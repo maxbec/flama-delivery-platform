@@ -1,0 +1,46 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+cd "$ROOT_DIR"
+
+if [[ $# -ne 1 ]]; then
+  echo 'usage: ./scripts/delivery {buildable|affected|full|smoke|health}' >&2
+  exit 2
+fi
+
+case "$1" in
+  buildable)
+    pnpm typecheck
+    pnpm build
+    ;;
+  affected)
+    bash scripts/public-repository-audit.sh
+    pnpm test:unit
+    bash tests/contracts/test-contracts.sh
+    bash tests/inventory/test-phase0-inventory.sh
+    bash tests/paperclip/test-paperclip-foundation.sh
+    bash tests/security/test-public-repository-audit.sh
+    bash tests/workflows/test-platform-ci.sh
+    bash tests/workflows/test-reusable-workflows.sh
+    bash tests/workflows/test-reusable-release.sh
+    bash tests/workflows/test-reusable-deploy.sh
+    bash tests/templates/test-delivery-entrypoint.sh
+    bash tests/templates/test-workflow-templates.sh
+    ;;
+  full)
+    "$0" buildable
+    "$0" affected
+    pnpm test:integration
+    bash tests/release/test-cli-bundle.sh
+    bash tests/release/test-platform-release.sh
+    ;;
+  smoke|health)
+    pnpm build >/dev/null
+    [[ "$(node dist/packages/delivery-ctl/src/main.js --version)" == '{"toolVersion":"0.1.0"}' ]]
+    ;;
+  *)
+    echo 'unsupported delivery command' >&2
+    exit 2
+    ;;
+esac

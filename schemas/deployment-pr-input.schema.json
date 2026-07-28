@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/deployment-pr-input.schema.json",
+  "title": "Exact-SHA production deployment pull request audit input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "requiredReviewer", "requestedHeadSha", "requestedMergeSha", "pullRequest", "reviews"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "requiredReviewer": { "const": "maxbec" },
+    "requestedHeadSha": { "$ref": "#/$defs/sha" },
+    "requestedMergeSha": { "$ref": "#/$defs/sha" },
+    "pullRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["merged", "headSha", "mergeSha", "baseBranch", "changedFiles"],
+      "properties": {
+        "merged": { "type": "boolean" },
+        "headSha": { "$ref": "#/$defs/sha" },
+        "mergeSha": { "$ref": "#/$defs/sha" },
+        "baseBranch": { "type": "string", "minLength": 1 },
+        "changedFiles": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "reviews": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reviewer", "state", "commitSha", "submittedAt"],
+        "properties": {
+          "reviewer": { "type": "string", "minLength": 1 },
+          "state": { "enum": ["APPROVED", "CHANGES_REQUESTED", "DISMISSED", "COMMENTED"] },
+          "commitSha": { "$ref": "#/$defs/sha" },
+          "submittedAt": { "type": "string", "format": "date-time" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+  }
+}

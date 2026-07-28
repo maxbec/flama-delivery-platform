@@ -1,0 +1,495 @@
+import { lstat, readFile, stat, writeFile } from "node:fs/promises";
+import { dirname } from "node:path";
+import { parseArgs } from "node:util";
+import { parse as parseYaml } from "yaml";
+import { orchestrateDeployment, type DeploymentManifest, type ProviderName } from "../../../providers/src/orchestrator.js";
+import {
+  loadDeploymentAdapter,
+  RepositoryVerificationRunner,
+  SystemDeploymentClock,
+} from "../../../providers/src/runtime.js";
+import { createSchemaValidator, type SchemaName } from "../../contracts/src/schema-validator.js";
+import { classifyInventory, type ClassificationInput } from "./classify.js";
+import { auditDeploymentPullRequest, type DeploymentPullRequestInput } from "./deployment-pr.js";
+import { RenderConflictError, renderTemplates, type RenderInput } from "./render.js";
+import { auditSecrets, type SecretsAuditInput } from "./secrets-audit.js";
+import { PreflightError, runPreflight, type PreflightRunInput } from "./preflight.js";
+import { auditInventory, InventoryAuditError, type InventoryAuditInput } from "./inventory.js";
+import {
+  bootstrapRepository,
+  BootstrapError,
+  type BootstrapInput,
+} from "./bootstrap.js";
+import {
+  GitHubRestCheckClient,
+  planPublishCheck,
+  publishCheck,
+  PublishCheckError,
+  type PublishCheckInput,
+} from "./publish-check.js";
+import {
+  GitHubRestPromotionClient,
+  planPromotion,
+  promote,
+  PromotionError,
+  type PromotionInput,
+} from "./promote.js";
+import {
+  auditReleaseEvidence,
+  GitHubCliReleaseVerifier,
+  planReleaseEvidence,
+  ReleaseEvidenceError,
+  type ReleaseEvidenceInput,
+} from "./release-evidence.js";
+
+const toolVersion = "0.1.0";
+const maximumInputBytes = 10 * 1024 * 1024;
+
+export interface CliIo {
+  writeStdout(value: string): void;
+  writeStderr(value: string): void;
+}
+
+function jsonLine(value: unknown): string {
+  return `${JSON.stringify(value)}\n`;
+}
+
+function fail(io: CliIo, code: string): number {
+  io.writeStderr(jsonLine({ error: { code }, ok: false, toolVersion }));
+  return 2;
+}
+
+async function readStructuredInput(path: string, format: "json" | "yaml"): Promise<unknown> {
+  const metadata = await stat(path);
+  if (!metadata.isFile() || metadata.size > maximumInputBytes) {
+    throw new Error("input rejected");
+  }
+  const source = await readFile(path, "utf8");
+  return format === "json"
+    ? JSON.parse(source)
+    : parseYaml(source, { maxAliasCount: 0, prettyErrors: false, strict: true });
+}
+
+function isSchemaName(value: string | undefined): value is SchemaName {
+  return [
+    "bootstrap-input",
+    "bootstrap-result",
+    "delivery-contract",
+    "deployment-manifest",
+    "deployment-pr-input",
+    "deployment-result",
+    "inventory-audit-result",
+    "preflight-evidence",
+    "preflight-run-input",
+    "preflight-run-result",
+    "publish-check-input",
+    "publish-check-result",
+    "promotion-input",
+    "promotion-result",
+    "release-evidence-input",
+    "release-evidence-result",
+    "platform-release-manifest",
+    "paperclip-controller",
+    "paperclip-lifecycle",
+    "repository-inventory",
+    "repository-scope-policy",
+    "render-input",
+    "secret-exceptions",
+    "secrets-audit-input",
+  ].includes(value ?? "");
+}
+
+function classificationInput(value: unknown): ClassificationInput {
+  if (typeof value !== "object" || value === null) throw new Error("invalid inventory");
+  const repositories = Reflect.get(value, "repositories");
+  if (!Array.isArray(repositories)) throw new Error("invalid inventory");
+  return { repositories } as ClassificationInput;
+}
+
+function secretsAuditInput(value: unknown): SecretsAuditInput {
+  return value as SecretsAuditInput;
+}
+
+interface FullDeploymentManifest {
+  readonly version: string;
+  readonly artifact: { readonly uri: string; readonly digest: string };
+  readonly previousArtifact: { readonly uri: string; readonly digest: string } | null;
+  readonly provider: { readonly name: ProviderName };
+  readonly verification: { readonly expectedVersion: string; readonly soakSeconds: number };
+  readonly rollback: { readonly automatic: boolean; readonly attemptLimit: number };
+}
+
+function deploymentManifest(value: unknown): FullDeploymentManifest {
+  return value as FullDeploymentManifest;
+}
+
+async function writeEvidence(path: string, value: unknown): Promise<void> {
+  const parent = await lstat(dirname(path));
+  if (!parent.isDirectory() || parent.isSymbolicLink()) throw new Error("unsafe evidence directory");
+  await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, {
+    encoding: "utf8",
+    flag: "wx",
+    mode: 0o600,
+  });
+}
+
+export async function runCli(
+  argv: readonly string[],
+  io: CliIo,
+  repositoryRoot: string,
+  workingDirectory = process.cwd(),
+): Promise<number> {
+  const command = argv[0];
+  if (command === "--version" || command === "version") {
+    io.writeStdout(jsonLine({ toolVersion }));
+    return 0;
+  }
+  if (
+    command !== "validate" &&
+    command !== "bootstrap" &&
+    command !== "inventory" &&
+    command !== "classify" &&
+    command !== "deployment-pr" &&
+    command !== "deploy" &&
+    command !== "preflight" &&
+    command !== "publish-check" &&
+    command !== "promote" &&
+    command !== "release-evidence" &&
+    command !== "secrets-audit" &&
+    command !== "render"
+  ) {
+    return fail(io, "unsupported_command");
+  }
+
+  let options: {
+    readonly input?: string;
+    readonly adapter?: string;
+    readonly format?: string;
+    readonly output?: string;
+    readonly schema?: string;
+    readonly "dry-run": boolean;
+  };
+  try {
+    const parsed = parseArgs({
+      args: [...argv.slice(1)],
+      options: {
+        input: { type: "string" },
+        adapter: { type: "string" },
+        format: { type: "string", default: "json" },
+        output: { type: "string" },
+        schema: { type: "string" },
+        "dry-run": { type: "boolean", default: false },
+      },
+      allowPositionals: false,
+      strict: true,
+    });
+    options = parsed.values;
+  } catch {
+    return fail(io, "invalid_arguments");
+  }
+  const inputPath = options.input;
+  if (typeof inputPath !== "string") return fail(io, "input_required");
+  if (options.format !== "json" && options.format !== "yaml") return fail(io, "invalid_format");
+
+  try {
+    const input = await readStructuredInput(inputPath, options.format);
+    const validator = await createSchemaValidator(repositoryRoot);
+    if (command === "validate") {
+      if (!isSchemaName(options.schema)) return fail(io, "schema_required");
+      const validation = validator.validate(options.schema, input);
+      io.writeStdout(
+        jsonLine({
+          command,
+          dryRun: options["dry-run"] ?? false,
+          ok: validation.ok,
+          schema: validation.schema,
+          toolVersion,
+          ...(validation.ok ? {} : { errors: validation.errors }),
+        }),
+      );
+      return validation.ok ? 0 : 1;
+    }
+
+    if (command === "bootstrap") {
+      if (typeof options.output !== "string") return fail(io, "output_required");
+      const validation = validator.validate("bootstrap-input", input);
+      if (!validation.ok) {
+        io.writeStdout(jsonLine({ command, ok: false, errors: validation.errors, toolVersion }));
+        return 1;
+      }
+      const bootstrapInput = input as BootstrapInput;
+      const contractValidation = validator.validate("delivery-contract", bootstrapInput.contract);
+      const renderValidation = validator.validate("render-input", bootstrapInput.render);
+      if (!contractValidation.ok || !renderValidation.ok) {
+        io.writeStdout(
+          jsonLine({
+            command,
+            ok: false,
+            errors: [
+              ...(contractValidation.ok ? [] : contractValidation.errors),
+              ...(renderValidation.ok ? [] : renderValidation.errors),
+            ],
+            toolVersion,
+          }),
+        );
+        return 1;
+      }
+      const result = await bootstrapRepository({
+        repositoryRoot,
+        outputRoot: options.output,
+        input: bootstrapInput,
+        dryRun: options["dry-run"],
+      });
+      const resultValidation = validator.validate("bootstrap-result", result);
+      if (!resultValidation.ok) return fail(io, "result_validation_failed");
+      io.writeStdout(jsonLine({ command, dryRun: options["dry-run"], ok: true, toolVersion, result }));
+      return 0;
+    }
+
+    if (command === "classify") {
+      const validation = validator.validate("repository-inventory", input);
+      if (!validation.ok) {
+        io.writeStdout(jsonLine({ command, ok: false, errors: validation.errors, toolVersion }));
+        return 1;
+      }
+      io.writeStdout(
+        jsonLine({ command, dryRun: options["dry-run"] ?? false, ok: true, toolVersion, result: classifyInventory(classificationInput(input)) }),
+      );
+      return 0;
+    }
+
+    if (command === "inventory") {
+      const validation = validator.validate("repository-inventory", input);
+      if (!validation.ok) {
+        io.writeStdout(jsonLine({ command, ok: false, errors: validation.errors, toolVersion }));
+        return 1;
+      }
+      const result = auditInventory(input as InventoryAuditInput);
+      const resultValidation = validator.validate("inventory-audit-result", result);
+      if (!resultValidation.ok) return fail(io, "result_validation_failed");
+      io.writeStdout(jsonLine({ command, dryRun: options["dry-run"], ok: true, toolVersion, result }));
+      return 0;
+    }
+
+    if (command === "publish-check") {
+      const validation = validator.validate("publish-check-input", input);
+      if (!validation.ok) {
+        io.writeStdout(jsonLine({ command, ok: false, errors: validation.errors, toolVersion }));
+        return 1;
+      }
+      const publishInput = input as PublishCheckInput;
+      const evidenceValidation = validator.validate("preflight-evidence", publishInput.evidence);
+      if (!evidenceValidation.ok) {
+        io.writeStdout(jsonLine({ command, ok: false, errors: evidenceValidation.errors, toolVersion }));
+        return 1;
+      }
+      const result = options["dry-run"]
+        ? planPublishCheck(publishInput)
+        : await publishCheck(publishInput, new GitHubRestCheckClient(process.env));
+      const resultValidation = validator.validate("publish-check-result", result);
+      if (!resultValidation.ok) return fail(io, "result_validation_failed");
+      if (!options["dry-run"] && typeof options.output === "string") {
+        await writeEvidence(options.output, result);
+      }
+      io.writeStdout(jsonLine({ command, dryRun: options["dry-run"], ok: true, toolVersion, result }));
+      return 0;
+    }
+
+    if (command === "promote") {
+      const validation = validator.validate("promotion-input", input);
+      if (!validation.ok) {
+        io.writeStdout(jsonLine({ command, ok: false, errors: validation.errors, toolVersion }));
+        return 1;
+      }
+      const promotionInput = input as PromotionInput;
+      const outputPath = options.output;
+      if (!options["dry-run"] && typeof outputPath !== "string") {
+        return fail(io, "output_required");
+      }
+      const result = options["dry-run"]
+        ? planPromotion(promotionInput)
+        : await promote(promotionInput, new GitHubRestPromotionClient(process.env));
+      const resultValidation = validator.validate("promotion-result", result);
+      if (!resultValidation.ok) return fail(io, "result_validation_failed");
+      if (!options["dry-run"]) {
+        if (typeof outputPath !== "string") return fail(io, "output_required");
+        await writeEvidence(outputPath, result);
+      }
+      io.writeStdout(jsonLine({ command, dryRun: options["dry-run"], ok: true, toolVersion, result }));
+      return 0;
+    }
+
+    if (command === "render") {
+      if (typeof options.output !== "string") return fail(io, "output_required");
+      const validation = validator.validate("render-input", input);
+      if (!validation.ok) {
+        io.writeStdout(jsonLine({ command, ok: false, errors: validation.errors, toolVersion }));
+        return 1;
+      }
+      if (!options["dry-run"]) return fail(io, "bootstrap_required");
+      const result = await renderTemplates({
+        repositoryRoot,
+        outputRoot: options.output,
+        input: input as RenderInput,
+        dryRun: true,
+      });
+      io.writeStdout(jsonLine({ command, dryRun: options["dry-run"], ok: true, toolVersion, result }));
+      return 0;
+    }
+
+    if (command === "release-evidence") {
+      const validation = validator.validate("release-evidence-input", input);
+      if (!validation.ok) {
+        io.writeStdout(jsonLine({ command, ok: false, errors: validation.errors, toolVersion }));
+        return 1;
+      }
+      const releaseInput = input as ReleaseEvidenceInput;
+      const outputPath = options.output;
+      if (!options["dry-run"] && typeof outputPath !== "string") {
+        return fail(io, "output_required");
+      }
+      const result = options["dry-run"]
+        ? planReleaseEvidence(releaseInput)
+        : await auditReleaseEvidence(
+            releaseInput,
+            workingDirectory,
+            new GitHubCliReleaseVerifier(process.env),
+          );
+      const resultValidation = validator.validate("release-evidence-result", result);
+      if (!resultValidation.ok) return fail(io, "result_validation_failed");
+      if (!options["dry-run"]) {
+        if (typeof outputPath !== "string") return fail(io, "output_required");
+        await writeEvidence(outputPath, result);
+      }
+      io.writeStdout(jsonLine({ command, dryRun: options["dry-run"], ok: true, toolVersion, result }));
+      return 0;
+    }
+
+    if (command === "deployment-pr") {
+      const validation = validator.validate("deployment-pr-input", input);
+      if (!validation.ok) {
+        io.writeStdout(jsonLine({ command, ok: false, errors: validation.errors, toolVersion }));
+        return 1;
+      }
+      const result = auditDeploymentPullRequest(input as DeploymentPullRequestInput);
+      io.writeStdout(
+        jsonLine({
+          command,
+          dryRun: options["dry-run"],
+          ok: result.status === "passed",
+          toolVersion,
+          result,
+        }),
+      );
+      return result.status === "passed" ? 0 : 1;
+    }
+
+    if (command === "deploy") {
+      if (typeof options.adapter !== "string") return fail(io, "adapter_required");
+      const validation = validator.validate("deployment-manifest", input);
+      if (!validation.ok) {
+        io.writeStdout(jsonLine({ command, ok: false, errors: validation.errors, toolVersion }));
+        return 1;
+      }
+      const fullManifest = deploymentManifest(input);
+      if (options["dry-run"]) {
+        io.writeStdout(
+          jsonLine({
+            command,
+            dryRun: true,
+            ok: true,
+            toolVersion,
+            result: {
+              schemaVersion: 1,
+              status: "planned",
+              provider: fullManifest.provider.name,
+              artifactDigest: fullManifest.artifact.digest,
+              soakSeconds: fullManifest.verification.soakSeconds,
+              rollbackAttemptLimit: fullManifest.rollback.attemptLimit,
+            },
+          }),
+        );
+        return 0;
+      }
+      if (typeof options.output !== "string") return fail(io, "output_required");
+      const manifest: DeploymentManifest = {
+        version: fullManifest.version,
+        artifact: fullManifest.artifact,
+        previousArtifact: fullManifest.previousArtifact,
+        verification: fullManifest.verification,
+        rollback: fullManifest.rollback,
+      };
+      const adapter = await loadDeploymentAdapter(
+        workingDirectory,
+        options.adapter,
+        fullManifest.provider.name,
+      );
+      const result = await orchestrateDeployment({
+        manifest,
+        adapter,
+        verification: new RepositoryVerificationRunner(workingDirectory),
+        clock: new SystemDeploymentClock(),
+        intervalSeconds: 60,
+      });
+      await writeEvidence(options.output, result);
+      io.writeStdout(jsonLine({ command, ok: result.status === "deployed", toolVersion, result }));
+      return result.status === "deployed" ? 0 : 1;
+    }
+
+    if (command === "preflight") {
+      const validation = validator.validate("preflight-run-input", input);
+      if (!validation.ok) {
+        io.writeStdout(jsonLine({ command, ok: false, errors: validation.errors, toolVersion }));
+        return 1;
+      }
+      if (options["dry-run"]) {
+        io.writeStdout(jsonLine({
+          command,
+          dryRun: true,
+          ok: true,
+          toolVersion,
+          result: {
+            status: "planned",
+            headSha: (input as PreflightRunInput).headSha,
+            commands: ["./scripts/delivery buildable", "./scripts/delivery affected"],
+          },
+        }));
+        return 0;
+      }
+      if (typeof options.output !== "string") return fail(io, "output_required");
+      const result = await runPreflight(input as PreflightRunInput, workingDirectory);
+      const resultValidation = validator.validate("preflight-run-result", result);
+      if (!resultValidation.ok) return fail(io, "result_validation_failed");
+      await writeEvidence(options.output, result);
+      io.writeStdout(jsonLine({ command, ok: result.status === "passed", toolVersion, result }));
+      return result.status === "passed" ? 0 : 1;
+    }
+
+    const validation = validator.validate("secrets-audit-input", input);
+    if (!validation.ok) {
+      io.writeStdout(jsonLine({ command, ok: false, errors: validation.errors, toolVersion }));
+      return 1;
+    }
+    const result = auditSecrets(secretsAuditInput(input), new Date());
+    io.writeStdout(jsonLine({ command, dryRun: options["dry-run"] ?? false, ok: result.status === "passed", toolVersion, result }));
+    return result.status === "passed" ? 0 : 1;
+  } catch (error) {
+    if (error instanceof RenderConflictError) {
+      io.writeStderr(
+        jsonLine({
+          error: { code: "render_conflict", files: error.conflicts },
+          ok: false,
+          toolVersion,
+        }),
+      );
+      return 1;
+    }
+    if (error instanceof PreflightError) return fail(io, error.code);
+    if (error instanceof InventoryAuditError) return fail(io, error.code);
+    if (error instanceof BootstrapError) return fail(io, error.code);
+    if (error instanceof PublishCheckError) return fail(io, error.code);
+    if (error instanceof PromotionError) return fail(io, error.code);
+    if (error instanceof ReleaseEvidenceError) return fail(io, error.code);
+    return fail(io, "input_processing_failed");
+  }
+}

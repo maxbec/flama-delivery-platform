@@ -1,0 +1,68 @@
+[
+  {
+    "nameWithOwner": "alpha/platform",
+    "isFork": false,
+    "isArchived": false,
+    "isPrivate": false,
+    "defaultBranch": "main",
+    "defaultBranchHeadSha": "0000000000000000000000000000000000000000",
+    "primaryLanguage": "Shell",
+    "pushedAt": "2026-07-28T09:00:00Z",
+    "paths": ["scripts/phase0-inventory.sh"],
+    "latestWorkflow": null
+  },
+  {
+    "nameWithOwner": "alpha/fast-app",
+    "isFork": false,
+    "isArchived": false,
+    "isPrivate": true,
+    "defaultBranch": "main",
+    "defaultBranchHeadSha": "1111111111111111111111111111111111111111",
+    "primaryLanguage": "TypeScript",
+    "pushedAt": "2026-07-28T10:00:00Z",
+    "paths": ["package.json", "Dockerfile", ".github/workflows/ci.yml"],
+    "latestWorkflow": {
+      "name": "CI",
+      "status": "completed",
+      "conclusion": "success",
+      "headSha": "1111111111111111111111111111111111111111",
+      "updatedAt": "2026-07-28T10:02:00Z"
+    }
+  },
+  {
+    "nameWithOwner": "alpha/major-app",
+    "isFork": false,
+    "isArchived": false,
+    "isPrivate": false,
+    "defaultBranch": "dev",
+    "defaultBranchHeadSha": "2222222222222222222222222222222222222222",
+    "primaryLanguage": "Python",
+    "pushedAt": "2026-07-28T11:00:00Z",
+    "paths": ["pyproject.toml", "vercel.json"],
+    "latestWorkflow": null
+  },
+  {
+    "nameWithOwner": "alpha/upstream-fork",
+    "isFork": true,
+    "isArchived": false,
+    "isPrivate": false,
+    "defaultBranch": "main",
+    "defaultBranchHeadSha": "3333333333333333333333333333333333333333",
+    "primaryLanguage": "Go",
+    "pushedAt": "2026-07-20T10:00:00Z",
+    "paths": ["go.mod"],
+    "latestWorkflow": null
+  },
+  {
+    "nameWithOwner": "alpha/retired",
+    "isFork": false,
+    "isArchived": true,
+    "isPrivate": true,
+    "defaultBranch": "master",
+    "defaultBranchHeadSha": "4444444444444444444444444444444444444444",
+    "primaryLanguage": "PHP",
+    "pushedAt": "2020-01-01T10:00:00Z",
+    "paths": ["composer.json"],
+    "latestWorkflow": null
+  }
+]

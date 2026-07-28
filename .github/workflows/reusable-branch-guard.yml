@@ -1,0 +1,48 @@
+name: Reusable Branch Guard
+
+on:
+  workflow_call:
+    inputs:
+      head-sha:
+        description: Exact pull-request head SHA
+        required: true
+        type: string
+      profile:
+        description: Flama branch profile
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    name: Branch Guard
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Validate pull-request branch boundary
+        env:
+          FLAMA_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          FLAMA_EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          FLAMA_EVENT_NAME: ${{ github.event_name }}
+          FLAMA_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          FLAMA_HEAD_SHA: ${{ inputs.head-sha }}
+          FLAMA_PROFILE: ${{ inputs.profile }}
+        run: |
+          [[ "$FLAMA_EVENT_NAME" == "pull_request" ]]
+          [[ "$FLAMA_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$FLAMA_HEAD_SHA" == "$FLAMA_EVENT_HEAD_SHA" ]]
+          case "$FLAMA_PROFILE:$FLAMA_BASE_REF" in
+            fast:main|major:dev)
+              ;;
+            major:main)
+              [[ "$FLAMA_HEAD_REF" == "dev" ||
+                 "$FLAMA_HEAD_REF" == hotfix/* ||
+                 "$FLAMA_HEAD_REF" == deploy/* ||
+                 "$FLAMA_HEAD_REF" == release-please--* ]]
+              ;;
+            *)
+              exit 1
+              ;;
+          esac

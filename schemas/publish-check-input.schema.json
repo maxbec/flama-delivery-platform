@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/publish-check-input.schema.json",
+  "title": "Controller-authorized Paperclip Preflight check publication input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "repository", "publisher", "evidence"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nameWithOwner", "disposition", "mutationAllowed", "isFork", "isArchived"],
+      "properties": {
+        "nameWithOwner": { "type": "string", "pattern": "^(maxbec|navigaite|edilio)/[A-Za-z0-9._-]+$" },
+        "disposition": { "const": "in_scope" },
+        "mutationAllowed": { "const": true },
+        "isFork": { "const": false },
+        "isArchived": { "const": false }
+      }
+    },
+    "publisher": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["controller", "appSlug", "tokenScope", "apiVersion"],
+      "properties": {
+        "controller": { "enum": ["maxbec-delivery-controller", "navigaite-delivery-controller", "edilio-delivery-controller"] },
+        "appSlug": { "type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?$" },
+        "tokenScope": { "const": "single-repository-checks-write" },
+        "apiVersion": { "const": "2026-03-10" }
+      }
+    },
+    "evidence": { "type": "object" }
+  }
+}

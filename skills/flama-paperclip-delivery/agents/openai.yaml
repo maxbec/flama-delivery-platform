@@ -1,0 +1,4 @@
+interface:
+  display_name: "Flama Paperclip Delivery"
+  short_description: "Run Flama delivery lifecycle safely"
+  default_prompt: "Use $flama-paperclip-delivery to prepare and advance this repository delivery task."

@@ -1,0 +1,54 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/release-evidence-input.schema.json",
+  "title": "Immutable release evidence verification input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "repository", "release", "files"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nameWithOwner", "disposition", "isFork", "isArchived"],
+      "properties": {
+        "nameWithOwner": { "type": "string", "pattern": "^(maxbec|navigaite|edilio)/[A-Za-z0-9._-]+$" },
+        "disposition": { "const": "in_scope" },
+        "isFork": { "const": false },
+        "isArchived": { "const": false }
+      }
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "tagName", "headSha"],
+      "properties": {
+        "version": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$" },
+        "tagName": { "type": "string", "pattern": "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$" },
+        "headSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+      }
+    },
+    "files": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["artifact", "sbom", "checksum"],
+      "properties": {
+        "artifact": { "$ref": "#/$defs/file" },
+        "sbom": { "$ref": "#/$defs/file" },
+        "checksum": { "$ref": "#/$defs/file" }
+      }
+    }
+  },
+  "$defs": {
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "name", "digest"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1, "maxLength": 500, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*\\\\).+$" },
+        "name": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$" },
+        "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+      }
+    }
+  }
+}

@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/release-evidence-result.schema.json",
+  "title": "Secret-minimized immutable release evidence result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "status", "version", "tagName", "headSha", "verification"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "status": { "enum": ["planned", "verified"] },
+    "version": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$" },
+    "tagName": { "type": "string", "pattern": "^v(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$" },
+    "headSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "requiredFiles": { "const": 3 },
+    "releaseId": { "type": "integer", "minimum": 1 },
+    "artifactDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "sbomDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "checksumDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["releaseAttestation", "assetAttestations"],
+      "properties": {
+        "immutableRelease": { "const": true },
+        "repositoryImmutable": { "const": true },
+        "releaseImmutable": { "const": true },
+        "releaseAttestation": { "const": true },
+        "assetAttestations": { "const": 3 }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "planned" } }, "required": ["status"] },
+      "then": {
+        "required": ["requiredFiles"],
+        "properties": {
+          "requiredFiles": { "const": 3 },
+          "releaseId": false,
+          "artifactDigest": false,
+          "sbomDigest": false,
+          "checksumDigest": false,
+          "verification": {
+            "type": "object",
+            "required": ["immutableRelease", "releaseAttestation", "assetAttestations"],
+            "properties": {
+              "immutableRelease": { "const": true },
+              "releaseAttestation": { "const": true },
+              "assetAttestations": { "const": 3 }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "status": { "const": "verified" } }, "required": ["status"] },
+      "then": {
+        "required": ["releaseId", "artifactDigest", "sbomDigest", "checksumDigest"],
+        "properties": {
+          "requiredFiles": false,
+          "releaseId": { "type": "integer", "minimum": 1 },
+          "artifactDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+          "sbomDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+          "checksumDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+          "verification": {
+            "type": "object",
+            "required": ["repositoryImmutable", "releaseImmutable", "releaseAttestation", "assetAttestations"],
+            "properties": {
+              "repositoryImmutable": { "const": true },
+              "releaseImmutable": { "const": true },
+              "releaseAttestation": { "const": true },
+              "assetAttestations": { "const": 3 }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "repository": {
+    "nameWithOwner": "maxbec/example",
+    "disposition": "in_scope",
+    "mutationAllowed": true,
+    "isFork": false,
+    "isArchived": false
+  },
+  "profile": "major",
+  "publisher": {
+    "controller": "maxbec-delivery-controller",
+    "appSlug": "flama-maxbec-delivery",
+    "tokenScope": "single-repository-pull-requests-write",
+    "apiVersion": "2026-03-10"
+  },
+  "promotion": {
+    "sourceBranch": "dev",
+    "targetBranch": "main",
+    "sourceSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "targetSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "integrationEvidenceDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+  }
+}

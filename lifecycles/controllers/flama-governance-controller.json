@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "name": "flama-governance-controller",
+  "mode": "global-governance",
+  "scope": { "companies": ["Private", "// Navigaite", "Edilio"], "githubOwners": ["maxbec", "navigaite", "edilio"] },
+  "authority": {
+    "read": ["paperclip_company", "github_metadata", "delivery_evidence", "ci_usage"],
+    "write": [],
+    "deny": ["other_companies", "git_push", "git_merge", "github_release", "production_approval", "production_deploy", "secret_values"]
+  },
+  "runtime": { "deterministic": true, "maxImplementationConcurrency": 0, "credentialSource": "infisical-oidc" }
+}

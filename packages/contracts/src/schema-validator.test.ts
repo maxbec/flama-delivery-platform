@@ -1,0 +1,75 @@
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+import { createSchemaValidator } from "./schema-validator.js";
+
+const repositoryRoot = fileURLToPath(new URL("../../../", import.meta.url));
+const fixture = new URL("../test/fixtures/delivery-contract.valid.json", import.meta.url);
+
+describe("schema validator", () => {
+  it("accepts a delivery contract and returns a stable schema name", async () => {
+    const validator = await createSchemaValidator(repositoryRoot);
+    const input: unknown = JSON.parse(await readFile(fixture, "utf8"));
+
+    expect(validator.validate("delivery-contract", input)).toEqual({
+      ok: true,
+      schema: "delivery-contract",
+    });
+  });
+
+  it("returns structural errors without echoing secret input values", async () => {
+    const validator = await createSchemaValidator(repositoryRoot);
+    const secretValue = "must-never-appear";
+
+    const result = validator.validate("delivery-contract", {
+      token: secretValue,
+    });
+
+    expect(result.ok).toBe(false);
+    expect(JSON.stringify(result)).not.toContain(secretValue);
+    if (!result.ok) {
+      expect(result.errors.every((error) => !Object.hasOwn(error, "data"))).toBe(true);
+    }
+  });
+
+  it("rejects secret values added to audit exception records", async () => {
+    const validator = await createSchemaValidator(repositoryRoot);
+    const secretValue = "must-never-appear";
+    const result = validator.validate("secrets-audit-input", {
+      schemaVersion: 1,
+      repository: { visibility: "private", isFork: false },
+      infisical: {
+        sourceOfTruth: true,
+        projectSlug: "api",
+        paths: ["/production"],
+        machineIdentity: { method: "oidc", hardcodedClaims: true },
+      },
+      publicPullRequest: {
+        secrets: false,
+        idToken: false,
+        infisical: false,
+        trustedCacheWrite: false,
+        privateRunner: false,
+      },
+      destinationSecrets: [],
+      exceptions: [
+        {
+          key: "DEPLOY_TOKEN",
+          destination: "github_environment_secret",
+          reason: "Provider requires destination storage",
+          owner: "max",
+          scope: "environment",
+          rotationDays: 30,
+          expiresAt: "2026-09-01",
+          reviewAfter: "2026-08-15",
+          status: "approved",
+          value: secretValue,
+        },
+      ],
+      repositoryVariables: [],
+    });
+
+    expect(result.ok).toBe(false);
+    expect(JSON.stringify(result)).not.toContain(secretValue);
+  });
+});

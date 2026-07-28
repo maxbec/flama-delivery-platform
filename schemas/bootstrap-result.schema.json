@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/bootstrap-result.schema.json",
+  "title": "Secret-minimized consumer bootstrap result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "status", "baseSha", "sourceBranch", "generated", "repositoryOwned"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "status": { "enum": ["planned", "prepared"] },
+    "baseSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "sourceBranch": { "enum": ["main", "dev"] },
+    "generated": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "profile", "platformRef", "files"],
+      "properties": {
+        "schemaVersion": { "const": 1 },
+        "profile": { "enum": ["fast", "major"] },
+        "platformRef": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "files": {
+          "type": "array",
+          "minItems": 8,
+          "maxItems": 10,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "status"],
+            "properties": {
+              "path": {
+                "enum": [
+                  ".flama/paperclip-webhook.json",
+                  ".flama/platform-lock.json",
+                  ".github/CODEOWNERS",
+                  ".github/dependabot.yml",
+                  ".github/workflows/flama-branch-guard.yml",
+                  ".github/workflows/flama-deploy.yml",
+                  ".github/workflows/flama-final.yml",
+                  ".github/workflows/flama-policy.yml",
+                  ".release-please-config.json",
+                  ".release-please-manifest.json"
+                ]
+              },
+              "status": { "enum": ["planned", "created", "unchanged"] }
+            }
+          }
+        }
+      }
+    },
+    "repositoryOwned": {
+      "type": "array",
+      "minItems": 6,
+      "maxItems": 6,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "status"],
+        "properties": {
+          "path": {
+            "enum": [
+              ".flama/commands.json",
+              ".flama/delivery-contract.json",
+              ".flama/run-command.mjs",
+              ".paperclip/project.yaml",
+              "AGENTS.md",
+              "scripts/delivery"
+            ]
+          },
+          "status": { "enum": ["planned", "created", "append_planned", "appended", "preserved"] }
+        }
+      }
+    }
+  }
+}

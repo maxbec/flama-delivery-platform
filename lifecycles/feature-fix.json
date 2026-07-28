@@ -1,0 +1,15 @@
+{
+  "schemaVersion": 1,
+  "id": "feature-fix",
+  "initialState": "Backlog",
+  "terminalStates": ["Done"],
+  "states": ["Backlog", "Spec Ready", "Implementing", "Preflight Passed", "PR Open", "Merged", "Done"],
+  "transitions": [
+    { "from": "Backlog", "to": "Spec Ready", "trigger": "paperclip_internal", "authority": "agent", "evidence": ["definition_of_ready"] },
+    { "from": "Spec Ready", "to": "Implementing", "trigger": "paperclip_internal", "authority": "agent", "evidence": ["isolated_worktree", "base_sha"] },
+    { "from": "Implementing", "to": "Preflight Passed", "trigger": "controller_signed", "authority": "delivery-controller", "evidence": ["exact_sha", "preflight_evidence", "release_impact"] },
+    { "from": "Preflight Passed", "to": "PR Open", "trigger": "github_signed", "authority": "github", "evidence": ["pull_request_url", "head_sha", "base_branch"] },
+    { "from": "PR Open", "to": "Merged", "trigger": "github_signed", "authority": "github", "evidence": ["merge_sha", "required_checks", "resolved_threads"] },
+    { "from": "Merged", "to": "Done", "trigger": "controller_signed", "authority": "delivery-controller", "evidence": ["definition_of_done", "release_case_link"] }
+  ]
+}

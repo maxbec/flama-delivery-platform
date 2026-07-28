@@ -1,0 +1,50 @@
+{
+  "$schema": "../schemas/repository-scope-policy.schema.json",
+  "version": 1,
+  "owners": {
+    "maxbec": {
+      "paperclipCompany": "Private",
+      "expected": {
+        "inScope": 15,
+        "private": 11,
+        "public": 4,
+        "forks": 13,
+        "archived": 0
+      }
+    },
+    "navigaite": {
+      "paperclipCompany": "// Navigaite",
+      "expected": {
+        "inScope": 11,
+        "private": 9,
+        "public": 2,
+        "forks": 0,
+        "archived": 3
+      }
+    },
+    "edilio": {
+      "paperclipCompany": "Edilio",
+      "expected": {
+        "inScope": 38,
+        "private": 0,
+        "public": 38,
+        "forks": 15,
+        "archived": 0
+      }
+    }
+  },
+  "platformRepositories": [
+    "maxbec/flama-delivery-platform"
+  ],
+  "inclusion": {
+    "owned": true,
+    "fork": false,
+    "archived": false
+  },
+  "mutationGuard": {
+    "forks": "deny",
+    "archived": "deny",
+    "unknownOwners": "deny",
+    "inventoryOnlyExclusions": true
+  }
+}

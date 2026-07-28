@@ -1,0 +1,33 @@
+{
+  "version": 1,
+  "defaultProfile": "fast",
+  "profiles": {
+    "fast": {
+      "defaultBranch": "main",
+      "stableBranch": "main",
+      "featureTarget": "main",
+      "featureMergeMethod": "squash",
+      "requiredChecks": ["Branch Guard", "Paperclip Preflight", "Final Gate"]
+    },
+    "major": {
+      "defaultBranch": "dev",
+      "stableBranch": "main",
+      "featureTarget": "dev",
+      "featureMergeMethod": "squash",
+      "promotionMergeMethod": "merge",
+      "integrationChecks": ["Branch Guard", "Paperclip Preflight", "Policy Gate"],
+      "stableChecks": ["Branch Guard", "Final Gate"]
+    }
+  },
+  "common": {
+    "pullRequestRequired": true,
+    "strictChecks": true,
+    "signedCommits": true,
+    "conversationResolution": true,
+    "forcePush": false,
+    "branchDeletion": false,
+    "autoMerge": true,
+    "deleteHeadBranch": true,
+    "normalBypassActors": []
+  }
+}

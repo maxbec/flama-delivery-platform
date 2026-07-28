@@ -1,0 +1,36 @@
+schemaVersion: 1
+version: 1.2.0
+release:
+  tag: v1.2.0
+  url: https://github.com/maxbec/example/releases/tag/v1.2.0
+artifact:
+  kind: oci
+  uri: ghcr.io/maxbec/example@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  signature: sigstore-bundle.json
+  sbom: https://github.com/maxbec/example/releases/download/v1.2.0/sbom.spdx.json
+previousArtifact:
+  kind: oci
+  uri: ghcr.io/maxbec/example@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  signature: previous-sigstore-bundle.json
+  sbom: https://github.com/maxbec/example/releases/download/v1.1.0/sbom.spdx.json
+provider:
+  name: docker-compose
+  configurationRefs:
+    - compose.production.yaml
+  infisicalPath: /production/deploy
+migration:
+  required: false
+  mode: none
+  backupVerified: true
+  rollbackCompatible: true
+verification:
+  healthCommand: ./scripts/delivery health
+  smokeCommand: ./scripts/delivery smoke
+  expectedVersion: 1.2.0
+  soakSeconds: 600
+rollback:
+  automatic: true
+  attemptLimit: 1
+  targetDigest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb

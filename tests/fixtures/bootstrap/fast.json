@@ -1,0 +1,93 @@
+{
+  "schemaVersion": 1,
+  "repository": {
+    "nameWithOwner": "maxbec/example",
+    "disposition": "in_scope",
+    "mutationAllowed": true,
+    "isFork": false,
+    "isArchived": false
+  },
+  "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "sourceBranch": "main",
+  "contract": {
+    "schemaVersion": 1,
+    "repository": {
+      "owner": "maxbec",
+      "name": "example",
+      "visibility": "private"
+    },
+    "paperclip": {
+      "company": "Private",
+      "projectId": "project-1",
+      "workspaceId": "workspace-1"
+    },
+    "profile": "fast",
+    "branches": {
+      "default": "main",
+      "stable": "main",
+      "featureTarget": "main"
+    },
+    "commands": {
+      "buildable": "./scripts/delivery buildable",
+      "affected": "./scripts/delivery affected",
+      "full": "./scripts/delivery full",
+      "smoke": "./scripts/delivery smoke",
+      "health": "./scripts/delivery health"
+    },
+    "changeDetection": {
+      "failClosed": true,
+      "broadenOn": ["lockfiles", "authentication", "database_schema", "uncertain_detection"]
+    },
+    "release": {
+      "enabled": true,
+      "strategy": "release-please",
+      "impactSource": "paperclip_task",
+      "type": "node"
+    },
+    "deployment": {
+      "deployable": false,
+      "provider": "none",
+      "manifestPath": ".deploy/production.yaml"
+    },
+    "secrets": {
+      "source": "infisical",
+      "projectSlug": "example",
+      "paths": { "development": "/development" },
+      "exceptionsFile": ".flama/secret-exceptions.json"
+    },
+    "platform": {
+      "repository": "maxbec/flama-delivery-platform",
+      "version": "0.1.0"
+    }
+  },
+  "render": {
+    "schemaVersion": 1,
+    "repository": "maxbec/example",
+    "profile": "fast",
+    "platformRef": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "platformVersion": "0.1.0",
+    "paperclip": {
+      "company": "Private",
+      "projectId": "project-1",
+      "workspaceId": "workspace-1",
+      "appSlug": "flama-maxbec-delivery"
+    },
+    "release": {
+      "enabled": true,
+      "type": "node",
+      "currentVersion": "1.2.3"
+    },
+    "dependabot": {
+      "ecosystems": [
+        { "packageEcosystem": "npm", "directory": "/" }
+      ]
+    },
+    "commands": {
+      "buildable": ["pnpm", "run", "build"],
+      "affected": ["pnpm", "test"],
+      "full": ["pnpm", "test"],
+      "smoke": ["pnpm", "run", "smoke"],
+      "health": ["pnpm", "run", "health"]
+    }
+  }
+}

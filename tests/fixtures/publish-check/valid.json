@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "repository": {
+    "nameWithOwner": "maxbec/example",
+    "disposition": "in_scope",
+    "mutationAllowed": true,
+    "isFork": false,
+    "isArchived": false
+  },
+  "publisher": {
+    "controller": "maxbec-delivery-controller",
+    "appSlug": "flama-maxbec-delivery",
+    "tokenScope": "single-repository-checks-write",
+    "apiVersion": "2026-03-10"
+  },
+  "evidence": {
+    "schemaVersion": 1,
+    "repository": "maxbec/example",
+    "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "baseSha": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "startedAt": "2026-07-28T20:00:00Z",
+    "finishedAt": "2026-07-28T20:02:00Z",
+    "runner": {
+      "class": "paperclip_ephemeral",
+      "id": "runner-example",
+      "controller": "maxbec-delivery-controller"
+    },
+    "commands": [
+      {
+        "command": "./scripts/delivery buildable",
+        "status": "passed",
+        "exitCode": 0,
+        "evidenceDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      {
+        "command": "./scripts/delivery affected",
+        "status": "passed",
+        "exitCode": 0,
+        "evidenceDigest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+      }
+    ],
+    "releaseImpact": "patch",
+    "signature": {
+      "issuer": "flama-maxbec-delivery",
+      "subject": "maxbec-delivery-controller",
+      "algorithm": "github-app",
+      "payloadDigest": "sha256:d2c0a0e40f5c96f40b53ff404bd02c2356f5e46c550e437995dd5aafd8a48189",
+      "signedAt": "2026-07-28T20:02:01Z"
+    }
+  }
+}

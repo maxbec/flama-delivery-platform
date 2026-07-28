@@ -1,0 +1,186 @@
+name: Reusable Production Deploy
+
+on:
+  workflow_call:
+    inputs:
+      platform-sha:
+        description: Full commit SHA used to invoke this platform workflow
+        required: true
+        type: string
+      pull-request-number:
+        description: Merged deployment pull request number
+        required: true
+        type: number
+      approved-head-sha:
+        description: Exact deployment PR head SHA approved by Max
+        required: true
+        type: string
+      merge-sha:
+        description: Exact protected merge commit to check out
+        required: true
+        type: string
+      manifest-path:
+        description: Production deployment manifest
+        required: false
+        default: .deploy/production.yaml
+        type: string
+      adapter-path:
+        description: Trusted repository-relative provider adapter module
+        required: false
+        default: .flama/provider.cjs
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  trust:
+    name: Deployment Trust Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Bind invocation to the merged and approved event
+        env:
+          FLAMA_ACTION: ${{ github.event.action }}
+          FLAMA_APPROVED_HEAD_SHA: ${{ inputs.approved-head-sha }}
+          FLAMA_EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          FLAMA_EVENT_MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+          FLAMA_EVENT_NAME: ${{ github.event_name }}
+          FLAMA_MERGED: ${{ github.event.pull_request.merged }}
+          FLAMA_MERGE_SHA: ${{ inputs.merge-sha }}
+          FLAMA_PLATFORM_SHA: ${{ inputs.platform-sha }}
+          FLAMA_PR_NUMBER: ${{ inputs.pull-request-number }}
+        run: |
+          [[ "$FLAMA_EVENT_NAME" == "pull_request" ]]
+          [[ "$FLAMA_ACTION" == "closed" ]]
+          [[ "$FLAMA_MERGED" == "true" ]]
+          [[ "$FLAMA_PLATFORM_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$FLAMA_APPROVED_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$FLAMA_MERGE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$FLAMA_EVENT_HEAD_SHA" == "$FLAMA_APPROVED_HEAD_SHA" ]]
+          [[ "$FLAMA_EVENT_MERGE_SHA" == "$FLAMA_MERGE_SHA" ]]
+          [[ "$FLAMA_PR_NUMBER" =~ ^[1-9][0-9]*$ ]]
+
+  deploy:
+    name: Production Deploy
+    needs: trust
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    permissions:
+      contents: read
+      pull-requests: read
+      deployments: write
+      id-token: write
+      attestations: read
+    steps:
+      - name: Check out exact merged source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.merge-sha }}
+          persist-credentials: false
+
+      - name: Check out exact delivery platform
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: maxbec/flama-delivery-platform
+          ref: ${{ inputs.platform-sha }}
+          path: .flama-platform
+          persist-credentials: false
+
+      - name: Set up platform Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .flama-platform/.nvmrc
+
+      - name: Build exact delivery CLI
+        run: |
+          corepack enable
+          pnpm --dir .flama-platform install --frozen-lockfile
+          pnpm --dir .flama-platform build
+
+      - name: Verify exact reusable workflow OIDC identity
+        env:
+          FLAMA_PLATFORM_SHA: ${{ inputs.platform-sha }}
+        run: |
+          oidc_response=$(curl --fail --silent --show-error \
+            --header "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=flama-delivery")
+          FLAMA_ID_TOKEN=$(jq -er '.value' <<< "$oidc_response")
+          export FLAMA_ID_TOKEN
+          node <<'NODE'
+          const token = process.env.FLAMA_ID_TOKEN;
+          const repository = process.env.GITHUB_REPOSITORY;
+          const platformSha = process.env.FLAMA_PLATFORM_SHA;
+          if (!token || !repository || !platformSha) process.exit(1);
+          const parts = token.split(".");
+          if (parts.length !== 3 || !parts[1]) process.exit(1);
+          const claims = JSON.parse(Buffer.from(parts[1], "base64url").toString("utf8"));
+          const expectedWorkflow = `maxbec/flama-delivery-platform/.github/workflows/reusable-deploy.yml@${platformSha}`;
+          if (claims.iss !== "https://token.actions.githubusercontent.com") process.exit(1);
+          if (claims.aud !== "flama-delivery") process.exit(1);
+          if (claims.repository !== repository) process.exit(1);
+          if (claims.sub !== `repo:${repository}:environment:production`) process.exit(1);
+          if (claims.job_workflow_ref !== expectedWorkflow) process.exit(1);
+          NODE
+          unset FLAMA_ID_TOKEN oidc_response
+
+      - name: Collect redacted deployment PR evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FLAMA_APPROVED_HEAD_SHA: ${{ inputs.approved-head-sha }}
+          FLAMA_MERGE_SHA: ${{ inputs.merge-sha }}
+          FLAMA_PR_NUMBER: ${{ inputs.pull-request-number }}
+        run: |
+          pr_json=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$FLAMA_PR_NUMBER" \
+            --jq '{merged: .merged, headSha: .head.sha, mergeSha: .merge_commit_sha, baseBranch: .base.ref}')
+          files_json=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$FLAMA_PR_NUMBER/files" \
+            --jq '.[].filename' | jq -R -s 'split("\n") | map(select(length > 0))')
+          reviews_json=$(gh api --paginate "repos/$GITHUB_REPOSITORY/pulls/$FLAMA_PR_NUMBER/reviews" \
+            --jq '.[] | select(.submitted_at != null and .commit_id != null) | {reviewer: .user.login, state: .state, commitSha: .commit_id, submittedAt: .submitted_at}' | jq -s '.')
+          jq -n \
+            --arg approvedHeadSha "$FLAMA_APPROVED_HEAD_SHA" \
+            --arg mergeSha "$FLAMA_MERGE_SHA" \
+            --argjson pullRequest "$pr_json" \
+            --argjson changedFiles "$files_json" \
+            --argjson reviews "$reviews_json" \
+            '{schemaVersion: 1, requiredReviewer: "maxbec", requestedHeadSha: $approvedHeadSha, requestedMergeSha: $mergeSha, pullRequest: ($pullRequest + {changedFiles: $changedFiles}), reviews: $reviews}' \
+            > "$RUNNER_TEMP/deployment-pr.json"
+
+      - name: Verify exact SHA-bound owner approval
+        run: |
+          node .flama-platform/dist/packages/delivery-ctl/src/main.js deployment-pr \
+            --input "$RUNNER_TEMP/deployment-pr.json"
+
+      - name: Validate production manifest
+        env:
+          FLAMA_MANIFEST_PATH: ${{ inputs.manifest-path }}
+        run: |
+          node .flama-platform/dist/packages/delivery-ctl/src/main.js validate \
+            --schema deployment-manifest --format yaml --input "$FLAMA_MANIFEST_PATH"
+
+      - name: Deploy immutable artifact and verify soak
+        env:
+          FLAMA_ADAPTER_PATH: ${{ inputs.adapter-path }}
+          FLAMA_MANIFEST_PATH: ${{ inputs.manifest-path }}
+        run: |
+          node .flama-platform/dist/packages/delivery-ctl/src/main.js deploy \
+            --format yaml \
+            --input "$FLAMA_MANIFEST_PATH" \
+            --adapter "$FLAMA_ADAPTER_PATH" \
+            --output "$RUNNER_TEMP/deployment-result.json"
+
+      - name: Preserve deployment evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: deployment-${{ inputs.merge-sha }}
+          path: ${{ runner.temp }}/deployment-result.json
+          if-no-files-found: ignore
+          compression-level: 0
+          overwrite: false
+          include-hidden-files: false

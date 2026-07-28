@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "repository": {
+    "owner": "maxbec",
+    "name": "example",
+    "visibility": "private"
+  },
+  "paperclip": {
+    "company": "Private",
+    "projectId": "project-1",
+    "workspaceId": "workspace-1"
+  },
+  "profile": "fast",
+  "branches": {
+    "default": "main",
+    "stable": "main",
+    "featureTarget": "main"
+  },
+  "commands": {
+    "buildable": "./scripts/delivery buildable",
+    "affected": "./scripts/delivery affected",
+    "full": "./scripts/delivery full",
+    "smoke": "./scripts/delivery smoke",
+    "health": "./scripts/delivery health"
+  },
+  "changeDetection": {
+    "failClosed": true,
+    "broadenOn": ["lockfiles", "authentication", "database_schema", "uncertain_detection"]
+  },
+  "release": {
+    "enabled": true,
+    "strategy": "release-please",
+    "impactSource": "paperclip_task",
+    "type": "node"
+  },
+  "deployment": {
+    "deployable": false,
+    "provider": "none",
+    "manifestPath": ".deploy/production.yaml"
+  },
+  "secrets": {
+    "source": "infisical",
+    "projectSlug": "example",
+    "paths": { "development": "/development" },
+    "exceptionsFile": ".flama/secret-exceptions.json"
+  },
+  "platform": {
+    "repository": "maxbec/flama-delivery-platform",
+    "version": "0.1.0"
+  }
+}

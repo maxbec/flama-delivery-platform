@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "owners": {
+    "alpha": {
+      "paperclipCompany": "Alpha Paperclip",
+      "expected": {
+        "inScope": 2,
+        "private": 1,
+        "public": 1,
+        "forks": 1,
+        "archived": 1
+      }
+    }
+  },
+  "platformRepositories": [
+    "alpha/platform"
+  ],
+  "inclusion": {
+    "owned": true,
+    "fork": false,
+    "archived": false
+  },
+  "mutationGuard": {
+    "forks": "deny",
+    "archived": "deny",
+    "unknownOwners": "deny",
+    "inventoryOnlyExclusions": true
+  }
+}

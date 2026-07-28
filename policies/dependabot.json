@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "schedule": {
+    "interval": "weekly",
+    "time": "04:00",
+    "timezone": "Europe/Berlin",
+    "weekdayStrategy": "repository_sha256_modulo_weekdays"
+  },
+  "requiredEcosystems": ["github-actions"],
+  "openPullRequestsLimit": 1,
+  "groups": {
+    "routine-updates": {
+      "updateTypes": ["minor", "patch"]
+    }
+  },
+  "securityUpdates": "enabled",
+  "majorUpdates": "paperclip"
+}

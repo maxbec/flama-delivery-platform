@@ -1,0 +1,39 @@
+{
+  "schemaVersion": 1,
+  "observedAt": "2026-07-28T20:00:00Z",
+  "source": { "mode": "fixture" },
+  "policyVersion": 1,
+  "summary": { "total": 1, "inScope": 1, "private": 0, "public": 1, "forks": 0, "archived": 0, "platform": 0, "mutationAllowed": 1, "mutationDenied": 0 },
+  "owners": {
+    "maxbec": {
+      "expected": { "inScope": 1, "private": 0, "public": 1, "forks": 0, "archived": 0 },
+      "observed": { "inScope": 1, "private": 0, "public": 1, "forks": 0, "archived": 0 }
+    }
+  },
+  "repositories": [
+    {
+      "nameWithOwner": "maxbec/example",
+      "owner": "maxbec",
+      "isFork": false,
+      "isArchived": false,
+      "isPrivate": false,
+      "defaultBranch": "main",
+      "defaultBranchHeadSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "pushedAt": "2026-07-28T19:00:00Z",
+      "primaryLanguage": "TypeScript",
+      "disposition": "in_scope",
+      "mutationAllowed": true,
+      "mutationDeniedReason": null,
+      "paperclipCompany": "Private",
+      "profile": "fast",
+      "branchNormalizationRequired": false,
+      "stack": ["node"],
+      "providerIndicators": [],
+      "workflowFiles": 0,
+      "deliveryEntrypoints": { "script": false, "paperclipProject": false, "deliveryContract": false, "productionManifest": false },
+      "defaultBranchStatus": null,
+      "latestWorkflow": null,
+      "health": "no_runs"
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "name": "edilio-delivery-controller",
+  "mode": "company-delivery",
+  "scope": { "companies": ["Edilio"], "githubOwners": ["edilio"] },
+  "authority": {
+    "read": ["paperclip_company", "github_metadata", "delivery_evidence", "ci_usage"],
+    "write": ["paperclip_company_transitions", "github_preflight_checks", "github_pull_requests"],
+    "deny": ["other_companies", "git_push", "git_merge", "github_release", "production_approval", "production_deploy", "secret_values"]
+  },
+  "runtime": { "deterministic": true, "maxImplementationConcurrency": 2, "credentialSource": "infisical-oidc" }
+}

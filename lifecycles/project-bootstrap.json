@@ -1,0 +1,13 @@
+{
+  "schemaVersion": 1,
+  "id": "project-bootstrap",
+  "initialState": "Intake",
+  "terminalStates": ["Ready"],
+  "states": ["Intake", "Classified", "Repository Prepared", "Baseline Green", "Ready"],
+  "transitions": [
+    { "from": "Intake", "to": "Classified", "trigger": "controller_signed", "authority": "delivery-controller", "evidence": ["live_inventory", "scope_decision", "profile_classification"] },
+    { "from": "Classified", "to": "Repository Prepared", "trigger": "controller_signed", "authority": "delivery-controller", "evidence": ["project_binding", "render_plan", "platform_lock"] },
+    { "from": "Repository Prepared", "to": "Baseline Green", "trigger": "github_signed", "authority": "github", "evidence": ["exact_sha", "buildable_result", "affected_result"] },
+    { "from": "Baseline Green", "to": "Ready", "trigger": "controller_signed", "authority": "delivery-controller", "evidence": ["delivery_contract", "github_protection", "paperclip_binding"] }
+  ]
+}

@@ -1,0 +1,112 @@
+name: Platform CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platform-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  foundation:
+    name: Foundation Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+
+      - name: Install locked dependencies
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+
+      - name: Validate shell syntax
+        run: |
+          bash -n scripts/phase0-inventory.sh
+          bash -n tests/contracts/test-contracts.sh
+          bash -n tests/inventory/test-phase0-inventory.sh
+          bash -n tests/paperclip/test-paperclip-foundation.sh
+          bash -n tests/security/test-public-repository-audit.sh
+          bash -n tests/workflows/test-platform-ci.sh
+          bash -n tests/workflows/test-reusable-workflows.sh
+          bash -n tests/workflows/test-reusable-release.sh
+          bash -n tests/workflows/test-reusable-deploy.sh
+          bash -n tests/templates/test-delivery-entrypoint.sh
+          bash -n tests/templates/test-workflow-templates.sh
+          bash -n scripts/build-cli-bundle.sh
+          bash -n tests/release/test-cli-bundle.sh
+          bash -n tests/release/test-platform-release.sh
+          bash -n scripts/public-repository-audit.sh
+          bash -n scripts/delivery
+          bash -n tests/scripts/test-delivery-script.sh
+          node --check scripts/build-platform-release.mjs
+          node --check scripts/consumer-policy-gate.mjs
+          bash -n tests/fixtures/inventory/bin/gh
+
+      - name: Test contracts and policy
+        run: bash tests/contracts/test-contracts.sh
+
+      - name: Test inventory and live serializer
+        run: bash tests/inventory/test-phase0-inventory.sh
+
+      - name: Test Paperclip and public safety contracts
+        run: |
+          bash tests/paperclip/test-paperclip-foundation.sh
+          bash tests/security/test-public-repository-audit.sh
+
+      - name: Test workflow trust policy
+        run: |
+          bash tests/workflows/test-platform-ci.sh
+          bash tests/workflows/test-reusable-workflows.sh
+          bash tests/workflows/test-reusable-release.sh
+          bash tests/workflows/test-reusable-deploy.sh
+
+      - name: Test generated templates
+        run: |
+          bash tests/templates/test-delivery-entrypoint.sh
+          bash tests/templates/test-workflow-templates.sh
+
+      - name: Test platform delivery entrypoint
+        run: bash tests/scripts/test-delivery-script.sh
+
+      - name: Validate JSON syntax
+        run: |
+          find lifecycles policies schemas tests/fixtures -type f -name '*.json' -print0 \
+            | sort -z \
+            | xargs -0 -n1 jq empty
+
+      - name: Reject private inventory evidence
+        run: |
+          test ! -d evidence
+          test ! -d inventory/private
+          if find . -type f \( -name 'phase0-github-*.json' -o -name '*.private-inventory.json' \) -print -quit | grep -q .; then
+            echo 'private inventory evidence must not be committed' >&2
+            exit 1
+          fi
+
+      - name: Audit public repository content
+        run: bash scripts/public-repository-audit.sh
+
+      - name: Typecheck platform packages
+        run: pnpm typecheck
+
+      - name: Test platform packages
+        run: pnpm test
+
+      - name: Build platform packages
+        run: |
+          pnpm build
+          bash tests/release/test-cli-bundle.sh
+          bash tests/release/test-platform-release.sh

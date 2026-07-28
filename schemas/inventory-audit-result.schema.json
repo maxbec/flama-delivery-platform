@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/inventory-audit-result.schema.json",
+  "title": "Privacy-preserving repository inventory audit result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "status", "observedAt", "sourceMode", "policyVersion", "inventoryDigest", "summary", "owners"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "status": { "const": "passed" },
+    "observedAt": { "type": "string", "format": "date-time" },
+    "sourceMode": { "enum": ["live", "fixture"] },
+    "policyVersion": { "type": "integer", "minimum": 1 },
+    "inventoryDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "summary": { "$ref": "#/$defs/summary" },
+    "owners": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["countsMatch", "observed"],
+        "properties": {
+          "countsMatch": { "const": true },
+          "observed": { "$ref": "#/$defs/counts" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inScope", "private", "public", "forks", "archived"],
+      "properties": {
+        "inScope": { "type": "integer", "minimum": 0 },
+        "private": { "type": "integer", "minimum": 0 },
+        "public": { "type": "integer", "minimum": 0 },
+        "forks": { "type": "integer", "minimum": 0 },
+        "archived": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "inScope", "private", "public", "forks", "archived", "platform", "mutationAllowed", "mutationDenied"],
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "inScope": { "type": "integer", "minimum": 0 },
+        "private": { "type": "integer", "minimum": 0 },
+        "public": { "type": "integer", "minimum": 0 },
+        "forks": { "type": "integer", "minimum": 0 },
+        "archived": { "type": "integer", "minimum": 0 },
+        "platform": { "type": "integer", "minimum": 0 },
+        "mutationAllowed": { "type": "integer", "minimum": 0 },
+        "mutationDenied": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

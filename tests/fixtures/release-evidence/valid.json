@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "repository": {
+    "nameWithOwner": "maxbec/example",
+    "disposition": "in_scope",
+    "isFork": false,
+    "isArchived": false
+  },
+  "release": {
+    "version": "1.2.3",
+    "tagName": "v1.2.3",
+    "headSha": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "files": {
+    "artifact": {
+      "path": "release/example-v1.2.3.tar.gz",
+      "name": "example-v1.2.3.tar.gz",
+      "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    },
+    "sbom": {
+      "path": "release/example-v1.2.3.sbom.spdx.json",
+      "name": "example-v1.2.3.sbom.spdx.json",
+      "digest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    },
+    "checksum": {
+      "path": "release/example-v1.2.3.tar.gz.sha256",
+      "name": "example-v1.2.3.tar.gz.sha256",
+      "digest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+    }
+  }
+}

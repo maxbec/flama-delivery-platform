@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/paperclip-lifecycle.schema.json",
+  "title": "Flama Paperclip lifecycle contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "id", "initialState", "terminalStates", "states", "transitions"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "id": { "enum": ["project-bootstrap", "feature-fix", "release-deployment"] },
+    "initialState": { "type": "string", "minLength": 1 },
+    "terminalStates": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+    "states": { "type": "array", "minItems": 2, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+    "transitions": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["from", "to", "trigger", "authority", "evidence"],
+        "properties": {
+          "from": { "type": "string", "minLength": 1 },
+          "to": { "type": "string", "minLength": 1 },
+          "trigger": { "enum": ["paperclip_internal", "controller_signed", "github_signed", "owner_approval", "deployment_verification", "deployment_rollback"] },
+          "authority": { "enum": ["agent", "delivery-controller", "github", "max", "deploy-workflow"] },
+          "evidence": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" } }
+        }
+      }
+    }
+  }
+}

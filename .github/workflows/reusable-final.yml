@@ -1,0 +1,96 @@
+name: Reusable Final Gate
+
+on:
+  workflow_call:
+    inputs:
+      base-sha:
+        description: Exact pull-request base SHA
+        required: true
+        type: string
+      head-sha:
+        description: Exact stable-boundary head SHA to verify
+        required: true
+        type: string
+      platform-sha:
+        description: Exact platform commit used by generated callers
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: final-${{ github.repository }}-${{ inputs.head-sha }}
+  cancel-in-progress: true
+
+jobs:
+  final:
+    name: Final Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Validate exact SHA inputs
+        env:
+          FLAMA_BASE_SHA: ${{ inputs.base-sha }}
+          FLAMA_EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          FLAMA_EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          FLAMA_HEAD_SHA: ${{ inputs.head-sha }}
+          FLAMA_PLATFORM_SHA: ${{ inputs.platform-sha }}
+        run: |
+          [[ "$FLAMA_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$FLAMA_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$FLAMA_PLATFORM_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$FLAMA_BASE_SHA" == "$FLAMA_EVENT_BASE_SHA" ]]
+          [[ "$FLAMA_HEAD_SHA" == "$FLAMA_EVENT_HEAD_SHA" ]]
+
+      - name: Check out exact source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.head-sha }}
+          fetch-depth: 0
+          path: consumer
+          persist-credentials: false
+
+      - name: Classify deployment-only changes
+        id: change
+        env:
+          FLAMA_BASE_SHA: ${{ inputs.base-sha }}
+          FLAMA_HEAD_SHA: ${{ inputs.head-sha }}
+        run: |
+          mapfile -d '' files < <(git -C consumer diff --name-only --no-renames -z "$FLAMA_BASE_SHA" "$FLAMA_HEAD_SHA")
+          if [[ "${#files[@]}" -eq 1 && "${files[0]}" == ".deploy/production.yaml" ]]; then
+            echo 'mode=deployment' >> "$GITHUB_OUTPUT"
+          else
+            echo 'mode=code' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run authoritative full verification
+        if: ${{ steps.change.outputs.mode == 'code' }}
+        working-directory: consumer
+        run: ./scripts/delivery full
+
+      - name: Check out exact delivery platform
+        if: ${{ steps.change.outputs.mode == 'deployment' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: maxbec/flama-delivery-platform
+          ref: ${{ inputs.platform-sha }}
+          path: platform
+          persist-credentials: false
+
+      - name: Set up platform Node.js
+        if: ${{ steps.change.outputs.mode == 'deployment' }}
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: platform/.nvmrc
+
+      - name: Validate deployment manifest without application tests
+        if: ${{ steps.change.outputs.mode == 'deployment' }}
+        run: |
+          corepack enable
+          pnpm --dir platform install --frozen-lockfile
+          pnpm --dir platform build
+          node platform/dist/packages/delivery-ctl/src/main.js validate \
+            --schema deployment-manifest \
+            --format yaml \
+            --input consumer/.deploy/production.yaml

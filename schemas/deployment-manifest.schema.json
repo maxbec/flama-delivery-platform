@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/deployment-manifest.schema.json",
+  "title": "Owner-approved immutable production deployment manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "version", "release", "artifact", "previousArtifact", "provider", "migration", "verification", "rollback"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:-[0-9A-Za-z.-]+)?$" },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tag", "url"],
+      "properties": {
+        "tag": { "type": "string", "pattern": "^v[0-9]+\\.[0-9]+\\.[0-9]+" },
+        "url": { "type": "string", "format": "uri", "pattern": "^https://github\\.com/" }
+      }
+    },
+    "artifact": { "$ref": "#/$defs/artifact" },
+    "previousArtifact": { "oneOf": [{ "$ref": "#/$defs/artifact" }, { "type": "null" }] },
+    "provider": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "configurationRefs", "infisicalPath"],
+      "properties": {
+        "name": { "enum": ["docker-compose", "vercel-prebuilt", "digitalocean-app", "digitalocean-droplet", "hostinger-vps", "coolify", "render", "custom"] },
+        "configurationRefs": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "infisicalPath": { "type": "string", "pattern": "^/" }
+      }
+    },
+    "migration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "mode", "backupVerified", "rollbackCompatible"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "mode": { "enum": ["none", "expand", "contract", "expand-contract"] },
+        "backupVerified": { "type": "boolean" },
+        "rollbackCompatible": { "type": "boolean" }
+      }
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["healthCommand", "smokeCommand", "expectedVersion", "soakSeconds"],
+      "properties": {
+        "healthCommand": { "const": "./scripts/delivery health" },
+        "smokeCommand": { "const": "./scripts/delivery smoke" },
+        "expectedVersion": { "type": "string", "minLength": 1 },
+        "soakSeconds": { "type": "integer", "minimum": 600 }
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["automatic", "attemptLimit", "targetDigest"],
+      "properties": {
+        "automatic": { "const": true },
+        "attemptLimit": { "const": 1 },
+        "targetDigest": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$" }
+      }
+    }
+  },
+  "$defs": {
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "uri", "digest", "signature", "sbom"],
+      "properties": {
+        "kind": { "enum": ["oci", "vercel-prebuilt", "archive", "package"] },
+        "uri": { "type": "string", "minLength": 1, "not": { "pattern": ":latest$" } },
+        "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "signature": { "type": "string", "minLength": 1 },
+        "sbom": { "type": "string", "format": "uri" }
+      }
+    }
+  }
+}
