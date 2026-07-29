@@ -87,7 +87,7 @@ jobs:
 
       - name: Validate JSON syntax
         run: |
-          find lifecycles policies schemas tests/fixtures -type f -name '*.json' -print0 \
+          find lifecycles policies routines schemas tests/fixtures -type f -name '*.json' -print0 \
             | sort -z \
             | xargs -0 -n1 jq empty
 

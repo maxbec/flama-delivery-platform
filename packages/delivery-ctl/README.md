@@ -48,6 +48,13 @@ Implemented commands:
   lets only the matching company controller authorize one exact, expiring
   external lifecycle edge. It resolves the already-minimized event and active
   repository binding from PostgreSQL, refuses drift, and emits only a digest.
+- `paperclip-routines --input <routine-plan> --output <evidence>` creates or
+  reuses one exact, company-staggered nightly reconciliation routine through
+  Paperclip's documented routine and schedule-trigger APIs. The command verifies
+  the active company, exact paused zero-budget controller, and selected active
+  project, rejects board-approval bypass and drift, and always creates the
+  routine paused. Dry-run requests no identity and live evidence omits object
+  identifiers.
 - `preflight --input <run-plan> --output <evidence>` verifies the clean exact
   Git SHA and executes only `./scripts/delivery buildable` followed by
   `./scripts/delivery affected`. Child output is never echoed or persisted;
@@ -78,7 +85,7 @@ Implemented commands:
 - `secrets-audit --input <audit>` validates and audits an Infisical-first secret
   configuration using redacted finding codes.
 
-Every command accepts `--dry-run`; only `bootstrap`, `paperclip-foundation`, `paperclip-controllers`, `paperclip-bindings`, `paperclip-transition-authorize`,
+Every command accepts `--dry-run`; only `bootstrap`, `paperclip-foundation`, `paperclip-controllers`, `paperclip-bindings`, `paperclip-transition-authorize`, `paperclip-routines`,
 `preflight`, `publish-check`, `promote`, `release-evidence`, and `deploy`
 currently perform writes or execution when dry-run is absent. Inputs are JSON
 files capped at 10 MiB.

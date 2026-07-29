@@ -231,7 +231,7 @@ try {
     { flag: "wx" },
   );
 
-  for (const path of ["schemas", "policies", "templates", "lifecycles", "skills"]) {
+  for (const path of ["schemas", "policies", "templates", "lifecycles", "routines", "skills"]) {
     await cp(join(root, path), join(stageDirectory, path), { recursive: true, errorOnExist: true });
   }
   await mkdir(join(stageDirectory, "scripts"), { recursive: true });

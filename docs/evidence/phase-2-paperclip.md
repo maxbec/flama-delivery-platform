@@ -63,6 +63,12 @@ Implemented and verified:
   rejection, response-body suppression, exact-attempt GitHub job reads,
   identifier-free aggregation, timestamp validation, and private evidence
   permissions. The bundle is included in deterministic platform artifacts.
+- A versioned nightly reconciliation routine contract uses per-company
+  staggered schedules, coalesces overlapping runs, skips missed schedules, and
+  starts paused. The deterministic installer verifies the exact company,
+  approved paused controller, and explicitly selected active project, then uses
+  only Paperclip's documented routine and schedule-trigger APIs. It resumes an
+  exact interrupted creation but rejects duplicates, activation, or drift.
 
 Still pending:
 
@@ -76,6 +82,10 @@ Still pending:
   read-only identities and a private repository/profile selector file. Cache-hit
   coverage stays explicitly unavailable until generated workflows emit the
   bounded signal required for an actual rate.
+- Routine application remains pending the authoritative project selection and
+  the remaining controller's native board approval. Even after application,
+  activation remains gated on the deployed bridge, private bindings, and the
+  executable reconciliation audit path.
 - Consumer repository migration, GitHub App installation, and production
   deployment remain separate later-phase work with their own canaries and
   approvals.

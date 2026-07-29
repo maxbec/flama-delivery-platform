@@ -35,7 +35,7 @@ grep -Fq 'bash tests/release/test-bridge-bundle.sh' "$WORKFLOW"
 grep -Fq 'bash tests/release/test-governance-bundle.sh' "$WORKFLOW"
 grep -Fq 'bash tests/release/test-platform-release.sh' "$WORKFLOW"
 grep -Fq 'bash tests/scripts/test-delivery-script.sh' "$WORKFLOW"
-grep -Fq 'find lifecycles policies schemas tests/fixtures' "$WORKFLOW"
+grep -Fq 'find lifecycles policies routines schemas tests/fixtures' "$WORKFLOW"
 
 if grep -Eq 'pull_request_target|id-token:|secrets:|continue-on-error:|@[A-Za-z][A-Za-z0-9._-]*([[:space:]]|$)' "$WORKFLOW"; then
   echo "platform CI contains a forbidden trust or mutability pattern" >&2

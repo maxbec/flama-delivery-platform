@@ -23,6 +23,7 @@ grep -Fqx 'flama-delivery-platform-v0.1.0/bin/governance/index.js' <<< "$archive
 grep -Fqx 'flama-delivery-platform-v0.1.0/release-manifest.json' <<< "$archive_listing"
 grep -Fqx "flama-delivery-platform-v0.1.0/$sbom" <<< "$archive_listing"
 grep -Fqx 'flama-delivery-platform-v0.1.0/lifecycles/feature-fix.json' <<< "$archive_listing"
+grep -Fqx 'flama-delivery-platform-v0.1.0/routines/nightly-reconciliation.json' <<< "$archive_listing"
 grep -Fqx 'flama-delivery-platform-v0.1.0/skills/flama-paperclip-delivery/SKILL.md' <<< "$archive_listing"
 grep -Fqx 'flama-delivery-platform-v0.1.0/services/bridge/migrations/002_repository_bindings.sql' <<< "$archive_listing"
 grep -Fqx 'flama-delivery-platform-v0.1.0/services/bridge/migrations/004_external_transition_authorizations.sql' <<< "$archive_listing"

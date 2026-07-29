@@ -27,8 +27,8 @@ Paperclip project → ready task → isolated implementation → signed prefligh
   Fastify, AJV, and a PostgreSQL 18 durable inbox/outbox.
 - `flama-delivery-ctl` currently implements secret-safe `validate`, `inventory`,
   `classify`, `bootstrap`, `render`, `paperclip-foundation`, `preflight`,
-  `publish-check`, `promote`, `release-evidence`, `deployment-pr`, `deploy`, and
-  `secrets-audit` JSON commands.
+  `paperclip-routines`, `publish-check`, `promote`, `release-evidence`,
+  `deployment-pr`, `deploy`, and `secrets-audit` JSON commands.
   Remaining lifecycle commands are added only with their executable
   provider/evidence contracts.
 - The bridge authenticates GitHub webhook bytes before parsing, minimizes
@@ -84,6 +84,7 @@ services/bridge/         flama-delivery-bridge
 services/governance/     external read-only governance collector
 skills/                  Paperclip skills
 lifecycles/              Paperclip pipeline templates
+routines/                paused Paperclip routine contracts
 policies/                scope, GitHub, secrets, Dependabot and cost policy
 providers/               deployment adapters
 templates/               generated consumer files

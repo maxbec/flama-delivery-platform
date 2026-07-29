@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "key": "flama-nightly-reconciliation-v1",
+  "title": "Flama Nightly Delivery Reconciliation",
+  "description": "Audit the assigned company's durable delivery queue, authorized transition evidence, and Paperclip lifecycle state through the pinned deterministic controller runtime. Never infer repository/case bindings, replay dead letters, mutate GitHub, approve or deploy production, retrieve secret values, or advance a lifecycle without its required external evidence. Record only minimized evidence and route drift to a separately authorized remediation task.",
+  "priority": "low",
+  "initialStatus": "paused",
+  "concurrencyPolicy": "coalesce_if_active",
+  "catchUpPolicy": "skip_missed",
+  "trigger": {
+    "kind": "schedule",
+    "label": "flama-nightly-reconciliation-v1",
+    "enabled": true,
+    "timezone": "Europe/Berlin",
+    "cronByCompany": {
+      "Private": "17 1 * * *",
+      "// Navigaite": "31 1 * * *",
+      "Edilio": "47 1 * * *"
+    }
+  }
+}

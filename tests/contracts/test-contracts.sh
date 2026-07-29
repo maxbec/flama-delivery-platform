@@ -31,6 +31,9 @@ required_schemas=(
   paperclip-transition-authorization-input.schema.json
   paperclip-transition-authorization-result.schema.json
   paperclip-lifecycle.schema.json
+  paperclip-routine.schema.json
+  paperclip-routines-input.schema.json
+  paperclip-routines-result.schema.json
   paperclip-topology.schema.json
   deployment-manifest.schema.json
   deployment-pr-input.schema.json

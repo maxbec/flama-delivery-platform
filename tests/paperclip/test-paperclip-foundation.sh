@@ -132,4 +132,39 @@ jq -e '.states == ["Backlog", "Spec Ready", "Implementing", "Preflight Passed", 
 jq -e '.states == ["Collecting Changes", "Production Verification", "Released", "Deployment PR Open", "Awaiting Owner Approval", "Deploying", "Verified", "Closed"]' \
   "$ROOT_DIR/lifecycles/release-deployment.json" >/dev/null
 
+jq -e '
+  .key == "flama-nightly-reconciliation-v1" and
+  .initialStatus == "paused" and
+  .concurrencyPolicy == "coalesce_if_active" and
+  .catchUpPolicy == "skip_missed" and
+  .trigger.kind == "schedule" and
+  .trigger.enabled == true and
+  .trigger.timezone == "Europe/Berlin" and
+  (.trigger.cronByCompany | keys | sort) == ["// Navigaite", "Edilio", "Private"]
+' "$ROOT_DIR/routines/nightly-reconciliation.json" >/dev/null
+
+jq -e '
+  .properties.controllerAgentId.format == "uuid" and
+  .properties.projectId.format == "uuid" and
+  .properties.mutationAllowed.const == true and
+  (.allOf | length) == 3
+' "$ROOT_DIR/schemas/paperclip-routines-input.schema.json" >/dev/null
+
+jq -e '
+  .properties.initialStatus.const == "paused" and
+  .properties.trigger.properties.enabled.const == true and
+  .properties.contractDigest.pattern == "^sha256:[0-9a-f]{64}$"
+' "$ROOT_DIR/schemas/paperclip-routines-result.schema.json" >/dev/null
+
+routine_output=$(node "$ROOT_DIR/dist/packages/delivery-ctl/src/main.js" paperclip-routines \
+  --dry-run \
+  --input "$ROOT_DIR/tests/fixtures/paperclip-routines/valid.json")
+jq -e '
+  .ok == true and
+  .dryRun == true and
+  .result.status == "planned" and
+  .result.initialStatus == "paused" and
+  .result.trigger.cronExpression == "17 1 * * *"
+' <<< "$routine_output" >/dev/null
+
 echo "Paperclip foundation contracts passed"

@@ -73,6 +73,14 @@ import {
   planPaperclipTransitionAuthorization,
   PostgresTransitionAuthorizationWriter,
 } from "./paperclip-transition-authorization.js";
+import {
+  applyPaperclipRoutines,
+  type PaperclipRoutineContract,
+  PaperclipRestRoutinesClient,
+  PaperclipRoutinesError,
+  type PaperclipRoutinesInput,
+  planPaperclipRoutines,
+} from "./paperclip-routines.js";
 
 const toolVersion = "0.1.0";
 const maximumInputBytes = 10 * 1024 * 1024;
@@ -133,6 +141,9 @@ function isSchemaName(value: string | undefined): value is SchemaName {
     "paperclip-transition-authorization-input",
     "paperclip-transition-authorization-result",
     "paperclip-lifecycle",
+    "paperclip-routine",
+    "paperclip-routines-input",
+    "paperclip-routines-result",
     "paperclip-topology",
     "repository-inventory",
     "repository-scope-policy",
@@ -204,6 +215,7 @@ export async function runCli(
     command !== "paperclip-foundation" &&
     command !== "paperclip-bindings" &&
     command !== "paperclip-controllers" &&
+    command !== "paperclip-routines" &&
     command !== "paperclip-transition-authorize" &&
     command !== "classify" &&
     command !== "deployment-pr" &&
@@ -456,6 +468,33 @@ export async function runCli(
       return 0;
     }
 
+    if (command === "paperclip-routines") {
+      const validation = validator.validate("paperclip-routines-input", input);
+      if (!validation.ok) {
+        io.writeStdout(jsonLine({ command, ok: false, errors: validation.errors, toolVersion }));
+        return 1;
+      }
+      const contract = JSON.parse(await readFile(
+        join(repositoryRoot, "routines", "nightly-reconciliation.json"),
+        "utf8",
+      )) as PaperclipRoutineContract;
+      const contractValidation = validator.validate("paperclip-routine", contract);
+      if (!contractValidation.ok) return fail(io, "paperclip_contract_invalid");
+      const routinesInput = input as PaperclipRoutinesInput;
+      if (!options["dry-run"] && typeof options.output !== "string") return fail(io, "output_required");
+      const result = options["dry-run"]
+        ? planPaperclipRoutines(routinesInput, contract)
+        : await applyPaperclipRoutines(routinesInput, contract, new PaperclipRestRoutinesClient(process.env));
+      const resultValidation = validator.validate("paperclip-routines-result", result);
+      if (!resultValidation.ok) return fail(io, "result_validation_failed");
+      if (!options["dry-run"]) {
+        if (typeof options.output !== "string") return fail(io, "output_required");
+        await writeEvidence(options.output, result);
+      }
+      io.writeStdout(jsonLine({ command, dryRun: options["dry-run"], ok: true, toolVersion, result }));
+      return 0;
+    }
+
     if (command === "publish-check") {
       const validation = validator.validate("publish-check-input", input);
       if (!validation.ok) {
@@ -677,7 +716,8 @@ export async function runCli(
     if (error instanceof ReleaseEvidenceError) return fail(io, error.code);
     if (
       error instanceof PaperclipFoundationError || error instanceof PaperclipControllersError ||
-      error instanceof PaperclipBindingsError || error instanceof PaperclipTransitionAuthorizationError
+      error instanceof PaperclipBindingsError || error instanceof PaperclipTransitionAuthorizationError ||
+      error instanceof PaperclipRoutinesError
     ) return fail(io, error.code);
     return fail(io, "input_processing_failed");
   }
