@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 const migration = new URL("../migrations/001_inbox_outbox.sql", import.meta.url);
 const bindingsMigration = new URL("../migrations/002_repository_bindings.sql", import.meta.url);
+const bindingIdentityMigration = new URL("../migrations/003_binding_identity.sql", import.meta.url);
 
 describe("bridge database schema", () => {
   it("defines constrained queue states, FK indexes, and ready-work indexes", async () => {
@@ -26,6 +27,16 @@ describe("bridge database schema", () => {
     expect(sql).toContain("owner_name = 'maxbec' and company = 'private'");
     expect(sql).toContain("owner_name = 'navigaite' and company = '// navigaite'");
     expect(sql).toContain("owner_name = 'edilio' and company = 'edilio'");
+    expect(sql).not.toMatch(/insert into flama_delivery\.repository_binding/);
+  });
+
+  it("binds active rows to an exact GitHub identity, branch, and digest", async () => {
+    const sql = (await readFile(bindingIdentityMigration, "utf8")).toLowerCase();
+
+    expect(sql).toContain("github_repository_id bigint");
+    expect(sql).toContain("default_branch text");
+    expect(sql).toContain("binding_digest text");
+    expect(sql).toContain("repository_binding_active_workspace_idx");
     expect(sql).not.toMatch(/insert into flama_delivery\.repository_binding/);
   });
 });

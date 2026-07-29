@@ -81,6 +81,23 @@ jq -e '
   .properties.contractDigest.pattern == "^sha256:[0-9a-f]{64}$"
 ' "$ROOT_DIR/schemas/paperclip-controllers-result.schema.json" >/dev/null
 
+jq -e '
+  .properties.repository.properties.isFork.const == false and
+  .properties.repository.properties.isArchived.const == false and
+  .properties.repository.properties.inventoryVerifiedAt.format == "date-time" and
+  .properties.project.properties.id.format == "uuid" and
+  .properties.workspace.properties.id.format == "uuid" and
+  (.allOf | length) == 3
+' "$ROOT_DIR/schemas/paperclip-binding-input.schema.json" >/dev/null
+
+jq -e '
+  .properties.bindingDigest.pattern == "^sha256:[0-9a-f]{64}$" and
+  (.properties | has("repository") | not) and
+  (.properties | has("company") | not) and
+  (.properties | has("project") | not) and
+  (.properties | has("workspace") | not)
+' "$ROOT_DIR/schemas/paperclip-binding-result.schema.json" >/dev/null
+
 jq -e '.states == ["Intake", "Classified", "Repository Prepared", "Baseline Green", "Ready"]' \
   "$ROOT_DIR/lifecycles/project-bootstrap.json" >/dev/null
 jq -e '.states == ["Backlog", "Spec Ready", "Implementing", "Preflight Passed", "PR Open", "Merged", "Done"]' \

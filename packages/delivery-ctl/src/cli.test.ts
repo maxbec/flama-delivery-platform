@@ -47,6 +47,9 @@ const paperclipFoundationInputPath = fileURLToPath(
 const paperclipControllersInputPath = fileURLToPath(
   new URL("../../../tests/fixtures/paperclip-controllers/valid.json", import.meta.url),
 );
+const paperclipBindingsInputPath = fileURLToPath(
+  new URL("../../../tests/fixtures/paperclip-bindings/valid.json", import.meta.url),
+);
 
 describe("delivery CLI", () => {
   it("returns versioned JSON validation output", async () => {
@@ -306,6 +309,28 @@ describe("delivery CLI", () => {
     });
     expect(io.stdout).not.toContain("10000000-0000-4000-8000-000000000001");
     expect(io.stdout).not.toContain("/srv/flama-delivery-platform");
+    expect(io.stderr).toBe("");
+  });
+
+  it("dry-runs a project/workspace binding without exposing repository metadata", async () => {
+    const io = new MemoryIo();
+    const exitCode = await runCli(
+      ["paperclip-bindings", "--dry-run", "--input", paperclipBindingsInputPath],
+      io,
+      repositoryRoot,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(io.stdout)).toMatchObject({
+      command: "paperclip-bindings",
+      dryRun: true,
+      ok: true,
+      result: { status: "planned", disposition: "planned" },
+    });
+    expect(io.stdout).not.toContain("maxbec/example");
+    expect(io.stdout).not.toContain("10000000-0000-4000-8000-000000000001");
+    expect(io.stdout).not.toContain("20000000-0000-4000-8000-000000000002");
+    expect(io.stdout).not.toContain("30000000-0000-4000-8000-000000000003");
     expect(io.stderr).toBe("");
   });
 });

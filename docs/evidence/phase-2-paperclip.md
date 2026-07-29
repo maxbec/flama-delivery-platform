@@ -34,14 +34,22 @@ Implemented and verified:
 - Temporary inputs containing private identifiers were deleted after use.
   Retained evidence is mode `0600`, identifier-free, and outside the public
   checkout.
+- The approved topology uses three company-local, zero-budget process agents
+  and an external read-only governance service. Two company controllers are
+  verified paused; the remaining native hire request awaits its company's human
+  board approval and has not been bypassed.
+- `paperclip-bindings` now provides the fail-closed project/workspace binding
+  boundary. It verifies fresh inventory, company/project/workspace ownership,
+  canonical GitHub remote and default ref before inserting or refreshing a
+  private bridge binding, while emitting no repository or object identifiers.
 
 Still pending:
 
-- Paperclip agents are company-scoped. Deploying the controller runtime needs
-  an explicit choice between company-local delivery controllers with an
-  external read-only governance aggregator and a different documented model.
-- The bridge publisher remains disconnected until a private
-  repository-to-case binding contract and scoped machine identity exist.
+- One company controller remains behind Paperclip's native board approval.
+- Selecting each repository's project/workspace mapping and applying private
+  bindings remains pending; the command intentionally does not guess mappings.
+- The bridge publisher remains disconnected until event-to-case correlation and
+  a scoped machine identity exist.
 - Consumer repository migration, GitHub App installation, and production
   deployment remain separate later-phase work with their own canaries and
   approvals.

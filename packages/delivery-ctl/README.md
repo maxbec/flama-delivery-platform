@@ -39,6 +39,11 @@ Implemented commands:
   The agent is zero-budget and immediately paused, cannot create agents, skills,
   or assignments, and refuses configuration drift or board-approval bypasses.
   The external governance controller is deliberately not a Paperclip agent.
+- `paperclip-bindings --input <binding-plan> --output <evidence>` verifies one
+  fresh, non-fork, non-archived inventory record against the exact Paperclip
+  company, active project, project workspace, canonical GitHub remote, and
+  default ref before creating or refreshing its private bridge binding. It does
+  not create or edit Paperclip projects/workspaces and emits no names or IDs.
 - `preflight --input <run-plan> --output <evidence>` verifies the clean exact
   Git SHA and executes only `./scripts/delivery buildable` followed by
   `./scripts/delivery affected`. Child output is never echoed or persisted;
@@ -69,7 +74,7 @@ Implemented commands:
 - `secrets-audit --input <audit>` validates and audits an Infisical-first secret
   configuration using redacted finding codes.
 
-Every command accepts `--dry-run`; only `bootstrap`, `paperclip-foundation`, `paperclip-controllers`,
+Every command accepts `--dry-run`; only `bootstrap`, `paperclip-foundation`, `paperclip-controllers`, `paperclip-bindings`,
 `preflight`, `publish-check`, `promote`, `release-evidence`, and `deploy`
 currently perform writes or execution when dry-run is absent. Inputs are JSON
 files capped at 10 MiB.

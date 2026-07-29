@@ -58,6 +58,14 @@ import {
   PaperclipRestControllersClient,
   planPaperclipControllers,
 } from "./paperclip-controllers.js";
+import {
+  applyPaperclipBinding,
+  PaperclipBindingsError,
+  type PaperclipBindingInput,
+  PaperclipRestBindingsClient,
+  planPaperclipBinding,
+  PostgresRepositoryBindingStore,
+} from "./paperclip-bindings.js";
 
 const toolVersion = "0.1.0";
 const maximumInputBytes = 10 * 1024 * 1024;
@@ -107,6 +115,8 @@ function isSchemaName(value: string | undefined): value is SchemaName {
     "release-evidence-result",
     "platform-release-manifest",
     "paperclip-controller",
+    "paperclip-binding-input",
+    "paperclip-binding-result",
     "paperclip-controllers-input",
     "paperclip-controllers-result",
     "paperclip-foundation-input",
@@ -181,6 +191,7 @@ export async function runCli(
     command !== "bootstrap" &&
     command !== "inventory" &&
     command !== "paperclip-foundation" &&
+    command !== "paperclip-bindings" &&
     command !== "paperclip-controllers" &&
     command !== "classify" &&
     command !== "deployment-pr" &&
@@ -335,6 +346,39 @@ export async function runCli(
       if (!options["dry-run"]) {
         if (typeof outputPath !== "string") return fail(io, "output_required");
         await writeEvidence(outputPath, result);
+      }
+      io.writeStdout(jsonLine({ command, dryRun: options["dry-run"], ok: true, toolVersion, result }));
+      return 0;
+    }
+
+    if (command === "paperclip-bindings") {
+      const validation = validator.validate("paperclip-binding-input", input);
+      if (!validation.ok) {
+        io.writeStdout(jsonLine({ command, ok: false, errors: validation.errors, toolVersion }));
+        return 1;
+      }
+      const bindingInput = input as PaperclipBindingInput;
+      if (!options["dry-run"] && typeof options.output !== "string") return fail(io, "output_required");
+      let result;
+      if (options["dry-run"]) {
+        result = planPaperclipBinding(bindingInput);
+      } else {
+        const store = new PostgresRepositoryBindingStore(process.env);
+        try {
+          result = await applyPaperclipBinding(
+            bindingInput,
+            new PaperclipRestBindingsClient(process.env),
+            store,
+          );
+        } finally {
+          await store.close();
+        }
+      }
+      const resultValidation = validator.validate("paperclip-binding-result", result);
+      if (!resultValidation.ok) return fail(io, "result_validation_failed");
+      if (!options["dry-run"]) {
+        if (typeof options.output !== "string") return fail(io, "output_required");
+        await writeEvidence(options.output, result);
       }
       io.writeStdout(jsonLine({ command, dryRun: options["dry-run"], ok: true, toolVersion, result }));
       return 0;
@@ -590,7 +634,10 @@ export async function runCli(
     if (error instanceof PublishCheckError) return fail(io, error.code);
     if (error instanceof PromotionError) return fail(io, error.code);
     if (error instanceof ReleaseEvidenceError) return fail(io, error.code);
-    if (error instanceof PaperclipFoundationError || error instanceof PaperclipControllersError) return fail(io, error.code);
+    if (
+      error instanceof PaperclipFoundationError || error instanceof PaperclipControllersError ||
+      error instanceof PaperclipBindingsError
+    ) return fail(io, error.code);
     return fail(io, "input_processing_failed");
   }
 }

@@ -32,6 +32,8 @@ const schemaFiles = {
   "release-evidence-result": "release-evidence-result.schema.json",
   "platform-release-manifest": "platform-release-manifest.schema.json",
   "paperclip-controller": "paperclip-controller.schema.json",
+  "paperclip-binding-input": "paperclip-binding-input.schema.json",
+  "paperclip-binding-result": "paperclip-binding-result.schema.json",
   "paperclip-controllers-input": "paperclip-controllers-input.schema.json",
   "paperclip-controllers-result": "paperclip-controllers-result.schema.json",
   "paperclip-foundation-input": "paperclip-foundation-input.schema.json",

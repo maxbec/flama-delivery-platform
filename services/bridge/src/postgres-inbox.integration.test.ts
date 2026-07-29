@@ -3,6 +3,12 @@ import { fileURLToPath } from "node:url";
 import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
 import { Pool } from "pg";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import {
+  applyPaperclipBinding,
+  type PaperclipBindingInput,
+  type PaperclipBindingsClient,
+  PostgresRepositoryBindingStore,
+} from "../../../packages/delivery-ctl/src/paperclip-bindings.js";
 import { PostgresInbox } from "./postgres-inbox.js";
 import { PostgresRepositoryScope } from "./repository-scope.js";
 
@@ -14,10 +20,12 @@ describe("PostgreSQL durable inbox and outbox", () => {
   beforeAll(async () => {
     container = await new PostgreSqlContainer("postgres:18.0-alpine").start();
     pool = new Pool({ connectionString: container.getConnectionUri(), max: 4 });
-    for (const migration of ["001_inbox_outbox.sql", "002_repository_bindings.sql"]) {
+    for (const migration of ["001_inbox_outbox.sql", "002_repository_bindings.sql", "003_binding_identity.sql"]) {
       const migrationPath = fileURLToPath(new URL(`../migrations/${migration}`, import.meta.url));
       await pool.query(await readFile(migrationPath, "utf8"));
     }
+    const bindingIdentityMigration = fileURLToPath(new URL("../migrations/003_binding_identity.sql", import.meta.url));
+    await pool.query(await readFile(bindingIdentityMigration, "utf8"));
     inbox = new PostgresInbox(pool);
   });
 
@@ -227,16 +235,73 @@ describe("PostgreSQL durable inbox and outbox", () => {
     const digest = `sha256:${"d".repeat(64)}`;
     await pool.query(
       `INSERT INTO flama_delivery.repository_binding
-        (repository_name, owner_name, company, project_id, workspace_id, profile,
-         active, is_fork, is_archived, inventory_digest, verified_at)
+        (repository_name, github_repository_id, owner_name, company, project_id, workspace_id, profile,
+         default_branch, active, is_fork, is_archived, inventory_digest, verified_at, binding_digest)
        VALUES
-        ('maxbec/api', 'maxbec', 'Private', 'project-1', 'workspace-1', 'fast', true, false, false, $1, CURRENT_TIMESTAMP),
-        ('maxbec/retired', 'maxbec', 'Private', 'project-2', 'workspace-2', 'fast', false, false, true, $1, CURRENT_TIMESTAMP)`,
-      [digest],
+        ('maxbec/api', 101, 'maxbec', 'Private', '20000000-0000-4000-8000-000000000002', '30000000-0000-4000-8000-000000000003', 'fast', 'main', true, false, false, $1, CURRENT_TIMESTAMP, $2),
+        ('maxbec/retired', 102, 'maxbec', 'Private', '40000000-0000-4000-8000-000000000004', '50000000-0000-4000-8000-000000000005', 'fast', 'main', false, false, true, $1, CURRENT_TIMESTAMP, $2)`,
+      [digest, `sha256:${"e".repeat(64)}`],
     );
 
     await expect(scope.allows("maxbec", "maxbec/api")).resolves.toBe(true);
     await expect(scope.allows("maxbec", "maxbec/retired")).resolves.toBe(false);
     await expect(scope.allows("maxbec", "maxbec/unknown")).resolves.toBe(false);
+  });
+
+  it("creates, reads back, reuses, and safely refreshes an exact binding", async () => {
+    const companyId = "60000000-0000-4000-8000-000000000006";
+    const projectId = "70000000-0000-4000-8000-000000000007";
+    const workspaceId = "80000000-0000-4000-8000-000000000008";
+    const base: PaperclipBindingInput = {
+      schemaVersion: 1,
+      company: { id: companyId, name: "Private" },
+      controller: "maxbec-delivery-controller",
+      repository: {
+        nameWithOwner: "maxbec/bound-repository",
+        githubRepositoryId: 901,
+        profile: "fast",
+        defaultBranch: "main",
+        isFork: false,
+        isArchived: false,
+        inventoryDigest: `sha256:${"a".repeat(64)}`,
+        inventoryVerifiedAt: "2026-07-29T04:00:00.000Z",
+      },
+      project: { id: projectId },
+      workspace: { id: workspaceId },
+      mutationAllowed: true,
+    };
+    const client: PaperclipBindingsClient = {
+      async getCompany() { return { id: companyId, name: "Private", status: "active" }; },
+      async getProject() { return { id: projectId, companyId, status: "in_progress", archivedAt: null }; },
+      async listProjectWorkspaces() {
+        return [{
+          id: workspaceId,
+          companyId,
+          projectId,
+          sourceType: "git_repo",
+          repoUrl: "https://github.com/maxbec/bound-repository.git",
+          defaultRef: "main",
+        }];
+      },
+    };
+    const store = new PostgresRepositoryBindingStore({ DATABASE_URL: container.getConnectionUri() });
+    const now = new Date("2026-07-29T04:30:00.000Z");
+    try {
+      await expect(applyPaperclipBinding(base, client, store, now)).resolves.toMatchObject({ disposition: "created" });
+      await expect(applyPaperclipBinding(base, client, store, now)).resolves.toMatchObject({ disposition: "reused" });
+      const refreshed = {
+        ...base,
+        repository: {
+          ...base.repository,
+          inventoryDigest: `sha256:${"b".repeat(64)}`,
+          inventoryVerifiedAt: "2026-07-29T04:10:00.000Z",
+        },
+      } as const;
+      await expect(applyPaperclipBinding(refreshed, client, store, now)).resolves.toMatchObject({
+        disposition: "refreshed",
+      });
+    } finally {
+      await store.close();
+    }
   });
 });

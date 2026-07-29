@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "company": { "id": "10000000-0000-4000-8000-000000000001", "name": "Private" },
+  "controller": "maxbec-delivery-controller",
+  "repository": {
+    "nameWithOwner": "maxbec/example",
+    "githubRepositoryId": 101,
+    "profile": "fast",
+    "defaultBranch": "main",
+    "isFork": false,
+    "isArchived": false,
+    "inventoryDigest": "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+    "inventoryVerifiedAt": "2026-07-29T04:00:00.000Z"
+  },
+  "project": { "id": "20000000-0000-4000-8000-000000000002" },
+  "workspace": { "id": "30000000-0000-4000-8000-000000000003" },
+  "mutationAllowed": true
+}

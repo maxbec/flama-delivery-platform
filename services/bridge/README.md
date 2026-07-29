@@ -40,8 +40,14 @@ and `FLAMA_WORKER_ID`; numeric recovery and polling controls are bounded.
 Credential-bearing values use a redacting wrapper and configuration failures
 emit stable codes without reflecting rejected input.
 
-The `PaperclipPublisher` interface remains an unconnected boundary. Paperclip's
-pipeline API is documented and the platform can install canonical lifecycle
-pipelines, but publication still requires a private repository-to-case binding
-contract and scoped machine identity. Neither is guessed or replaced with a
-long-lived token.
+`flama-delivery-ctl paperclip-bindings` now verifies a fresh authoritative
+inventory record against the exact Paperclip company, active project, project
+workspace, canonical GitHub remote, and default ref before creating or safely
+refreshing a private database binding. It does not create or rewrite Paperclip
+projects/workspaces and never emits their IDs or repository names.
+
+The `PaperclipPublisher` interface remains unconnected until an event-to-case
+correlation record and scoped machine identity exist. Repository/project/
+workspace binding alone is deliberately insufficient to guess which case an
+external event may advance, and no long-lived token substitutes for that
+missing authority.

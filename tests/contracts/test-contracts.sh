@@ -20,6 +20,8 @@ required_schemas=(
   release-evidence-result.schema.json
   platform-release-manifest.schema.json
   paperclip-controller.schema.json
+  paperclip-binding-input.schema.json
+  paperclip-binding-result.schema.json
   paperclip-controllers-input.schema.json
   paperclip-controllers-result.schema.json
   paperclip-foundation-input.schema.json
