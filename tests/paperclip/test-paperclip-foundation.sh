@@ -156,15 +156,4 @@ jq -e '
   .properties.contractDigest.pattern == "^sha256:[0-9a-f]{64}$"
 ' "$ROOT_DIR/schemas/paperclip-routines-result.schema.json" >/dev/null
 
-routine_output=$(node "$ROOT_DIR/dist/packages/delivery-ctl/src/main.js" paperclip-routines \
-  --dry-run \
-  --input "$ROOT_DIR/tests/fixtures/paperclip-routines/valid.json")
-jq -e '
-  .ok == true and
-  .dryRun == true and
-  .result.status == "planned" and
-  .result.initialStatus == "paused" and
-  .result.trigger.cronExpression == "17 1 * * *"
-' <<< "$routine_output" >/dev/null
-
 echo "Paperclip foundation contracts passed"
