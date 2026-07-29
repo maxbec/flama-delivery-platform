@@ -69,6 +69,12 @@ Implemented and verified:
   approved paused controller, and explicitly selected active project, then uses
   only Paperclip's documented routine and schedule-trigger APIs. It resumes an
   exact interrupted creation but rejects duplicates, activation, or drift.
+- The `reconcile` command now provides the routine's executable read-only audit
+  boundary. It uses parameterized aggregate queries inside a bounded
+  repeatable-read PostgreSQL transaction forced read-only, verifies recent
+  authorization/case transition evidence through a GET-only Paperclip client,
+  fails closed on oversized scans, and writes only mode-0600 metadata evidence.
+  Ordinary output omits live identifiers, counts, and timestamps.
 
 Still pending:
 
@@ -84,8 +90,11 @@ Still pending:
   bounded signal required for an actual rate.
 - Routine application remains pending the authoritative project selection and
   the remaining controller's native board approval. Even after application,
-  activation remains gated on the deployed bridge, private bindings, and the
-  executable reconciliation audit path.
+  activation remains gated on the deployed bridge, private bindings, and exact
+  controller dispatch wiring for the managed routine issue.
+- Authoritative GitHub missed-event discovery remains pending the later scoped
+  GitHub App identities and private repository selectors. The current audit
+  intentionally does not guess either input or replay dead letters.
 - Consumer repository migration, GitHub App installation, and production
   deployment remain separate later-phase work with their own canaries and
   approvals.

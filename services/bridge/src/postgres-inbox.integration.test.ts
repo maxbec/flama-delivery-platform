@@ -14,6 +14,10 @@ import {
   type PaperclipTransitionAuthorizationInput,
   PostgresTransitionAuthorizationWriter,
 } from "../../../packages/delivery-ctl/src/paperclip-transition-authorization.js";
+import {
+  PostgresReconciliationReader,
+  type ReconciliationInput,
+} from "../../../packages/delivery-ctl/src/reconcile.js";
 import { PostgresInbox } from "./postgres-inbox.js";
 import {
   minimizedEventDigest,
@@ -34,6 +38,7 @@ describe("PostgreSQL durable inbox and outbox", () => {
       "002_repository_bindings.sql",
       "003_binding_identity.sql",
       "004_external_transition_authorizations.sql",
+      "005_reconciliation_indexes.sql",
     ]) {
       const migrationPath = fileURLToPath(new URL(`../migrations/${migration}`, import.meta.url));
       await pool.query(await readFile(migrationPath, "utf8"));
@@ -451,5 +456,41 @@ describe("PostgreSQL durable inbox and outbox", () => {
     } finally {
       await writer.close();
     }
+  });
+
+  it("audits a repeatable read-only company snapshot without changing durable state", async () => {
+    const reader = new PostgresReconciliationReader(pool);
+    const reconciliationInput: ReconciliationInput = {
+      schemaVersion: 1,
+      company: { id: "d0000000-0000-4000-8000-00000000000d", name: "Private" },
+      controller: "maxbec-delivery-controller",
+      controls: {
+        queueLagSeconds: 900,
+        staleClaimSeconds: 300,
+        authorizationExpiryWarningSeconds: 300,
+        lookbackSeconds: 172_800,
+        maximumAuthorizationRecords: 500,
+      },
+      mutationAllowed: false,
+    };
+    const before = await pool.query<{ inbox: string; outbox: string; authorizations: string }>(`
+      SELECT
+        (SELECT count(*)::text FROM flama_delivery.webhook_inbox) AS inbox,
+        (SELECT count(*)::text FROM flama_delivery.transition_outbox) AS outbox,
+        (SELECT count(*)::text FROM flama_delivery.external_transition_authorization) AS authorizations
+    `);
+
+    const snapshot = await reader.read(reconciliationInput, new Date());
+    const after = await pool.query<{ inbox: string; outbox: string; authorizations: string }>(`
+      SELECT
+        (SELECT count(*)::text FROM flama_delivery.webhook_inbox) AS inbox,
+        (SELECT count(*)::text FROM flama_delivery.transition_outbox) AS outbox,
+        (SELECT count(*)::text FROM flama_delivery.external_transition_authorization) AS authorizations
+    `);
+
+    expect(snapshot.activeBindings).toBeGreaterThanOrEqual(1);
+    expect(snapshot.authorizationRecords.length).toBeGreaterThanOrEqual(2);
+    expect(snapshot.authorizations.missingOutbox).toBeGreaterThanOrEqual(1);
+    expect(after.rows[0]).toEqual(before.rows[0]);
   });
 });

@@ -20,6 +20,9 @@ required_schemas=(
   promotion-result.schema.json
   release-evidence-input.schema.json
   release-evidence-result.schema.json
+  reconciliation-evidence.schema.json
+  reconciliation-input.schema.json
+  reconciliation-result.schema.json
   platform-release-manifest.schema.json
   paperclip-controller.schema.json
   paperclip-binding-input.schema.json

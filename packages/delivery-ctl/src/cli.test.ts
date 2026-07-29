@@ -53,6 +53,9 @@ const paperclipBindingsInputPath = fileURLToPath(
 const paperclipRoutinesInputPath = fileURLToPath(
   new URL("../../../tests/fixtures/paperclip-routines/valid.json", import.meta.url),
 );
+const reconciliationInputPath = fileURLToPath(
+  new URL("../../../tests/fixtures/reconciliation/valid.json", import.meta.url),
+);
 
 describe("delivery CLI", () => {
   it("returns versioned JSON validation output", async () => {
@@ -360,6 +363,29 @@ describe("delivery CLI", () => {
     expect(io.stdout).not.toContain("10000000-0000-4000-8000-000000000001");
     expect(io.stdout).not.toContain("20000000-0000-4000-8000-000000000002");
     expect(io.stdout).not.toContain("30000000-0000-4000-8000-000000000003");
+    expect(io.stderr).toBe("");
+  });
+
+  it("dry-runs read-only reconciliation without requesting identity or exposing company IDs", async () => {
+    const io = new MemoryIo();
+    const exitCode = await runCli(
+      ["reconcile", "--dry-run", "--input", reconciliationInputPath],
+      io,
+      repositoryRoot,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(io.stdout)).toMatchObject({
+      command: "reconcile",
+      dryRun: true,
+      ok: true,
+      result: {
+        status: "planned",
+        controller: "maxbec-delivery-controller",
+        mode: "read_only",
+      },
+    });
+    expect(io.stdout).not.toContain("10000000-0000-4000-8000-000000000001");
     expect(io.stderr).toBe("");
   });
 

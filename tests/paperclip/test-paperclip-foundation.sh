@@ -156,4 +156,25 @@ jq -e '
   .properties.contractDigest.pattern == "^sha256:[0-9a-f]{64}$"
 ' "$ROOT_DIR/schemas/paperclip-routines-result.schema.json" >/dev/null
 
+jq -e '
+  .properties.company.properties.id.format == "uuid" and
+  .properties.controls.properties.maximumAuthorizationRecords.maximum == 1000 and
+  .properties.mutationAllowed.const == false and
+  (.allOf | length) == 3
+' "$ROOT_DIR/schemas/reconciliation-input.schema.json" >/dev/null
+
+jq -e '
+  .properties.mode.const == "read_only" and
+  (.properties | has("company") | not) and
+  (.properties | has("companyId") | not) and
+  (.properties | has("repositories") | not)
+' "$ROOT_DIR/schemas/reconciliation-result.schema.json" >/dev/null
+
+jq -e '
+  .properties.mode.const == "read_only" and
+  .properties.database.properties.activeBindings."$ref" == "#/$defs/count" and
+  (.properties | has("companyId") | not) and
+  (.properties | has("repositories") | not)
+' "$ROOT_DIR/schemas/reconciliation-evidence.schema.json" >/dev/null
+
 echo "Paperclip foundation contracts passed"

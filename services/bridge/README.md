@@ -46,8 +46,10 @@ job before starting the service; do not grant the runtime role schema-owner
 privileges. `001_inbox_outbox.sql` defines the durable queues,
 `002_repository_bindings.sql` and `003_binding_identity.sql` define private
 runtime bindings without embedding repository names in this public repository,
-and `004_external_transition_authorizations.sql` constrains the exact external
-lifecycle edges a company controller may authorize.
+`004_external_transition_authorizations.sql` constrains the exact external
+lifecycle edges a company controller may authorize, and
+`005_reconciliation_indexes.sql` adds company-scoped read paths for the bounded
+nightly audit without modifying queue data.
 
 Runtime configuration is environment-only after Infisical/OIDC injection. The
 runtime requires `DATABASE_URL`, `GITHUB_WEBHOOK_SECRET`,

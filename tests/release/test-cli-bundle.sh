@@ -142,6 +142,22 @@ if grep -Eq 'maxbec/example|release/example' "$FIRST/release-evidence-plan.json"
   exit 1
 fi
 
+(cd "$ROOT_DIR" && node "$FIRST/index.js" reconcile \
+  --dry-run \
+  --input tests/fixtures/reconciliation/valid.json \
+  > "$FIRST/reconciliation-plan.json")
+jq -e '
+  .ok == true and
+  .command == "reconcile" and
+  .result.status == "planned" and
+  .result.mode == "read_only" and
+  (.result.evidenceDigest? == null)
+' "$FIRST/reconciliation-plan.json" >/dev/null
+if grep -Fq '10000000-0000-4000-8000-000000000001' "$FIRST/reconciliation-plan.json"; then
+  echo 'bundled reconciliation command exposed a company identifier' >&2
+  exit 1
+fi
+
 evidence="$FIRST/deployment-result.json"
 if (cd "$ROOT_DIR" && node "$FIRST/index.js" deploy \
   --format yaml \

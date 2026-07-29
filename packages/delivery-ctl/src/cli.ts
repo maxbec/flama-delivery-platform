@@ -81,6 +81,13 @@ import {
   type PaperclipRoutinesInput,
   planPaperclipRoutines,
 } from "./paperclip-routines.js";
+import {
+  auditReconciliation,
+  createReconciliationRuntime,
+  planReconciliation,
+  ReconciliationError,
+  type ReconciliationInput,
+} from "./reconcile.js";
 
 const toolVersion = "0.1.0";
 const maximumInputBytes = 10 * 1024 * 1024;
@@ -130,6 +137,9 @@ function isSchemaName(value: string | undefined): value is SchemaName {
     "promotion-result",
     "release-evidence-input",
     "release-evidence-result",
+    "reconciliation-evidence",
+    "reconciliation-input",
+    "reconciliation-result",
     "platform-release-manifest",
     "paperclip-controller",
     "paperclip-binding-input",
@@ -224,6 +234,7 @@ export async function runCli(
     command !== "publish-check" &&
     command !== "promote" &&
     command !== "release-evidence" &&
+    command !== "reconcile" &&
     command !== "secrets-audit" &&
     command !== "render"
   ) {
@@ -495,6 +506,43 @@ export async function runCli(
       return 0;
     }
 
+    if (command === "reconcile") {
+      const validation = validator.validate("reconciliation-input", input);
+      if (!validation.ok) {
+        io.writeStdout(jsonLine({ command, ok: false, errors: validation.errors, toolVersion }));
+        return 1;
+      }
+      const reconciliationInput = input as ReconciliationInput;
+      if (!options["dry-run"] && typeof options.output !== "string") return fail(io, "output_required");
+      if (options["dry-run"]) {
+        const result = planReconciliation(reconciliationInput);
+        const resultValidation = validator.validate("reconciliation-result", result);
+        if (!resultValidation.ok) return fail(io, "result_validation_failed");
+        io.writeStdout(jsonLine({ command, dryRun: true, ok: true, toolVersion, result }));
+        return 0;
+      }
+      const runtime = createReconciliationRuntime(process.env);
+      let audit;
+      try {
+        audit = await auditReconciliation(reconciliationInput, runtime);
+      } finally {
+        await runtime.close();
+      }
+      const resultValidation = validator.validate("reconciliation-result", audit.result);
+      const evidenceValidation = validator.validate("reconciliation-evidence", audit.evidence);
+      if (!resultValidation.ok || !evidenceValidation.ok) return fail(io, "result_validation_failed");
+      if (typeof options.output !== "string") return fail(io, "output_required");
+      await writeEvidence(options.output, audit.evidence);
+      io.writeStdout(jsonLine({
+        command,
+        dryRun: false,
+        ok: audit.result.status === "compliant",
+        toolVersion,
+        result: audit.result,
+      }));
+      return audit.result.status === "compliant" ? 0 : 1;
+    }
+
     if (command === "publish-check") {
       const validation = validator.validate("publish-check-input", input);
       if (!validation.ok) {
@@ -717,7 +765,7 @@ export async function runCli(
     if (
       error instanceof PaperclipFoundationError || error instanceof PaperclipControllersError ||
       error instanceof PaperclipBindingsError || error instanceof PaperclipTransitionAuthorizationError ||
-      error instanceof PaperclipRoutinesError
+      error instanceof PaperclipRoutinesError || error instanceof ReconciliationError
     ) return fail(io, error.code);
     return fail(io, "input_processing_failed");
   }

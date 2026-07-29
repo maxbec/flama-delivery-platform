@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/reconciliation-evidence.schema.json",
+  "title": "Private metadata-only reconciliation evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "observedAt", "status", "controller", "mode", "database", "paperclip"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "observedAt": { "type": "string", "format": "date-time" },
+    "status": { "enum": ["compliant", "attention", "insufficient_data"] },
+    "controller": { "enum": ["maxbec-delivery-controller", "navigaite-delivery-controller", "edilio-delivery-controller"] },
+    "mode": { "const": "read_only" },
+    "database": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "activeBindings", "inbox", "outbox", "authorizations", "integrity"],
+      "properties": {
+        "status": { "enum": ["compliant", "attention", "insufficient_data"] },
+        "activeBindings": { "$ref": "#/$defs/count" },
+        "inbox": { "$ref": "#/$defs/queue" },
+        "outbox": { "$ref": "#/$defs/queue" },
+        "authorizations": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["active", "expiring", "expiredUnpublished", "bindingDrift", "missingOutbox", "publicationMismatch", "overdueWithoutAuthorization"],
+          "properties": {
+            "active": { "$ref": "#/$defs/count" },
+            "expiring": { "$ref": "#/$defs/count" },
+            "expiredUnpublished": { "$ref": "#/$defs/count" },
+            "bindingDrift": { "$ref": "#/$defs/count" },
+            "missingOutbox": { "$ref": "#/$defs/count" },
+            "publicationMismatch": { "$ref": "#/$defs/count" },
+            "overdueWithoutAuthorization": { "$ref": "#/$defs/count" }
+          }
+        },
+        "integrity": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["completedWithoutTransition", "outboxScopeMismatch", "deadLetterMismatch"],
+          "properties": {
+            "completedWithoutTransition": { "$ref": "#/$defs/count" },
+            "outboxScopeMismatch": { "$ref": "#/$defs/count" },
+            "deadLetterMismatch": { "$ref": "#/$defs/count" }
+          }
+        }
+      }
+    },
+    "paperclip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "checkedCases", "scopeDrift", "missingTransitionEvidence", "unrecordedTransitionEvidence", "stateConflict"],
+      "properties": {
+        "status": { "enum": ["compliant", "attention", "not_applicable"] },
+        "checkedCases": { "$ref": "#/$defs/count" },
+        "scopeDrift": { "$ref": "#/$defs/count" },
+        "missingTransitionEvidence": { "$ref": "#/$defs/count" },
+        "unrecordedTransitionEvidence": { "$ref": "#/$defs/count" },
+        "stateConflict": { "$ref": "#/$defs/count" }
+      }
+    }
+  },
+  "$defs": {
+    "count": { "type": "integer", "minimum": 0 },
+    "queue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ready", "overdue", "staleClaims", "deadLettered"],
+      "properties": {
+        "ready": { "$ref": "#/$defs/count" },
+        "overdue": { "$ref": "#/$defs/count" },
+        "staleClaims": { "$ref": "#/$defs/count" },
+        "deadLettered": { "$ref": "#/$defs/count" }
+      }
+    }
+  }
+}

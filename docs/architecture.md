@@ -70,6 +70,15 @@ and exact-attempt job metadata provide duration, queue, retry, and runner-time
 measurements. Cache-hit coverage is explicitly unavailable until generated
 consumer workflows emit a bounded signal.
 
+Nightly reconciliation has a separate read-only boundary. PostgreSQL sessions
+default to read-only and use a bounded repeatable-read transaction; Paperclip
+requests are hard-coded to GET. The audit compares aggregate queue, dead-letter,
+binding, authorization, case, and transition-event state without emitting
+repository, delivery, case, pipeline, or company identifiers. Detailed evidence
+is create-only mode `0600`; normal output contains only status and digests.
+Reconciliation cannot replay queues, mutate Paperclip, infer bindings, or scan
+GitHub until the later scoped App identities and private selectors exist.
+
 ## Artifact and deployment contract
 
 Release packaging produces an immutable artifact with digest, SBOM, signature,

@@ -5,6 +5,7 @@ const migration = new URL("../migrations/001_inbox_outbox.sql", import.meta.url)
 const bindingsMigration = new URL("../migrations/002_repository_bindings.sql", import.meta.url);
 const bindingIdentityMigration = new URL("../migrations/003_binding_identity.sql", import.meta.url);
 const transitionAuthorizationMigration = new URL("../migrations/004_external_transition_authorizations.sql", import.meta.url);
+const reconciliationIndexesMigration = new URL("../migrations/005_reconciliation_indexes.sql", import.meta.url);
 
 describe("bridge database schema", () => {
   it("defines constrained queue states, FK indexes, and ready-work indexes", async () => {
@@ -51,5 +52,16 @@ describe("bridge database schema", () => {
     expect(sql).toContain("binding_digest text not null");
     expect(sql).toContain("awaiting_owner_approval");
     expect(sql).not.toMatch(/insert into flama_delivery\.external_transition_authorization/);
+  });
+
+  it("indexes bounded company reconciliation scans without changing data", async () => {
+    const sql = (await readFile(reconciliationIndexesMigration, "utf8")).toLowerCase();
+
+    expect(sql).toContain("webhook_inbox_reconciliation_idx");
+    expect(sql).toContain("transition_outbox_reconciliation_idx");
+    expect(sql).toContain("external_transition_authorization_reconciliation_idx");
+    expect(sql).toContain("external_transition_authorization_unpublished_idx");
+    expect(sql).toContain("where revoked_at is null and published_at is null");
+    expect(sql).not.toMatch(/\b(?:insert|update|delete)\b/);
   });
 });

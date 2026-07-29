@@ -55,6 +55,15 @@ Implemented commands:
   project, rejects board-approval bypass and drift, and always creates the
   routine paused. Dry-run requests no identity and live evidence omits object
   identifiers.
+- `reconcile --input <company-audit> --output <evidence>` performs a bounded,
+  repeatable-read PostgreSQL audit of one company's bindings, inbox/outbox,
+  dead letters, and transition authorizations, then verifies recent case and
+  transition evidence through a hard GET-only Paperclip client. It never
+  replays work or advances a case. Detailed counts and timestamps are written
+  create-only at mode `0600`; stdout contains only status, controller, and
+  digests. Missing GitHub webhook discovery remains disabled until an
+  authoritative private repository selector is supplied by the later scoped
+  GitHub App rollout.
 - `preflight --input <run-plan> --output <evidence>` verifies the clean exact
   Git SHA and executes only `./scripts/delivery buildable` followed by
   `./scripts/delivery affected`. Child output is never echoed or persisted;
@@ -86,9 +95,10 @@ Implemented commands:
   configuration using redacted finding codes.
 
 Every command accepts `--dry-run`; only `bootstrap`, `paperclip-foundation`, `paperclip-controllers`, `paperclip-bindings`, `paperclip-transition-authorize`, `paperclip-routines`,
-`preflight`, `publish-check`, `promote`, `release-evidence`, and `deploy`
-currently perform writes or execution when dry-run is absent. Inputs are JSON
-files capped at 10 MiB.
+`reconcile`, `preflight`, `publish-check`, `promote`, `release-evidence`, and
+`deploy` currently perform external reads, writes, or execution when dry-run is
+absent. `reconcile` is externally read-only and writes only its requested local
+evidence file. Inputs are JSON files capped at 10 MiB.
 Secret values are not valid fields in the secret-audit schema.
 
 Development:

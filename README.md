@@ -27,14 +27,21 @@ Paperclip project → ready task → isolated implementation → signed prefligh
   Fastify, AJV, and a PostgreSQL 18 durable inbox/outbox.
 - `flama-delivery-ctl` currently implements secret-safe `validate`, `inventory`,
   `classify`, `bootstrap`, `render`, `paperclip-foundation`, `preflight`,
-  `paperclip-routines`, `publish-check`, `promote`, `release-evidence`,
-  `deployment-pr`, `deploy`, and `secrets-audit` JSON commands.
+  `paperclip-controllers`, `paperclip-bindings`,
+  `paperclip-transition-authorize`, `paperclip-routines`, `reconcile`,
+  `publish-check`, `promote`, `release-evidence`, `deployment-pr`, `deploy`, and
+  `secrets-audit` JSON commands.
   Remaining lifecycle commands are added only with their executable
   provider/evidence contracts.
 - The bridge authenticates GitHub webhook bytes before parsing, minimizes
   accepted payloads before persistence, requires a private active repository
   binding at intake and processing, deduplicates deliveries, replays stale
   claims, and bounds inbox/outbox retries with payload-free dead-letter records.
+- Reconciliation now has an executable read-only audit boundary: PostgreSQL is
+  forced into a repeatable-read read-only transaction, Paperclip transport is
+  GET-only, scans are bounded, detailed metadata is create-only mode `0600`,
+  and ordinary output is digest-only. It does not replay dead letters, infer
+  mappings, or discover missed GitHub events without later private selectors.
 - The validated `flama-paperclip-delivery` skill and enforced canonical
   lifecycle pipelines are installed in the approved live Paperclip scope from
   pinned source. Two zero-budget company controllers are verified paused; the

@@ -27,6 +27,7 @@ grep -Fqx 'flama-delivery-platform-v0.1.0/routines/nightly-reconciliation.json' 
 grep -Fqx 'flama-delivery-platform-v0.1.0/skills/flama-paperclip-delivery/SKILL.md' <<< "$archive_listing"
 grep -Fqx 'flama-delivery-platform-v0.1.0/services/bridge/migrations/002_repository_bindings.sql' <<< "$archive_listing"
 grep -Fqx 'flama-delivery-platform-v0.1.0/services/bridge/migrations/004_external_transition_authorizations.sql' <<< "$archive_listing"
+grep -Fqx 'flama-delivery-platform-v0.1.0/services/bridge/migrations/005_reconciliation_indexes.sql' <<< "$archive_listing"
 grep -Fqx 'flama-delivery-platform-v0.1.0/scripts/consumer-policy-gate.mjs' <<< "$archive_listing"
 
 EXTRACTED=$(mktemp -d)
