@@ -75,6 +75,12 @@ Implemented and verified:
   authorization/case transition evidence through a GET-only Paperclip client,
   fails closed on oversized scans, and writes only mode-0600 metadata evidence.
   Ordinary output omits live identifiers, counts, and timestamps.
+- The company controller now recognizes only the exact schedule-created routine
+  issue bound to its current Paperclip execution run. It re-verifies the active
+  routine, sole enabled trigger, and linked routine-run record before invoking
+  the fixed read-only audit. Arbitrary assignments and manual or drifted runs
+  fail closed. Detailed evidence remains create-only mode `0600` outside the
+  checkout; the issue receives only the audit status and evidence digest.
 
 Still pending:
 
@@ -89,9 +95,9 @@ Still pending:
   coverage stays explicitly unavailable until generated workflows emit the
   bounded signal required for an actual rate.
 - Routine application remains pending the authoritative project selection and
-  the remaining controller's native board approval. Even after application,
-  activation remains gated on the deployed bridge, private bindings, and exact
-  controller dispatch wiring for the managed routine issue.
+  the remaining controller's native board approval. Activation remains gated
+  on the deployed bridge, private bindings, scoped runtime identity injection,
+  and an explicit production authorization.
 - Authoritative GitHub missed-event discovery remains pending the later scoped
   GitHub App identities and private repository selectors. The current audit
   intentionally does not guess either input or replay dead letters.

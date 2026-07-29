@@ -79,6 +79,15 @@ is create-only mode `0600`; normal output contains only status and digests.
 Reconciliation cannot replay queues, mutate Paperclip, infer bindings, or scan
 GitHub until the later scoped App identities and private selectors exist.
 
+The company controller dispatches that audit only for one active assignment
+whose execution run matches its current Paperclip run and whose issue, routine,
+schedule trigger, and routine-run records match the repository-pinned contract.
+Manual routine runs, arbitrary issues, concurrent assignments, disabled or
+drifted routines, and unbound runs fail closed before the database is opened.
+After evidence is safely persisted outside the checkout, the controller uses
+Paperclip's documented issue-update API only to mark a compliant execution done
+or route a non-compliant execution to review with a status and evidence digest.
+
 ## Artifact and deployment contract
 
 Release packaging produces an immutable artifact with digest, SBOM, signature,

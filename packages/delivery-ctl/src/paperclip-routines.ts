@@ -22,6 +22,18 @@ export interface PaperclipRoutineContract {
   readonly initialStatus: "paused";
   readonly concurrencyPolicy: "coalesce_if_active";
   readonly catchUpPolicy: "skip_missed";
+  readonly execution: {
+    readonly command: "reconcile";
+    readonly mode: "read_only";
+    readonly evidenceDirectoryEnvironment: "FLAMA_RECONCILIATION_EVIDENCE_DIR";
+    readonly controls: {
+      readonly queueLagSeconds: 900;
+      readonly staleClaimSeconds: 300;
+      readonly authorizationExpiryWarningSeconds: 300;
+      readonly lookbackSeconds: 172800;
+      readonly maximumAuthorizationRecords: 500;
+    };
+  };
   readonly trigger: {
     readonly kind: "schedule";
     readonly label: "flama-nightly-reconciliation-v1";
@@ -58,6 +70,18 @@ interface RoutineSpec {
     readonly cronExpression: string;
     readonly timezone: "Europe/Berlin";
   };
+  readonly contractDigest: string;
+}
+
+export interface ResolvedPaperclipRoutineContract {
+  readonly key: "flama-nightly-reconciliation-v1";
+  readonly title: "Flama Nightly Delivery Reconciliation";
+  readonly description: string;
+  readonly priority: "low";
+  readonly concurrencyPolicy: "coalesce_if_active";
+  readonly catchUpPolicy: "skip_missed";
+  readonly execution: PaperclipRoutineContract["execution"];
+  readonly trigger: RoutineSpec["trigger"];
   readonly contractDigest: string;
 }
 
@@ -176,11 +200,19 @@ function validateContract(contract: PaperclipRoutineContract): void {
     "// Navigaite": "31 1 * * *",
     Edilio: "47 1 * * *",
   } as const;
-  if (contract.schemaVersion !== 1 || contract.key !== "flama-nightly-reconciliation-v1" ||
+  if (!isRecord(contract.execution) || !isRecord(contract.execution.controls) || !isRecord(contract.trigger) ||
+    contract.schemaVersion !== 1 || contract.key !== "flama-nightly-reconciliation-v1" ||
     contract.title !== "Flama Nightly Delivery Reconciliation" || contract.description.length < 100 ||
     contract.description.length > 2_000 || /[\u0000\r]/u.test(contract.description) ||
     contract.priority !== "low" || contract.initialStatus !== "paused" ||
     contract.concurrencyPolicy !== "coalesce_if_active" || contract.catchUpPolicy !== "skip_missed" ||
+    contract.execution.command !== "reconcile" || contract.execution.mode !== "read_only" ||
+    contract.execution.evidenceDirectoryEnvironment !== "FLAMA_RECONCILIATION_EVIDENCE_DIR" ||
+    contract.execution.controls.queueLagSeconds !== 900 ||
+    contract.execution.controls.staleClaimSeconds !== 300 ||
+    contract.execution.controls.authorizationExpiryWarningSeconds !== 300 ||
+    contract.execution.controls.lookbackSeconds !== 172_800 ||
+    contract.execution.controls.maximumAuthorizationRecords !== 500 ||
     contract.trigger.kind !== "schedule" || contract.trigger.label !== contract.key ||
     contract.trigger.enabled !== true || contract.trigger.timezone !== "Europe/Berlin" ||
     JSON.stringify(stableValue(contract.trigger.cronByCompany)) !== JSON.stringify(stableValue(expectedCron))) {
@@ -188,29 +220,49 @@ function validateContract(contract: PaperclipRoutineContract): void {
   }
 }
 
-function routineSpec(input: PaperclipRoutinesInput, contract: PaperclipRoutineContract): RoutineSpec {
-  validateInput(input);
+export function resolvePaperclipRoutineContract(
+  company: CompanyName,
+  contract: PaperclipRoutineContract,
+): ResolvedPaperclipRoutineContract {
   validateContract(contract);
   const contractDigest = digest(contract);
   return {
     key: contract.key,
     title: contract.title,
     description: `Managed by flama-delivery-platform; key=${contract.key}; contract=${contractDigest}\n\n${contract.description}`,
-    projectId: input.projectId,
-    assigneeAgentId: input.controllerAgentId,
     priority: contract.priority,
-    status: contract.initialStatus,
     concurrencyPolicy: contract.concurrencyPolicy,
     catchUpPolicy: contract.catchUpPolicy,
-    variables: [],
+    execution: contract.execution,
     trigger: {
       kind: contract.trigger.kind,
       label: contract.trigger.label,
       enabled: contract.trigger.enabled,
-      cronExpression: contract.trigger.cronByCompany[input.company.name],
+      cronExpression: contract.trigger.cronByCompany[company],
       timezone: contract.trigger.timezone,
     },
     contractDigest,
+  };
+}
+
+function routineSpec(input: PaperclipRoutinesInput, contract: PaperclipRoutineContract): RoutineSpec {
+  validateInput(input);
+  const resolved = resolvePaperclipRoutineContract(input.company.name, contract);
+  return {
+    key: resolved.key,
+    title: resolved.title,
+    description: resolved.description,
+    projectId: input.projectId,
+    assigneeAgentId: input.controllerAgentId,
+    priority: contract.priority,
+    status: contract.initialStatus,
+    concurrencyPolicy: resolved.concurrencyPolicy,
+    catchUpPolicy: resolved.catchUpPolicy,
+    variables: [],
+    trigger: {
+      ...resolved.trigger,
+    },
+    contractDigest: resolved.contractDigest,
   };
 }
 

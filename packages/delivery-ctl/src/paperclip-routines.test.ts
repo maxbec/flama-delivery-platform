@@ -117,6 +117,19 @@ describe("Paperclip routine provisioning", () => {
     });
   });
 
+  it("pins the managed read-only execution controls", () => {
+    const drifted = {
+      ...contract,
+      execution: {
+        ...contract.execution,
+        controls: { ...contract.execution.controls, queueLagSeconds: 901 },
+      },
+    } as unknown as PaperclipRoutineContract;
+    expect(() => planPaperclipRoutines(input, drifted)).toThrow(expect.objectContaining<Partial<PaperclipRoutinesError>>({
+      code: "paperclip_contract_invalid",
+    }));
+  });
+
   it("creates the paused routine and trigger then reuses them idempotently", async () => {
     const client = new FakeClient();
     await expect(applyPaperclipRoutines(input, contract, client)).resolves.toMatchObject({

@@ -64,6 +64,12 @@ Implemented commands:
   digests. Missing GitHub webhook discovery remains disabled until an
   authoritative private repository selector is supplied by the later scoped
   GitHub App rollout.
+- The Flama-owned company controller invokes that same audit only when its sole
+  active assignment is the exact scheduled execution issue for the pinned
+  routine contract and current Paperclip execution run. It rejects arbitrary,
+  manual, concurrent, or drifted work before audit access, stores detailed
+  evidence outside the checkout, and posts only status plus an evidence digest
+  through Paperclip's documented issue-update API.
 - `preflight --input <run-plan> --output <evidence>` verifies the clean exact
   Git SHA and executes only `./scripts/delivery buildable` followed by
   `./scripts/delivery affected`. Child output is never echoed or persisted;

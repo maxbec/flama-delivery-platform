@@ -4,7 +4,7 @@
   "title": "Managed Flama Paperclip routine contract",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "key", "title", "description", "priority", "initialStatus", "concurrencyPolicy", "catchUpPolicy", "trigger"],
+  "required": ["schemaVersion", "key", "title", "description", "priority", "initialStatus", "concurrencyPolicy", "catchUpPolicy", "execution", "trigger"],
   "properties": {
     "schemaVersion": { "const": 1 },
     "key": { "const": "flama-nightly-reconciliation-v1" },
@@ -14,6 +14,28 @@
     "initialStatus": { "const": "paused" },
     "concurrencyPolicy": { "const": "coalesce_if_active" },
     "catchUpPolicy": { "const": "skip_missed" },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command", "mode", "evidenceDirectoryEnvironment", "controls"],
+      "properties": {
+        "command": { "const": "reconcile" },
+        "mode": { "const": "read_only" },
+        "evidenceDirectoryEnvironment": { "const": "FLAMA_RECONCILIATION_EVIDENCE_DIR" },
+        "controls": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["queueLagSeconds", "staleClaimSeconds", "authorizationExpiryWarningSeconds", "lookbackSeconds", "maximumAuthorizationRecords"],
+          "properties": {
+            "queueLagSeconds": { "const": 900 },
+            "staleClaimSeconds": { "const": 300 },
+            "authorizationExpiryWarningSeconds": { "const": 300 },
+            "lookbackSeconds": { "const": 172800 },
+            "maximumAuthorizationRecords": { "const": 500 }
+          }
+        }
+      }
+    },
     "trigger": {
       "type": "object",
       "additionalProperties": false,

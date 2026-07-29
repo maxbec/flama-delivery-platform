@@ -7,6 +7,18 @@
   "initialStatus": "paused",
   "concurrencyPolicy": "coalesce_if_active",
   "catchUpPolicy": "skip_missed",
+  "execution": {
+    "command": "reconcile",
+    "mode": "read_only",
+    "evidenceDirectoryEnvironment": "FLAMA_RECONCILIATION_EVIDENCE_DIR",
+    "controls": {
+      "queueLagSeconds": 900,
+      "staleClaimSeconds": 300,
+      "authorizationExpiryWarningSeconds": 300,
+      "lookbackSeconds": 172800,
+      "maximumAuthorizationRecords": 500
+    }
+  },
   "trigger": {
     "kind": "schedule",
     "label": "flama-nightly-reconciliation-v1",
