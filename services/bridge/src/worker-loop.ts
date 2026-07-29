@@ -9,15 +9,15 @@ export class SystemWorkerWait implements WorkerWait {
         reject(signal.reason);
         return;
       }
-      const timeout = setTimeout(resolve, milliseconds);
-      signal.addEventListener(
-        "abort",
-        () => {
-          clearTimeout(timeout);
-          reject(signal.reason);
-        },
-        { once: true },
-      );
+      const onAbort = () => {
+        clearTimeout(timeout);
+        reject(signal.reason);
+      };
+      const timeout = setTimeout(() => {
+        signal.removeEventListener("abort", onAbort);
+        resolve();
+      }, milliseconds);
+      signal.addEventListener("abort", onAbort, { once: true });
     });
   }
 }
@@ -43,7 +43,15 @@ export async function runWorkerLoop(
     let outcome: string;
     try {
       outcome = await options.runOnce();
-      consecutiveInfrastructureFailures = 0;
+      if (outcome === "infrastructure_failed") {
+        consecutiveInfrastructureFailures += 1;
+        if (consecutiveInfrastructureFailures >= 2) {
+          options.onPause?.("repeated_infrastructure_failure");
+          return "paused";
+        }
+      } else if (outcome !== "idle") {
+        consecutiveInfrastructureFailures = 0;
+      }
     } catch {
       consecutiveInfrastructureFailures += 1;
       if (consecutiveInfrastructureFailures >= 2) {
@@ -54,7 +62,7 @@ export async function runWorkerLoop(
     }
 
     if (options.signal.aborted) break;
-    if (outcome === "idle" || consecutiveInfrastructureFailures > 0) {
+    if (outcome === "idle" || outcome === "infrastructure_failed" || consecutiveInfrastructureFailures > 0) {
       try {
         await options.wait.wait(options.pollIntervalMilliseconds, options.signal);
       } catch {

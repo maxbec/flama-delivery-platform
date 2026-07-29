@@ -21,9 +21,9 @@ and transfers them without compression. A separate least-privilege job
 recomputes every digest and creates the provenance attestations. That identity-
 capable job does not check out or execute repository code.
 
-The archive contains the self-contained Node.js 26 CLI, third-party license
-notices, schemas, policies, templates, reusable workflows, bridge migration,
-SPDX SBOM, and a release manifest with per-file digests. Its file order,
+The archive contains the self-contained Node.js 26 CLI and bridge executables,
+third-party license notices, schemas, policies, templates, reusable workflows,
+bridge migrations, SPDX SBOM, and a release manifest with per-file digests. Its file order,
 ownership, timestamps, gzip header, SBOM timestamp, and manifest timestamp derive
 from the signed Git commit, so independent builds are byte-identical.
 

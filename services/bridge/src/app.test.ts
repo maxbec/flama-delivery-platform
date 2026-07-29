@@ -30,6 +30,7 @@ describe("bridge webhook intake", () => {
     repository: { id: 101, full_name: "maxbec/api" },
     workflow_run: {
       id: 501,
+      name: "Final Gate",
       status: "completed",
       conclusion: "success",
       head_sha: "a".repeat(40),
@@ -67,7 +68,7 @@ describe("bridge webhook intake", () => {
         schemaVersion: 1,
         eventName: "workflow_run",
         repository: "maxbec/api",
-        workflowRun: { id: 501, headSha: "a".repeat(40) },
+        workflowRun: { id: 501, name: "Final Gate", headSha: "a".repeat(40) },
       },
     });
     expect(JSON.stringify(inbox.deliveries)).not.toContain("sensitive-value");

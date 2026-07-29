@@ -12,7 +12,7 @@ describe("GitHub webhook minimization", () => {
         number: 7,
         state: "closed",
         merged: true,
-        head: { sha },
+        head: { sha, ref: "feature/verified-change" },
         base: { ref: "main" },
         merge_commit_sha: sha,
         html_url: "https://github.com/maxbec/api/pull/7",
@@ -35,6 +35,7 @@ describe("GitHub webhook minimization", () => {
           state: "closed",
           merged: true,
           headSha: sha,
+          headRef: "feature/verified-change",
           baseRef: "main",
           mergeSha: sha,
           url: "https://github.com/maxbec/api/pull/7",
@@ -49,7 +50,11 @@ describe("GitHub webhook minimization", () => {
     const result = sanitizeGitHubWebhook("pull_request_review", {
       action: "submitted",
       repository: { id: 102, full_name: "navigaite/app" },
-      pull_request: { number: 9, head: { sha } },
+      pull_request: {
+        number: 9,
+        head: { sha, ref: "deploy/v1.0.0" },
+        base: { ref: "main" },
+      },
       review: {
         id: 55,
         state: "approved",
@@ -66,6 +71,7 @@ describe("GitHub webhook minimization", () => {
     if (result.status === "accepted") {
       expect(result.event).toMatchObject({
         eventName: "pull_request_review",
+        pullRequest: { headRef: "deploy/v1.0.0", baseRef: "main" },
         review: { id: 55, state: "approved", commitSha: sha, reviewer: "maxbec" },
       });
     }
@@ -79,7 +85,7 @@ describe("GitHub webhook minimization", () => {
         number: 3,
         state: "open",
         merged: false,
-        head: { sha },
+        head: { sha, ref: "feature/legacy-fix" },
         base: { ref: "develop" },
         merge_commit_sha: null,
         html_url: "https://github.com/edilio/legacy-plugin/pull/3",
@@ -118,7 +124,7 @@ describe("GitHub webhook minimization", () => {
       {
         action: "completed",
         repository: { id: 201, full_name: "maxbec/api" },
-        workflow_run: { id: 1, status: "completed", conclusion: "success", head_sha: sha, html_url: "https://github.com/maxbec/api/actions/runs/1" },
+        workflow_run: { id: 1, name: "Final Gate", status: "completed", conclusion: "success", head_sha: sha, html_url: "https://github.com/maxbec/api/actions/runs/1" },
       },
       "workflow_run",
     ],
@@ -127,7 +133,7 @@ describe("GitHub webhook minimization", () => {
       {
         action: "completed",
         repository: { id: 202, full_name: "navigaite/app" },
-        check_run: { id: 2, status: "completed", conclusion: "failure", head_sha: sha, html_url: "https://github.com/navigaite/app/runs/2" },
+        check_run: { id: 2, name: "Paperclip Preflight", app: { slug: "paperclip-preflight" }, status: "completed", conclusion: "failure", head_sha: sha, html_url: "https://github.com/navigaite/app/runs/2" },
       },
       "check_run",
     ],

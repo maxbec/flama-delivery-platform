@@ -1,4 +1,4 @@
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -331,6 +331,50 @@ describe("delivery CLI", () => {
     expect(io.stdout).not.toContain("10000000-0000-4000-8000-000000000001");
     expect(io.stdout).not.toContain("20000000-0000-4000-8000-000000000002");
     expect(io.stdout).not.toContain("30000000-0000-4000-8000-000000000003");
+    expect(io.stderr).toBe("");
+  });
+
+  it("dry-runs an exact transition authorization without requesting database identity", async () => {
+    const io = new MemoryIo();
+    const temporary = await mkdtemp(join(tmpdir(), "flama-transition-authorization-"));
+    const inputPath = join(temporary, "input.json");
+    const authorizedAt = new Date();
+    const privateCaseId = "40000000-0000-4000-8000-000000000004";
+    await writeFile(inputPath, JSON.stringify({
+      schemaVersion: 1,
+      company: "Private",
+      controller: "maxbec-delivery-controller",
+      deliveryId: "private-delivery-id",
+      transitionKind: "pull_request.opened",
+      bindingDigest: `sha256:${"d".repeat(64)}`,
+      evidenceDigest: `sha256:${"e".repeat(64)}`,
+      case: {
+        id: privateCaseId,
+        pipelineId: "50000000-0000-4000-8000-000000000005",
+        pipelineKey: "flama-feature-fix-v1",
+        fromStageKey: "preflight_passed",
+        toStageKey: "pr_open",
+      },
+      authorizedAt: authorizedAt.toISOString(),
+      expiresAt: new Date(authorizedAt.getTime() + 30 * 60 * 1_000).toISOString(),
+      mutationAllowed: true,
+    }));
+
+    const exitCode = await runCli(
+      ["paperclip-transition-authorize", "--dry-run", "--input", inputPath],
+      io,
+      repositoryRoot,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(io.stdout)).toMatchObject({
+      command: "paperclip-transition-authorize",
+      dryRun: true,
+      ok: true,
+      result: { status: "planned", disposition: "planned" },
+    });
+    expect(io.stdout).not.toContain("private-delivery-id");
+    expect(io.stdout).not.toContain(privateCaseId);
     expect(io.stderr).toBe("");
   });
 });

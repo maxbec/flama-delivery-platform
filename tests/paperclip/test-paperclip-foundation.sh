@@ -98,6 +98,18 @@ jq -e '
   (.properties | has("workspace") | not)
 ' "$ROOT_DIR/schemas/paperclip-binding-result.schema.json" >/dev/null
 
+jq -e '
+  .properties.mutationAllowed.const == true and
+  .properties.case.additionalProperties == false and
+  (.properties.transitionKind.enum | index("pull_request.merged") != null) and
+  (.allOf | length) == 3
+' "$ROOT_DIR/schemas/paperclip-transition-authorization-input.schema.json" >/dev/null
+
+jq -e '
+  .properties.authorizationDigest.pattern == "^sha256:[0-9a-f]{64}$" and
+  .additionalProperties == false
+' "$ROOT_DIR/schemas/paperclip-transition-authorization-result.schema.json" >/dev/null
+
 jq -e '.states == ["Intake", "Classified", "Repository Prepared", "Baseline Green", "Ready"]' \
   "$ROOT_DIR/lifecycles/project-bootstrap.json" >/dev/null
 jq -e '.states == ["Backlog", "Spec Ready", "Implementing", "Preflight Passed", "PR Open", "Merged", "Done"]' \

@@ -66,6 +66,13 @@ import {
   planPaperclipBinding,
   PostgresRepositoryBindingStore,
 } from "./paperclip-bindings.js";
+import {
+  applyPaperclipTransitionAuthorization,
+  PaperclipTransitionAuthorizationError,
+  type PaperclipTransitionAuthorizationInput,
+  planPaperclipTransitionAuthorization,
+  PostgresTransitionAuthorizationWriter,
+} from "./paperclip-transition-authorization.js";
 
 const toolVersion = "0.1.0";
 const maximumInputBytes = 10 * 1024 * 1024;
@@ -121,6 +128,8 @@ function isSchemaName(value: string | undefined): value is SchemaName {
     "paperclip-controllers-result",
     "paperclip-foundation-input",
     "paperclip-foundation-result",
+    "paperclip-transition-authorization-input",
+    "paperclip-transition-authorization-result",
     "paperclip-lifecycle",
     "paperclip-topology",
     "repository-inventory",
@@ -193,6 +202,7 @@ export async function runCli(
     command !== "paperclip-foundation" &&
     command !== "paperclip-bindings" &&
     command !== "paperclip-controllers" &&
+    command !== "paperclip-transition-authorize" &&
     command !== "classify" &&
     command !== "deployment-pr" &&
     command !== "deploy" &&
@@ -406,6 +416,35 @@ export async function runCli(
         ? planPaperclipControllers(controllersInput, contract)
         : await applyPaperclipControllers(controllersInput, contract, new PaperclipRestControllersClient(process.env));
       const resultValidation = validator.validate("paperclip-controllers-result", result);
+      if (!resultValidation.ok) return fail(io, "result_validation_failed");
+      if (!options["dry-run"]) {
+        if (typeof options.output !== "string") return fail(io, "output_required");
+        await writeEvidence(options.output, result);
+      }
+      io.writeStdout(jsonLine({ command, dryRun: options["dry-run"], ok: true, toolVersion, result }));
+      return 0;
+    }
+
+    if (command === "paperclip-transition-authorize") {
+      const validation = validator.validate("paperclip-transition-authorization-input", input);
+      if (!validation.ok) {
+        io.writeStdout(jsonLine({ command, ok: false, errors: validation.errors, toolVersion }));
+        return 1;
+      }
+      const authorizationInput = input as PaperclipTransitionAuthorizationInput;
+      if (!options["dry-run"] && typeof options.output !== "string") return fail(io, "output_required");
+      let result;
+      if (options["dry-run"]) {
+        result = planPaperclipTransitionAuthorization(authorizationInput);
+      } else {
+        const writer = new PostgresTransitionAuthorizationWriter(process.env);
+        try {
+          result = await applyPaperclipTransitionAuthorization(authorizationInput, writer);
+        } finally {
+          await writer.close();
+        }
+      }
+      const resultValidation = validator.validate("paperclip-transition-authorization-result", result);
       if (!resultValidation.ok) return fail(io, "result_validation_failed");
       if (!options["dry-run"]) {
         if (typeof options.output !== "string") return fail(io, "output_required");
@@ -636,7 +675,7 @@ export async function runCli(
     if (error instanceof ReleaseEvidenceError) return fail(io, error.code);
     if (
       error instanceof PaperclipFoundationError || error instanceof PaperclipControllersError ||
-      error instanceof PaperclipBindingsError
+      error instanceof PaperclipBindingsError || error instanceof PaperclipTransitionAuthorizationError
     ) return fail(io, error.code);
     return fail(io, "input_processing_failed");
   }

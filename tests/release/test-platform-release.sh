@@ -17,11 +17,14 @@ cmp "$FIRST/$artifact.sha256" "$SECOND/$artifact.sha256"
 
 archive_listing=$(tar -tzf "$FIRST/$artifact")
 grep -Fqx 'flama-delivery-platform-v0.1.0/bin/flama-delivery-ctl.js' <<< "$archive_listing"
+grep -Fqx 'flama-delivery-platform-v0.1.0/bin/bridge/index.js' <<< "$archive_listing"
+grep -Fqx 'flama-delivery-platform-v0.1.0/bin/bridge/worker.js' <<< "$archive_listing"
 grep -Fqx 'flama-delivery-platform-v0.1.0/release-manifest.json' <<< "$archive_listing"
 grep -Fqx "flama-delivery-platform-v0.1.0/$sbom" <<< "$archive_listing"
 grep -Fqx 'flama-delivery-platform-v0.1.0/lifecycles/feature-fix.json' <<< "$archive_listing"
 grep -Fqx 'flama-delivery-platform-v0.1.0/skills/flama-paperclip-delivery/SKILL.md' <<< "$archive_listing"
 grep -Fqx 'flama-delivery-platform-v0.1.0/services/bridge/migrations/002_repository_bindings.sql' <<< "$archive_listing"
+grep -Fqx 'flama-delivery-platform-v0.1.0/services/bridge/migrations/004_external_transition_authorizations.sql' <<< "$archive_listing"
 grep -Fqx 'flama-delivery-platform-v0.1.0/scripts/consumer-policy-gate.mjs' <<< "$archive_listing"
 
 EXTRACTED=$(mktemp -d)
@@ -42,6 +45,7 @@ jq -e '
   .version == "0.1.0" and
   .nodeMajor == 26 and
   .cli == "bin/flama-delivery-ctl.js" and
+  .bridge == "bin/bridge/index.js" and
   (.commitSha | test("^[0-9a-f]{40}$")) and
   (.files | length > 10)
 ' "$release_root/release-manifest.json" >/dev/null

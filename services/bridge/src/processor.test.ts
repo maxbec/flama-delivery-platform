@@ -80,6 +80,7 @@ describe("bridge workers", () => {
           state: "closed",
           merged: true,
           headSha: sha,
+          headRef: "feature/verified-change",
           baseRef: "main",
           mergeSha: sha,
           url: "https://github.com/maxbec/api/pull/7",
@@ -135,6 +136,7 @@ describe("bridge workers", () => {
           state: "closed",
           merged: true,
           headSha: sha,
+          headRef: "feature/verified-change",
           baseRef: "main",
           mergeSha: sha,
           url: "https://github.com/maxbec/api/pull/7",
@@ -223,11 +225,35 @@ describe("bridge workers", () => {
       },
     };
 
-    await expect(processNextTransition(queue, publisher, "publisher-a")).resolves.toBe("failed");
+    await expect(processNextTransition(queue, publisher, "publisher-a")).resolves.toBe("infrastructure_failed");
     expect(queue.failure).toEqual({
       id: "43",
       maxAttempts: 5,
       reasonCode: "paperclip_unavailable",
     });
+  });
+
+  it("dead-letters a permanent publisher scope rejection without reflection", async () => {
+    const queue = new MemoryTransitionQueue({
+      id: "44",
+      deliveryId: "delivery-14",
+      company: "Private",
+      transitionKind: "pull_request.opened",
+      payload: { schemaVersion: 1, repository: "maxbec/api" },
+      attempts: 1,
+    });
+    const publisher: PaperclipPublisher = {
+      async publish() {
+        throw Object.assign(new Error("private detail"), { code: "authorization_scope_mismatch" });
+      },
+    };
+
+    await expect(processNextTransition(queue, publisher, "publisher-a", 9)).resolves.toBe("failed");
+    expect(queue.failure).toEqual({
+      id: "44",
+      maxAttempts: 1,
+      reasonCode: "authorization_scope_mismatch",
+    });
+    expect(JSON.stringify(queue.failure)).not.toContain("private detail");
   });
 });

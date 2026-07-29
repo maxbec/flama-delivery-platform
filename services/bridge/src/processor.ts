@@ -46,7 +46,7 @@ export async function processNextWebhook(
   queue: WebhookQueue,
   repositoryScope: RepositoryScope,
   workerId: string,
-): Promise<"idle" | "completed" | "failed"> {
+): Promise<"idle" | "completed" | "failed" | "infrastructure_failed"> {
   const claimed = await queue.claimNext(workerId);
   if (claimed === undefined) return "idle";
   const owner = githubOwner(claimed.repository);
@@ -88,7 +88,7 @@ export async function processNextWebhook(
       reasonCode: "transition_persistence_failed",
       maxAttempts: 5,
     });
-    return "failed";
+    return "infrastructure_failed";
   }
 }
 
@@ -96,7 +96,11 @@ export async function processNextTransition(
   queue: TransitionQueue,
   publisher: PaperclipPublisher,
   workerId: string,
-): Promise<"idle" | "published" | "failed"> {
+  maxAttempts = 5,
+): Promise<"idle" | "published" | "failed" | "infrastructure_failed"> {
+  if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > 20) {
+    throw new Error("invalid transition retry bound");
+  }
   const claimed = await queue.claimNextTransition(workerId);
   if (claimed === undefined) return "idle";
   try {
@@ -109,12 +113,39 @@ export async function processNextTransition(
     });
     await queue.markTransitionPublished(claimed.id);
     return "published";
-  } catch {
+  } catch (error) {
+    const publicationCode = typeof error === "object" && error !== null && "code" in error &&
+      typeof error.code === "string"
+      ? error.code
+      : undefined;
+    const permanentCodes = new Set([
+      "authorization_scope_mismatch",
+      "event_evidence_invalid",
+      "paperclip_scope_mismatch",
+    ]);
+    const recognizedCodes = new Set([
+      "authorization_missing",
+      ...permanentCodes,
+      "paperclip_identity_unavailable",
+      "paperclip_response_invalid",
+      "paperclip_state_conflict",
+      "paperclip_unavailable",
+    ]);
+    const infrastructureCodes = new Set([
+      "paperclip_identity_unavailable",
+      "paperclip_response_invalid",
+      "paperclip_unavailable",
+    ]);
+    const reasonCode = publicationCode !== undefined && recognizedCodes.has(publicationCode)
+      ? publicationCode
+      : "paperclip_unavailable";
     await queue.failTransition({
       id: claimed.id,
-      reasonCode: "paperclip_unavailable",
-      maxAttempts: 5,
+      reasonCode,
+      maxAttempts: publicationCode !== undefined && permanentCodes.has(publicationCode) ? 1 : maxAttempts,
     });
-    return "failed";
+    return infrastructureCodes.has(reasonCode)
+      ? "infrastructure_failed"
+      : "failed";
   }
 }

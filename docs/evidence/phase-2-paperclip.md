@@ -42,14 +42,27 @@ Implemented and verified:
   boundary. It verifies fresh inventory, company/project/workspace ownership,
   canonical GitHub remote and default ref before inserting or refreshing a
   private bridge binding, while emitting no repository or object identifiers.
+- The bridge publisher now requires an exact, expiring controller authorization
+  tied to the minimized-event digest, live repository-binding digest, company,
+  case, pipeline, and a database-constrained lifecycle edge. It validates the
+  live Paperclip company/pipeline/stage/version before and after the documented
+  transition call and uses paginated event history for crash-safe replay.
+- GitHub evidence minimization now retains the head/base branch and trusted
+  workflow/check identity fields needed for deterministic routing, while
+  continuing to discard bodies, sender records, and unknown fields.
+- The complete bridge runtime is bundled deterministically for Node.js 26 with
+  its third-party notices. PostgreSQL 18 integration tests cover migration
+  replay, exact authorization resolution, publication recording, and rejection
+  after repository-binding drift.
 
 Still pending:
 
 - One company controller remains behind Paperclip's native board approval.
 - Selecting each repository's project/workspace mapping and applying private
   bindings remains pending; the command intentionally does not guess mappings.
-- The bridge publisher remains disconnected until event-to-case correlation and
-  a scoped machine identity exist.
+- Live bridge deployment, scoped machine identity injection, and controller
+  authorization writes remain pending explicit deployment authority and the
+  private repository/case mappings. The runtime does not infer those mappings.
 - Consumer repository migration, GitHub App installation, and production
   deployment remain separate later-phase work with their own canaries and
   approvals.

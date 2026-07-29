@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/paperclip-transition-authorization-result.schema.json",
+  "title": "Secret-minimized Paperclip transition authorization result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "status", "disposition", "authorizationDigest"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "status": { "enum": ["planned", "applied"] },
+    "disposition": { "enum": ["planned", "created", "reused"] },
+    "authorizationDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  }
+}

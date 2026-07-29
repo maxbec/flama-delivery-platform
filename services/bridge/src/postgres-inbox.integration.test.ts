@@ -9,7 +9,16 @@ import {
   type PaperclipBindingsClient,
   PostgresRepositoryBindingStore,
 } from "../../../packages/delivery-ctl/src/paperclip-bindings.js";
+import {
+  applyPaperclipTransitionAuthorization,
+  type PaperclipTransitionAuthorizationInput,
+  PostgresTransitionAuthorizationWriter,
+} from "../../../packages/delivery-ctl/src/paperclip-transition-authorization.js";
 import { PostgresInbox } from "./postgres-inbox.js";
+import {
+  minimizedEventDigest,
+  PostgresTransitionAuthorizationStore,
+} from "./paperclip-publisher.js";
 import { PostgresRepositoryScope } from "./repository-scope.js";
 
 describe("PostgreSQL durable inbox and outbox", () => {
@@ -20,12 +29,19 @@ describe("PostgreSQL durable inbox and outbox", () => {
   beforeAll(async () => {
     container = await new PostgreSqlContainer("postgres:18.0-alpine").start();
     pool = new Pool({ connectionString: container.getConnectionUri(), max: 4 });
-    for (const migration of ["001_inbox_outbox.sql", "002_repository_bindings.sql", "003_binding_identity.sql"]) {
+    for (const migration of [
+      "001_inbox_outbox.sql",
+      "002_repository_bindings.sql",
+      "003_binding_identity.sql",
+      "004_external_transition_authorizations.sql",
+    ]) {
       const migrationPath = fileURLToPath(new URL(`../migrations/${migration}`, import.meta.url));
       await pool.query(await readFile(migrationPath, "utf8"));
     }
     const bindingIdentityMigration = fileURLToPath(new URL("../migrations/003_binding_identity.sql", import.meta.url));
     await pool.query(await readFile(bindingIdentityMigration, "utf8"));
+    const authorizationMigration = fileURLToPath(new URL("../migrations/004_external_transition_authorizations.sql", import.meta.url));
+    await pool.query(await readFile(authorizationMigration, "utf8"));
     inbox = new PostgresInbox(pool);
   });
 
@@ -302,6 +318,138 @@ describe("PostgreSQL durable inbox and outbox", () => {
       });
     } finally {
       await store.close();
+    }
+  });
+
+  it("resolves only an exact live controller authorization and records publication", async () => {
+    const message = {
+      idempotencyKey: "github:delivery-postgres-authorization:pull_request.opened",
+      deliveryId: "delivery-postgres-authorization",
+      company: "Private",
+      transitionKind: "pull_request.opened",
+      payload: {
+        schemaVersion: 1,
+        eventName: "pull_request",
+        action: "opened",
+        repository: "maxbec/api",
+        repositoryId: 101,
+        pullRequest: {
+          number: 11,
+          state: "open",
+          merged: false,
+          headSha: "a".repeat(40),
+          headRef: "feature/exact-authorization",
+          baseRef: "main",
+          mergeSha: null,
+          url: "https://github.com/maxbec/api/pull/11",
+        },
+      },
+    } as const;
+    const eventDigest = minimizedEventDigest(message.payload);
+    const bindingDigest = `sha256:${"e".repeat(64)}`;
+    await pool.query(
+      `INSERT INTO flama_delivery.external_transition_authorization
+        (idempotency_key, repository_name, company, controller_name, case_id, pipeline_id,
+         pipeline_key, transition_kind, from_stage_key, to_stage_key, event_digest,
+         evidence_digest, binding_digest, authorized_at, expires_at)
+       VALUES
+        ($1, 'maxbec/api', 'Private', 'maxbec-delivery-controller',
+         '90000000-0000-4000-8000-000000000009', 'a0000000-0000-4000-8000-00000000000a',
+         'flama-feature-fix-v1', 'pull_request.opened', 'preflight_passed', 'pr_open',
+         $2, $3, $4, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP + INTERVAL '1 hour')`,
+      [message.idempotencyKey, eventDigest, `sha256:${"f".repeat(64)}`, bindingDigest],
+    );
+    const store = new PostgresTransitionAuthorizationStore(pool);
+
+    await expect(store.resolve(message, eventDigest, new Date())).resolves.toMatchObject({
+      idempotencyKey: message.idempotencyKey,
+      repository: "maxbec/api",
+      caseId: "90000000-0000-4000-8000-000000000009",
+      pipelineId: "a0000000-0000-4000-8000-00000000000a",
+      alreadyPublished: false,
+    });
+    await expect(store.markPublished(message.idempotencyKey, new Date())).resolves.toBeUndefined();
+    await expect(store.resolve(message, eventDigest, new Date())).resolves.toMatchObject({ alreadyPublished: true });
+
+    await pool.query(
+      `UPDATE flama_delivery.repository_binding
+       SET binding_digest = $2
+       WHERE repository_name = $1`,
+      ["maxbec/api", `sha256:${"0".repeat(64)}`],
+    );
+    await expect(store.resolve(message, eventDigest, new Date())).resolves.toBeUndefined();
+  });
+
+  it("creates and idempotently reuses authorization from the durable minimized event", async () => {
+    const deliveryId = "delivery-postgres-writer";
+    const payload = {
+      schemaVersion: 1,
+      eventName: "pull_request",
+      action: "opened",
+      repository: "maxbec/api",
+      repositoryId: 101,
+      pullRequest: {
+        number: 12,
+        state: "open",
+        merged: false,
+        headSha: "b".repeat(40),
+        headRef: "feature/writer",
+        baseRef: "main",
+        mergeSha: null,
+        url: "https://github.com/maxbec/api/pull/12",
+      },
+    } as const;
+    await inbox.enqueue({
+      deliveryId,
+      eventName: "pull_request",
+      owner: "maxbec",
+      repository: "maxbec/api",
+      payload,
+      receivedAt: new Date(),
+    });
+    await inbox.claimNext("writer-test");
+    await inbox.completeWithTransition({
+      deliveryId,
+      company: "Private",
+      transitionKind: "pull_request.opened",
+      payload,
+    });
+    const authorizedAt = new Date();
+    const authorization: PaperclipTransitionAuthorizationInput = {
+      schemaVersion: 1,
+      company: "Private",
+      controller: "maxbec-delivery-controller",
+      deliveryId,
+      transitionKind: "pull_request.opened",
+      bindingDigest: `sha256:${"0".repeat(64)}`,
+      evidenceDigest: `sha256:${"1".repeat(64)}`,
+      case: {
+        id: "b0000000-0000-4000-8000-00000000000b",
+        pipelineId: "c0000000-0000-4000-8000-00000000000c",
+        pipelineKey: "flama-feature-fix-v1",
+        fromStageKey: "preflight_passed",
+        toStageKey: "pr_open",
+      },
+      authorizedAt: authorizedAt.toISOString(),
+      expiresAt: new Date(authorizedAt.getTime() + 30 * 60 * 1_000).toISOString(),
+      mutationAllowed: true,
+    };
+    const writer = new PostgresTransitionAuthorizationWriter({ DATABASE_URL: container.getConnectionUri() });
+    try {
+      await expect(applyPaperclipTransitionAuthorization(authorization, writer, authorizedAt)).resolves.toMatchObject({
+        status: "applied",
+        disposition: "created",
+      });
+      await expect(applyPaperclipTransitionAuthorization(authorization, writer, authorizedAt)).resolves.toMatchObject({
+        status: "applied",
+        disposition: "reused",
+      });
+      await expect(applyPaperclipTransitionAuthorization({
+        ...authorization,
+        evidenceDigest: `sha256:${"2".repeat(64)}`,
+      }, writer, authorizedAt)).rejects.toMatchObject({ code: "authorization_drift" });
+    } finally {
+      await writer.close();
     }
   });
 });

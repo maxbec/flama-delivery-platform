@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/paperclip-transition-authorization-input.schema.json",
+  "title": "Controller authorization for one exact external Paperclip transition",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "company", "controller", "deliveryId", "transitionKind", "bindingDigest", "evidenceDigest", "case", "authorizedAt", "expiresAt", "mutationAllowed"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "company": { "enum": ["Private", "// Navigaite", "Edilio"] },
+    "controller": { "enum": ["maxbec-delivery-controller", "navigaite-delivery-controller", "edilio-delivery-controller"] },
+    "deliveryId": { "type": "string", "pattern": "^[A-Za-z0-9._:-]{1,128}$" },
+    "transitionKind": {
+      "enum": ["workflow_run.completed", "pull_request.opened", "pull_request.reopened", "pull_request.ready_for_review", "pull_request.merged", "release.published", "deployment_status.success"]
+    },
+    "bindingDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "evidenceDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "case": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "pipelineId", "pipelineKey", "fromStageKey", "toStageKey"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "pipelineId": { "type": "string", "format": "uuid" },
+        "pipelineKey": { "enum": ["flama-project-bootstrap-v1", "flama-feature-fix-v1", "flama-release-deployment-v1"] },
+        "fromStageKey": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,119}$" },
+        "toStageKey": { "type": "string", "pattern": "^[a-z][a-z0-9_]{0,119}$" }
+      }
+    },
+    "authorizedAt": { "type": "string", "format": "date-time" },
+    "expiresAt": { "type": "string", "format": "date-time" },
+    "mutationAllowed": { "const": true }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "company": { "const": "Private" } }, "required": ["company"] },
+      "then": { "properties": { "controller": { "const": "maxbec-delivery-controller" } } }
+    },
+    {
+      "if": { "properties": { "company": { "const": "// Navigaite" } }, "required": ["company"] },
+      "then": { "properties": { "controller": { "const": "navigaite-delivery-controller" } } }
+    },
+    {
+      "if": { "properties": { "company": { "const": "Edilio" } }, "required": ["company"] },
+      "then": { "properties": { "controller": { "const": "edilio-delivery-controller" } } }
+    }
+  ]
+}

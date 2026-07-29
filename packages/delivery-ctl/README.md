@@ -44,6 +44,10 @@ Implemented commands:
   company, active project, project workspace, canonical GitHub remote, and
   default ref before creating or refreshing its private bridge binding. It does
   not create or edit Paperclip projects/workspaces and emits no names or IDs.
+- `paperclip-transition-authorize --input <authorization> --output <evidence>`
+  lets only the matching company controller authorize one exact, expiring
+  external lifecycle edge. It resolves the already-minimized event and active
+  repository binding from PostgreSQL, refuses drift, and emits only a digest.
 - `preflight --input <run-plan> --output <evidence>` verifies the clean exact
   Git SHA and executes only `./scripts/delivery buildable` followed by
   `./scripts/delivery affected`. Child output is never echoed or persisted;
@@ -74,7 +78,7 @@ Implemented commands:
 - `secrets-audit --input <audit>` validates and audits an Infisical-first secret
   configuration using redacted finding codes.
 
-Every command accepts `--dry-run`; only `bootstrap`, `paperclip-foundation`, `paperclip-controllers`, `paperclip-bindings`,
+Every command accepts `--dry-run`; only `bootstrap`, `paperclip-foundation`, `paperclip-controllers`, `paperclip-bindings`, `paperclip-transition-authorize`,
 `preflight`, `publish-check`, `promote`, `release-evidence`, and `deploy`
 currently perform writes or execution when dry-run is absent. Inputs are JSON
 files capped at 10 MiB.

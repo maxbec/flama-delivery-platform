@@ -33,6 +33,7 @@ case "$1" in
     "$0" affected
     pnpm test:integration
     bash tests/release/test-cli-bundle.sh
+    bash tests/release/test-bridge-bundle.sh
     bash tests/release/test-platform-release.sh
     ;;
   smoke|health)

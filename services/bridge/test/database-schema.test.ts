@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 const migration = new URL("../migrations/001_inbox_outbox.sql", import.meta.url);
 const bindingsMigration = new URL("../migrations/002_repository_bindings.sql", import.meta.url);
 const bindingIdentityMigration = new URL("../migrations/003_binding_identity.sql", import.meta.url);
+const transitionAuthorizationMigration = new URL("../migrations/004_external_transition_authorizations.sql", import.meta.url);
 
 describe("bridge database schema", () => {
   it("defines constrained queue states, FK indexes, and ready-work indexes", async () => {
@@ -38,5 +39,17 @@ describe("bridge database schema", () => {
     expect(sql).toContain("binding_digest text");
     expect(sql).toContain("repository_binding_active_workspace_idx");
     expect(sql).not.toMatch(/insert into flama_delivery\.repository_binding/);
+  });
+
+  it("permits only controller-authorized external lifecycle edges", async () => {
+    const sql = (await readFile(transitionAuthorizationMigration, "utf8")).toLowerCase();
+
+    expect(sql).toContain("create table if not exists flama_delivery.external_transition_authorization");
+    expect(sql).toContain("references flama_delivery.repository_binding (repository_name) on delete restrict");
+    expect(sql).toContain("event_digest text not null");
+    expect(sql).toContain("evidence_digest text not null");
+    expect(sql).toContain("binding_digest text not null");
+    expect(sql).toContain("awaiting_owner_approval");
+    expect(sql).not.toMatch(/insert into flama_delivery\.external_transition_authorization/);
   });
 });

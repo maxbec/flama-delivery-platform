@@ -9,6 +9,7 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
+    "bundle:bridge": "bash scripts/build-bridge-bundle.sh",
     "bundle:cli": "bash scripts/build-cli-bundle.sh",
     "release:build": "node scripts/build-platform-release.mjs",
     "test": "vitest run",

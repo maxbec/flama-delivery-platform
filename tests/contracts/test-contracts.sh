@@ -26,6 +26,8 @@ required_schemas=(
   paperclip-controllers-result.schema.json
   paperclip-foundation-input.schema.json
   paperclip-foundation-result.schema.json
+  paperclip-transition-authorization-input.schema.json
+  paperclip-transition-authorization-result.schema.json
   paperclip-lifecycle.schema.json
   paperclip-topology.schema.json
   deployment-manifest.schema.json

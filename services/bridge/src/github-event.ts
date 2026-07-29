@@ -134,11 +134,12 @@ function sanitizePullRequest(payload: JsonRecord, action: string): SafeGitHubEve
     : undefined;
   const merged = booleanValue(pullRequest["merged"]);
   const headSha = shaValue(head["sha"]);
+  const headRef = branchValue(head["ref"]);
   const baseRef = branchValue(base["ref"]);
   const mergeSha = nullableShaValue(pullRequest["merge_commit_sha"]);
   const url = safeUrl(pullRequest["html_url"]);
   if (
-    number === undefined || state === undefined || merged === undefined || headSha === undefined ||
+    number === undefined || state === undefined || merged === undefined || headSha === undefined || headRef === undefined ||
     baseRef === undefined || mergeSha === undefined || url === undefined
   ) return undefined;
   return {
@@ -146,7 +147,7 @@ function sanitizePullRequest(payload: JsonRecord, action: string): SafeGitHubEve
     eventName: "pull_request",
     action,
     ...repository,
-    pullRequest: { number, state, merged, headSha, baseRef, mergeSha, url },
+    pullRequest: { number, state, merged, headSha, headRef, baseRef, mergeSha, url },
   };
 }
 
@@ -154,14 +155,17 @@ function sanitizeReview(payload: JsonRecord, action: string): SafeGitHubEvent | 
   const repository = repositoryEvidence(payload);
   const pullRequest = record(payload["pull_request"]);
   const head = record(pullRequest?.["head"]);
+  const base = record(pullRequest?.["base"]);
   const review = record(payload["review"]);
   const user = record(review?.["user"]);
   if (
-    repository === undefined || pullRequest === undefined || head === undefined ||
+    repository === undefined || pullRequest === undefined || head === undefined || base === undefined ||
     review === undefined || user === undefined
   ) return undefined;
   const pullRequestNumber = integerValue(pullRequest["number"]);
   const headSha = shaValue(head["sha"]);
+  const headRef = branchValue(head["ref"]);
+  const baseRef = branchValue(base["ref"]);
   const id = integerValue(review["id"]);
   const state = inValues(review["state"], ["approved", "changes_requested", "commented", "dismissed"] as const)
     ? review["state"]
@@ -171,7 +175,8 @@ function sanitizeReview(payload: JsonRecord, action: string): SafeGitHubEvent | 
   const submittedAt = optionalDateTimeValue(review["submitted_at"]);
   const url = safeUrl(review["html_url"]);
   if (
-    pullRequestNumber === undefined || headSha === undefined || id === undefined || state === undefined ||
+    pullRequestNumber === undefined || headSha === undefined || headRef === undefined || baseRef === undefined ||
+    id === undefined || state === undefined ||
     commitSha === undefined || reviewer === undefined || submittedAt === undefined || url === undefined
   ) return undefined;
   return {
@@ -179,7 +184,7 @@ function sanitizeReview(payload: JsonRecord, action: string): SafeGitHubEvent | 
     eventName: "pull_request_review",
     action,
     ...repository,
-    pullRequest: { number: pullRequestNumber, headSha },
+    pullRequest: { number: pullRequestNumber, headSha, headRef, baseRef },
     review: { id, state, commitSha, reviewer, submittedAt, url },
   };
 }
@@ -189,6 +194,7 @@ function sanitizeWorkflowRun(payload: JsonRecord, action: string): SafeGitHubEve
   const run = record(payload["workflow_run"]);
   if (repository === undefined || run === undefined) return undefined;
   const id = integerValue(run["id"]);
+  const name = stringValue(run["name"], /^[^\u0000-\u001f\u007f]{1,200}$/u, 200);
   const status = inValues(run["status"], ["requested", "in_progress", "completed", "queued", "waiting", "pending"] as const)
     ? run["status"]
     : undefined;
@@ -199,17 +205,20 @@ function sanitizeWorkflowRun(payload: JsonRecord, action: string): SafeGitHubEve
       : undefined;
   const headSha = shaValue(run["head_sha"]);
   const url = safeUrl(run["html_url"]);
-  if (id === undefined || status === undefined || conclusion === undefined || headSha === undefined || url === undefined) {
+  if (id === undefined || name === undefined || status === undefined || conclusion === undefined || headSha === undefined || url === undefined) {
     return undefined;
   }
-  return { schemaVersion: 1, eventName: "workflow_run", action, ...repository, workflowRun: { id, status, conclusion, headSha, url } };
+  return { schemaVersion: 1, eventName: "workflow_run", action, ...repository, workflowRun: { id, name, status, conclusion, headSha, url } };
 }
 
 function sanitizeCheckRun(payload: JsonRecord, action: string): SafeGitHubEvent | undefined {
   const repository = repositoryEvidence(payload);
   const run = record(payload["check_run"]);
-  if (repository === undefined || run === undefined) return undefined;
+  const app = record(run?.["app"]);
+  if (repository === undefined || run === undefined || app === undefined) return undefined;
   const id = integerValue(run["id"]);
+  const name = stringValue(run["name"], /^[^\u0000-\u001f\u007f]{1,200}$/u, 200);
+  const appSlug = stringValue(app["slug"], /^[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?$/u, 100);
   const status = inValues(run["status"], ["queued", "in_progress", "completed", "waiting", "pending"] as const)
     ? run["status"]
     : undefined;
@@ -220,10 +229,13 @@ function sanitizeCheckRun(payload: JsonRecord, action: string): SafeGitHubEvent 
       : undefined;
   const headSha = shaValue(run["head_sha"]);
   const url = safeUrl(run["html_url"]);
-  if (id === undefined || status === undefined || conclusion === undefined || headSha === undefined || url === undefined) {
+  if (
+    id === undefined || name === undefined || appSlug === undefined || status === undefined ||
+    conclusion === undefined || headSha === undefined || url === undefined
+  ) {
     return undefined;
   }
-  return { schemaVersion: 1, eventName: "check_run", action, ...repository, checkRun: { id, status, conclusion, headSha, url } };
+  return { schemaVersion: 1, eventName: "check_run", action, ...repository, checkRun: { id, name, appSlug, status, conclusion, headSha, url } };
 }
 
 function sanitizeRelease(payload: JsonRecord, action: string): SafeGitHubEvent | undefined {
@@ -317,7 +329,7 @@ export function sanitizeGitHubWebhook(eventName: string, value: unknown): GitHub
       event = sanitizeCheckRun(payload, action);
       break;
     case "release":
-      if (!inValues(action, ["published", "released"] as const)) return { status: "ignored" };
+      if (action !== "published") return { status: "ignored" };
       event = sanitizeRelease(payload, action);
       break;
     case "deployment_status":
@@ -351,10 +363,11 @@ export function transitionKindForMinimizedEvent(
         !validBaseMinimizedEvent(value, expectedEventName, expectedRepository, "pullRequest") ||
         !inValues(action, ["opened", "synchronize", "reopened", "closed", "ready_for_review", "converted_to_draft"] as const) ||
         pullRequest === undefined ||
-        !onlyKeys(pullRequest, ["number", "state", "merged", "headSha", "baseRef", "mergeSha", "url"]) ||
+        !onlyKeys(pullRequest, ["number", "state", "merged", "headSha", "headRef", "baseRef", "mergeSha", "url"]) ||
         integerValue(pullRequest["number"]) === undefined ||
         !inValues(pullRequest["state"], ["open", "closed"] as const) ||
         booleanValue(pullRequest["merged"]) === undefined || shaValue(pullRequest["headSha"]) === undefined ||
+        branchValue(pullRequest["headRef"]) === undefined ||
         branchValue(pullRequest["baseRef"]) === undefined ||
         nullableShaValue(pullRequest["mergeSha"]) === undefined || safeUrl(pullRequest["url"]) === undefined
       ) return undefined;
@@ -370,8 +383,9 @@ export function transitionKindForMinimizedEvent(
       const pullRequest = record(value["pullRequest"]);
       const review = record(value["review"]);
       if (
-        pullRequest === undefined || !onlyKeys(pullRequest, ["number", "headSha"]) ||
+        pullRequest === undefined || !onlyKeys(pullRequest, ["number", "headSha", "headRef", "baseRef"]) ||
         integerValue(pullRequest["number"]) === undefined || shaValue(pullRequest["headSha"]) === undefined ||
+        branchValue(pullRequest["headRef"]) === undefined || branchValue(pullRequest["baseRef"]) === undefined ||
         review === undefined ||
         !onlyKeys(review, ["id", "state", "commitSha", "reviewer", "submittedAt", "url"]) ||
         integerValue(review["id"]) === undefined ||
@@ -388,8 +402,9 @@ export function transitionKindForMinimizedEvent(
       if (
         !validBaseMinimizedEvent(value, expectedEventName, expectedRepository, "workflowRun") ||
         !inValues(action, ["requested", "in_progress", "completed"] as const) || run === undefined ||
-        !onlyKeys(run, ["id", "status", "conclusion", "headSha", "url"]) ||
+        !onlyKeys(run, ["id", "name", "status", "conclusion", "headSha", "url"]) ||
         integerValue(run["id"]) === undefined ||
+        stringValue(run["name"], /^[^\u0000-\u001f\u007f]{1,200}$/u, 200) === undefined ||
         !inValues(run["status"], ["requested", "in_progress", "completed", "queued", "waiting", "pending"] as const) ||
         !(run["conclusion"] === null || inValues(run["conclusion"], ["success", "failure", "neutral", "cancelled", "skipped", "timed_out", "action_required", "stale"] as const)) ||
         shaValue(run["headSha"]) === undefined || safeUrl(run["url"]) === undefined
@@ -401,8 +416,10 @@ export function transitionKindForMinimizedEvent(
       if (
         !validBaseMinimizedEvent(value, expectedEventName, expectedRepository, "checkRun") ||
         !inValues(action, ["created", "rerequested", "completed"] as const) || run === undefined ||
-        !onlyKeys(run, ["id", "status", "conclusion", "headSha", "url"]) ||
+        !onlyKeys(run, ["id", "name", "appSlug", "status", "conclusion", "headSha", "url"]) ||
         integerValue(run["id"]) === undefined ||
+        stringValue(run["name"], /^[^\u0000-\u001f\u007f]{1,200}$/u, 200) === undefined ||
+        stringValue(run["appSlug"], /^[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?$/u, 100) === undefined ||
         !inValues(run["status"], ["queued", "in_progress", "completed", "waiting", "pending"] as const) ||
         !(run["conclusion"] === null || inValues(run["conclusion"], ["success", "failure", "neutral", "cancelled", "skipped", "timed_out", "action_required", "stale"] as const)) ||
         shaValue(run["headSha"]) === undefined || safeUrl(run["url"]) === undefined
@@ -413,7 +430,7 @@ export function transitionKindForMinimizedEvent(
       const release = record(value["release"]);
       if (
         !validBaseMinimizedEvent(value, expectedEventName, expectedRepository, "release") ||
-        !inValues(action, ["published", "released"] as const) || release === undefined ||
+        action !== "published" || release === undefined ||
         !onlyKeys(release, ["id", "tagName", "targetCommitish", "draft", "prerelease", "url"]) ||
         integerValue(release["id"]) === undefined ||
         stringValue(release["tagName"], /^[^\u0000-\u001f\u007f\s]+$/u, 255) === undefined ||

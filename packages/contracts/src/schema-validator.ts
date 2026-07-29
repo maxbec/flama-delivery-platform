@@ -38,6 +38,8 @@ const schemaFiles = {
   "paperclip-controllers-result": "paperclip-controllers-result.schema.json",
   "paperclip-foundation-input": "paperclip-foundation-input.schema.json",
   "paperclip-foundation-result": "paperclip-foundation-result.schema.json",
+  "paperclip-transition-authorization-input": "paperclip-transition-authorization-input.schema.json",
+  "paperclip-transition-authorization-result": "paperclip-transition-authorization-result.schema.json",
   "paperclip-lifecycle": "paperclip-lifecycle.schema.json",
   "paperclip-topology": "paperclip-topology.schema.json",
   "repository-inventory": "repository-inventory.schema.json",

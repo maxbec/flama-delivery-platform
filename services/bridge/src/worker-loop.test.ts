@@ -46,6 +46,39 @@ describe("bounded worker loop", () => {
     expect(JSON.stringify(paused)).not.toContain("private infrastructure detail");
   });
 
+  it("pauses after two handled infrastructure-failure outcomes", async () => {
+    const paused: string[] = [];
+    const runOnce = vi.fn(async () => "infrastructure_failed" as const);
+
+    await expect(
+      runWorkerLoop({
+        signal: new AbortController().signal,
+        pollIntervalMilliseconds: 100,
+        runOnce,
+        wait: immediateWait,
+        onPause(reasonCode) { paused.push(reasonCode); },
+      }),
+    ).resolves.toBe("paused");
+    expect(runOnce).toHaveBeenCalledTimes(2);
+    expect(paused).toEqual(["repeated_infrastructure_failure"]);
+  });
+
+  it("does not erase an infrastructure-failure streak merely because the queue is idle", async () => {
+    const outcomes = ["infrastructure_failed", "idle", "infrastructure_failed"] as const;
+    let index = 0;
+    const runOnce = vi.fn(async () => outcomes[index++]!);
+
+    await expect(
+      runWorkerLoop({
+        signal: new AbortController().signal,
+        pollIntervalMilliseconds: 100,
+        runOnce,
+        wait: immediateWait,
+      }),
+    ).resolves.toBe("paused");
+    expect(runOnce).toHaveBeenCalledTimes(3);
+  });
+
   it("resets the failure counter after a successful operation", async () => {
     const controller = new AbortController();
     const outcomes = ["throw", "completed", "throw", "completed"] as const;

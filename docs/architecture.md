@@ -101,8 +101,10 @@ Node.js 26 as the baseline:
   bounded retries, and dead-letter records.
 - Vitest unit tests and Testcontainers integration tests against PostgreSQL 18.
 
-The bridge remains undeployed until Phase 2. Provider credentials, GitHub App
-installation, and production authority are not implied by this runtime choice.
+The bridge remains undeployed until its Phase 2 deployment is separately
+approved with scoped identities and private mappings. Provider credentials,
+GitHub App installation, and production authority are not implied by this
+runtime choice.
 
 The trusted deploy workflow verifies the GitHub OIDC token's issuer, audience,
 repository, production subject, and `job_workflow_ref` for the exact platform
