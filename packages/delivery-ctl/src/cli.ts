@@ -1,5 +1,5 @@
 import { lstat, readFile, stat, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import { parse as parseYaml } from "yaml";
 import { orchestrateDeployment, type DeploymentManifest, type ProviderName } from "../../../providers/src/orchestrator.js";
@@ -41,6 +41,14 @@ import {
   ReleaseEvidenceError,
   type ReleaseEvidenceInput,
 } from "./release-evidence.js";
+import {
+  applyPaperclipFoundation,
+  type LifecycleContract,
+  PaperclipFoundationError,
+  type PaperclipFoundationInput,
+  PaperclipRestFoundationClient,
+  planPaperclipFoundation,
+} from "./paperclip-foundation.js";
 
 const toolVersion = "0.1.0";
 const maximumInputBytes = 10 * 1024 * 1024;
@@ -90,6 +98,8 @@ function isSchemaName(value: string | undefined): value is SchemaName {
     "release-evidence-result",
     "platform-release-manifest",
     "paperclip-controller",
+    "paperclip-foundation-input",
+    "paperclip-foundation-result",
     "paperclip-lifecycle",
     "repository-inventory",
     "repository-scope-policy",
@@ -133,6 +143,16 @@ async function writeEvidence(path: string, value: unknown): Promise<void> {
   });
 }
 
+async function readLifecycleContracts(repositoryRoot: string): Promise<readonly LifecycleContract[]> {
+  return Promise.all(
+    ["project-bootstrap", "feature-fix", "release-deployment"].map(async (name) =>
+      JSON.parse(
+        await readFile(join(repositoryRoot, "lifecycles", `${name}.json`), "utf8"),
+      ) as LifecycleContract,
+    ),
+  );
+}
+
 export async function runCli(
   argv: readonly string[],
   io: CliIo,
@@ -148,6 +168,7 @@ export async function runCli(
     command !== "validate" &&
     command !== "bootstrap" &&
     command !== "inventory" &&
+    command !== "paperclip-foundation" &&
     command !== "classify" &&
     command !== "deployment-pr" &&
     command !== "deploy" &&
@@ -267,6 +288,41 @@ export async function runCli(
       const result = auditInventory(input as InventoryAuditInput);
       const resultValidation = validator.validate("inventory-audit-result", result);
       if (!resultValidation.ok) return fail(io, "result_validation_failed");
+      io.writeStdout(jsonLine({ command, dryRun: options["dry-run"], ok: true, toolVersion, result }));
+      return 0;
+    }
+
+    if (command === "paperclip-foundation") {
+      const validation = validator.validate("paperclip-foundation-input", input);
+      if (!validation.ok) {
+        io.writeStdout(jsonLine({ command, ok: false, errors: validation.errors, toolVersion }));
+        return 1;
+      }
+      const lifecycleContracts = await readLifecycleContracts(repositoryRoot);
+      for (const contract of lifecycleContracts) {
+        const lifecycleValidation = validator.validate("paperclip-lifecycle", contract);
+        if (!lifecycleValidation.ok) {
+          return fail(io, "paperclip_contract_invalid");
+        }
+      }
+      const foundationInput = input as PaperclipFoundationInput;
+      const outputPath = options.output;
+      if (!options["dry-run"] && typeof outputPath !== "string") {
+        return fail(io, "output_required");
+      }
+      const result = options["dry-run"]
+        ? planPaperclipFoundation(foundationInput, lifecycleContracts)
+        : await applyPaperclipFoundation(
+            foundationInput,
+            lifecycleContracts,
+            new PaperclipRestFoundationClient(process.env),
+          );
+      const resultValidation = validator.validate("paperclip-foundation-result", result);
+      if (!resultValidation.ok) return fail(io, "result_validation_failed");
+      if (!options["dry-run"]) {
+        if (typeof outputPath !== "string") return fail(io, "output_required");
+        await writeEvidence(outputPath, result);
+      }
       io.writeStdout(jsonLine({ command, dryRun: options["dry-run"], ok: true, toolVersion, result }));
       return 0;
     }
@@ -490,6 +546,7 @@ export async function runCli(
     if (error instanceof PublishCheckError) return fail(io, error.code);
     if (error instanceof PromotionError) return fail(io, error.code);
     if (error instanceof ReleaseEvidenceError) return fail(io, error.code);
+    if (error instanceof PaperclipFoundationError) return fail(io, error.code);
     return fail(io, "input_processing_failed");
   }
 }

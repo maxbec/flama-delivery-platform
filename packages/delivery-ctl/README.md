@@ -25,6 +25,15 @@ Implemented commands:
   applies the plan only after repository-scope and source-state checks.
 - `deployment-pr --input <evidence>` validates Max's latest review against the
   exact PR head and allows only `.deploy/production.yaml` to change.
+- `paperclip-foundation --input <company-plan> --output <evidence>` creates or
+  reuses the three Flama-owned Paperclip lifecycle pipelines for one exact
+  company. It validates the company/controller binding, creates stages and
+  enforced transitions from the pinned lifecycle contracts, adds only the
+  unreachable administrative-cancellation sentinel required by Paperclip,
+  refuses archived companies, open cases, duplicate keys, and drift, and emits
+  no company or Paperclip object IDs. Dry-run requests no identity; live use
+  accepts the API URL and scoped token only from the process environment and
+  writes mode-0600 evidence outside the repository.
 - `preflight --input <run-plan> --output <evidence>` verifies the clean exact
   Git SHA and executes only `./scripts/delivery buildable` followed by
   `./scripts/delivery affected`. Child output is never echoed or persisted;
@@ -55,9 +64,10 @@ Implemented commands:
 - `secrets-audit --input <audit>` validates and audits an Infisical-first secret
   configuration using redacted finding codes.
 
-Every command accepts `--dry-run`; only `bootstrap`, `preflight`,
-`publish-check`, `promote`, `release-evidence`, and `deploy` currently perform
-writes or execution when dry-run is absent. Inputs are JSON files capped at 10 MiB.
+Every command accepts `--dry-run`; only `bootstrap`, `paperclip-foundation`,
+`preflight`, `publish-check`, `promote`, `release-evidence`, and `deploy`
+currently perform writes or execution when dry-run is absent. Inputs are JSON
+files capped at 10 MiB.
 Secret values are not valid fields in the secret-audit schema.
 
 Development:

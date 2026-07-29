@@ -26,6 +26,26 @@ jq -e '
   .runtime.maxImplementationConcurrency == 0
 ' "$ROOT_DIR/lifecycles/controllers/flama-governance-controller.json" >/dev/null
 
+jq -e '
+  .company.name == "Private" and
+  .controller == "maxbec-delivery-controller" and
+  .mutationAllowed == true
+' "$ROOT_DIR/tests/fixtures/paperclip-foundation/valid.json" >/dev/null
+
+jq -e '
+  .properties.company.additionalProperties == false and
+  .properties.company.properties.id.format == "uuid" and
+  .properties.mutationAllowed.const == true and
+  (.allOf | length) == 3
+' "$ROOT_DIR/schemas/paperclip-foundation-input.schema.json" >/dev/null
+
+jq -e '
+  .properties.pipelines.minItems == 3 and
+  .properties.pipelines.maxItems == 3 and
+  .properties.pipelines.items.additionalProperties == false and
+  .properties.summary.additionalProperties == false
+' "$ROOT_DIR/schemas/paperclip-foundation-result.schema.json" >/dev/null
+
 jq -e '.states == ["Intake", "Classified", "Repository Prepared", "Baseline Green", "Ready"]' \
   "$ROOT_DIR/lifecycles/project-bootstrap.json" >/dev/null
 jq -e '.states == ["Backlog", "Spec Ready", "Implementing", "Preflight Passed", "PR Open", "Merged", "Done"]' \

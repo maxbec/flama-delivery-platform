@@ -26,18 +26,20 @@ Paperclip project → ready task → isolated implementation → signed prefligh
 - Phase 1 runtime foundations use Node.js 26, TypeScript, pnpm workspaces,
   Fastify, AJV, and a PostgreSQL 18 durable inbox/outbox.
 - `flama-delivery-ctl` currently implements secret-safe `validate`, `inventory`,
-  `classify`, `bootstrap`, `render`, `preflight`, `publish-check`,
-  `promote`, `release-evidence`, `deployment-pr`, `deploy`, and `secrets-audit`
-  JSON commands.
+  `classify`, `bootstrap`, `render`, `paperclip-foundation`, `preflight`,
+  `publish-check`, `promote`, `release-evidence`, `deployment-pr`, `deploy`, and
+  `secrets-audit` JSON commands.
   Remaining lifecycle commands are added only with their executable
   provider/evidence contracts.
 - The bridge authenticates GitHub webhook bytes before parsing, minimizes
   accepted payloads before persistence, requires a private active repository
   binding at intake and processing, deduplicates deliveries, replays stale
   claims, and bounds inbox/outbox retries with payload-free dead-letter records.
-- Versioned Paperclip lifecycle and controller authority contracts plus the
-  validated `flama-paperclip-delivery` skill are packaged in each platform
-  artifact. They are not installed into live Paperclip agents yet.
+- The validated `flama-paperclip-delivery` skill and enforced canonical
+  lifecycle pipelines are installed in the approved live Paperclip scope from
+  pinned source. Controller authority contracts remain packaged but controller
+  agents are not deployed until the documented company-scoping decision is
+  approved.
 - Production deployment has a separate exact-SHA trust gate, strict manifest
   validation, provider-neutral health/version/smoke soak, and one-attempt
   rollback state machine. No concrete provider is configured or invoked here.
@@ -101,5 +103,7 @@ Do not write a live snapshot into this public checkout.
 
 See [Architecture](docs/architecture.md) and
 [Inventory operations](docs/operations/inventory.md). Platform artifact
-operations are documented in [Platform releases](docs/operations/platform-release.md).
+operations are documented in [Platform releases](docs/operations/platform-release.md),
+and the current Paperclip rollout evidence is summarized in
+[Phase 2 Paperclip evidence](docs/evidence/phase-2-paperclip.md).
 Flama software delivery platform: deterministic lifecycle orchestration, reusable workflows, policies, and evidence

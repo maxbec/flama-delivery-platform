@@ -41,6 +41,9 @@ const releaseEvidenceInputPath = fileURLToPath(
 const promotionInputPath = fileURLToPath(
   new URL("../../../tests/fixtures/promote/valid.json", import.meta.url),
 );
+const paperclipFoundationInputPath = fileURLToPath(
+  new URL("../../../tests/fixtures/paperclip-foundation/valid.json", import.meta.url),
+);
 
 describe("delivery CLI", () => {
   it("returns versioned JSON validation output", async () => {
@@ -253,6 +256,28 @@ describe("delivery CLI", () => {
     });
     expect(io.stdout).not.toContain("maxbec/example");
     expect(io.stdout).not.toContain("flama-maxbec-delivery");
+    expect(io.stderr).toBe("");
+  });
+
+  it("dry-runs Paperclip lifecycle installation without requesting identity or exposing company IDs", async () => {
+    const io = new MemoryIo();
+    const exitCode = await runCli(
+      ["paperclip-foundation", "--dry-run", "--input", paperclipFoundationInputPath],
+      io,
+      repositoryRoot,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(io.stdout)).toMatchObject({
+      command: "paperclip-foundation",
+      dryRun: true,
+      ok: true,
+      result: {
+        status: "planned",
+        summary: { planned: 3, created: 0, reused: 0 },
+      },
+    });
+    expect(io.stdout).not.toContain("10000000-0000-4000-8000-000000000001");
     expect(io.stderr).toBe("");
   });
 });

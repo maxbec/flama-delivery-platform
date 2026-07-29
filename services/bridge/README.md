@@ -40,7 +40,8 @@ and `FLAMA_WORKER_ID`; numeric recovery and polling controls are bounded.
 Credential-bearing values use a redacting wrapper and configuration failures
 emit stable codes without reflecting rejected input.
 
-The `PaperclipPublisher` interface is deliberately an unconnected boundary.
-Implementing and deploying its network adapter requires the documented
-Paperclip API contract and scoped machine identity; neither is guessed or
-replaced with a long-lived token in this phase.
+The `PaperclipPublisher` interface remains an unconnected boundary. Paperclip's
+pipeline API is documented and the platform can install canonical lifecycle
+pipelines, but publication still requires a private repository-to-case binding
+contract and scoped machine identity. Neither is guessed or replaced with a
+long-lived token.

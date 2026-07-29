@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/paperclip-foundation-result.schema.json",
+  "title": "Secret-minimized Paperclip foundation result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "status", "pipelines", "summary"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "status": { "enum": ["planned", "applied"] },
+    "pipelines": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "lifecycle": { "const": "project-bootstrap" },
+              "pipelineKey": { "const": "flama-project-bootstrap-v1" }
+            },
+            "required": ["lifecycle", "pipelineKey"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "lifecycle": { "const": "feature-fix" },
+              "pipelineKey": { "const": "flama-feature-fix-v1" }
+            },
+            "required": ["lifecycle", "pipelineKey"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "lifecycle": { "const": "release-deployment" },
+              "pipelineKey": { "const": "flama-release-deployment-v1" }
+            },
+            "required": ["lifecycle", "pipelineKey"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        }
+      ],
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["lifecycle", "pipelineKey", "contractDigest", "disposition", "stageCount", "transitionCount"],
+        "properties": {
+          "lifecycle": { "enum": ["project-bootstrap", "feature-fix", "release-deployment"] },
+          "pipelineKey": { "enum": ["flama-project-bootstrap-v1", "flama-feature-fix-v1", "flama-release-deployment-v1"] },
+          "contractDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+          "disposition": { "enum": ["planned", "created", "reused"] },
+          "stageCount": { "type": "integer", "minimum": 1 },
+          "transitionCount": { "type": "integer", "minimum": 1 }
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["planned", "created", "reused"],
+      "properties": {
+        "planned": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "created": { "type": "integer", "minimum": 0, "maximum": 3 },
+        "reused": { "type": "integer", "minimum": 0, "maximum": 3 }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "type": "object",
+        "properties": { "status": { "const": "planned" } },
+        "required": ["status"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "pipelines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": { "disposition": { "const": "planned" } },
+              "required": ["disposition"]
+            }
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "planned": { "const": 3 },
+              "created": { "const": 0 },
+              "reused": { "const": 0 }
+            },
+            "required": ["planned", "created", "reused"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": { "status": { "const": "applied" } },
+        "required": ["status"]
+      },
+      "then": {
+        "type": "object",
+        "properties": {
+          "pipelines": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": { "disposition": { "enum": ["created", "reused"] } },
+              "required": ["disposition"]
+            }
+          },
+          "summary": {
+            "type": "object",
+            "properties": { "planned": { "const": 0 } },
+            "required": ["planned"]
+          }
+        }
+      }
+    }
+  ]
+}

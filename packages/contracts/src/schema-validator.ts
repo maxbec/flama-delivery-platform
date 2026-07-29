@@ -32,6 +32,8 @@ const schemaFiles = {
   "release-evidence-result": "release-evidence-result.schema.json",
   "platform-release-manifest": "platform-release-manifest.schema.json",
   "paperclip-controller": "paperclip-controller.schema.json",
+  "paperclip-foundation-input": "paperclip-foundation-input.schema.json",
+  "paperclip-foundation-result": "paperclip-foundation-result.schema.json",
   "paperclip-lifecycle": "paperclip-lifecycle.schema.json",
   "repository-inventory": "repository-inventory.schema.json",
   "repository-scope-policy": "repository-scope-policy.schema.json",
