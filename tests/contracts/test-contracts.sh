@@ -10,6 +10,8 @@ required_schemas=(
   inventory-audit-result.schema.json
   governance-input.schema.json
   governance-result.schema.json
+  github-policy-audit-input.schema.json
+  github-policy-audit-result.schema.json
   delivery-contract.schema.json
   preflight-evidence.schema.json
   preflight-run-input.schema.json

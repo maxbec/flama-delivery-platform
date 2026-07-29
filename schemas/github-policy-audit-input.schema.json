@@ -1,0 +1,153 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/github-policy-audit-input.schema.json",
+  "title": "Normalized read-only GitHub repository policy observation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "repository", "protectedBranches", "merge", "actions", "security", "supplyChain", "deployment", "githubApp", "runners", "mutationAllowed"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile", "visibility", "isFork", "isArchived", "defaultBranch", "autoMerge", "deleteHeadBranch"],
+      "properties": {
+        "profile": { "enum": ["fast", "major"] },
+        "visibility": { "enum": ["private", "public"] },
+        "isFork": { "type": "boolean" },
+        "isArchived": { "type": "boolean" },
+        "defaultBranch": { "enum": ["main", "dev"] },
+        "autoMerge": { "type": "boolean" },
+        "deleteHeadBranch": { "type": "boolean" }
+      }
+    },
+    "protectedBranches": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "requiredChecks", "pullRequestRequired", "strictChecks", "signedCommits", "conversationResolution", "forcePush", "deletion", "bypassActorCount"],
+        "properties": {
+          "name": { "enum": ["main", "dev"] },
+          "requiredChecks": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": { "enum": ["Branch Guard", "Paperclip Preflight", "Policy Gate", "Final Gate"] }
+          },
+          "pullRequestRequired": { "type": "boolean" },
+          "strictChecks": { "type": "boolean" },
+          "signedCommits": { "type": "boolean" },
+          "conversationResolution": { "type": "boolean" },
+          "forcePush": { "type": "boolean" },
+          "deletion": { "type": "boolean" },
+          "bypassActorCount": { "type": "integer", "minimum": 0, "maximum": 100 }
+        }
+      }
+    },
+    "merge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["squash", "mergeCommit", "rebase"],
+      "properties": {
+        "squash": { "type": "boolean" },
+        "mergeCommit": { "type": "boolean" },
+        "rebase": { "type": "boolean" }
+      }
+    },
+    "actions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["defaultWorkflowPermissions", "workflowCanApprovePullRequests", "policy", "thirdPartyFullShaPins", "pullRequestTarget"],
+      "properties": {
+        "defaultWorkflowPermissions": { "enum": ["read", "write"] },
+        "workflowCanApprovePullRequests": { "type": "boolean" },
+        "policy": { "enum": ["selected", "all", "local_only"] },
+        "thirdPartyFullShaPins": { "type": "boolean" },
+        "pullRequestTarget": { "type": "boolean" }
+      }
+    },
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vulnerabilityAlerts", "dependabotAlerts", "dependabotSecurityUpdates", "secretScanning", "pushProtection"],
+      "properties": {
+        "vulnerabilityAlerts": { "type": "boolean" },
+        "dependabotAlerts": { "type": "boolean" },
+        "dependabotSecurityUpdates": { "type": "boolean" },
+        "secretScanning": { "$ref": "#/$defs/availableFeature" },
+        "pushProtection": { "$ref": "#/$defs/availableFeature" }
+      }
+    },
+    "supplyChain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["protectedVersionTags", "immutableReleases"],
+      "properties": {
+        "protectedVersionTags": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["available", "enabled", "pattern", "forceUpdate", "deletion"],
+          "properties": {
+            "available": { "type": "boolean" },
+            "enabled": { "type": "boolean" },
+            "pattern": { "const": "v*" },
+            "forceUpdate": { "type": "boolean" },
+            "deletion": { "type": "boolean" }
+          }
+        },
+        "immutableReleases": { "$ref": "#/$defs/availableFeature" }
+      }
+    },
+    "deployment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["codeOwners", "staleReviewDismissal", "pathRestricted", "exactShaApproval"],
+      "properties": {
+        "codeOwners": { "type": "boolean" },
+        "staleReviewDismissal": { "type": "boolean" },
+        "pathRestricted": { "type": "boolean" },
+        "exactShaApproval": { "type": "boolean" }
+      }
+    },
+    "githubApp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ownerScoped", "repositorySelection", "installationTokens", "leastPrivilegePermissions", "webhookEventsExact", "administration", "secretAdministration"],
+      "properties": {
+        "ownerScoped": { "type": "boolean" },
+        "repositorySelection": { "enum": ["selected", "all"] },
+        "installationTokens": { "enum": ["short_lived", "long_lived"] },
+        "leastPrivilegePermissions": { "type": "boolean" },
+        "webhookEventsExact": { "type": "boolean" },
+        "administration": { "type": "boolean" },
+        "secretAdministration": { "type": "boolean" }
+      }
+    },
+    "runners": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["paperclipPreflight", "githubVerification", "deployment", "deploymentSeparated", "publicPullRequestProductionNetwork"],
+      "properties": {
+        "paperclipPreflight": { "enum": ["ephemeral", "persistent"] },
+        "githubVerification": { "enum": ["github_hosted_or_disposable", "private_persistent"] },
+        "deployment": { "enum": ["hardened_separate", "shared"] },
+        "deploymentSeparated": { "type": "boolean" },
+        "publicPullRequestProductionNetwork": { "type": "boolean" }
+      }
+    },
+    "mutationAllowed": { "const": false }
+  },
+  "$defs": {
+    "availableFeature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["available", "enabled"],
+      "properties": {
+        "available": { "type": "boolean" },
+        "enabled": { "type": "boolean" }
+      }
+    }
+  }
+}

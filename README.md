@@ -29,8 +29,8 @@ Paperclip project → ready task → isolated implementation → signed prefligh
   `classify`, `bootstrap`, `render`, `paperclip-foundation`, `preflight`,
   `paperclip-controllers`, `paperclip-bindings`,
   `paperclip-transition-authorize`, `paperclip-routines`, `reconcile`,
-  `publish-check`, `promote`, `release-evidence`, `deployment-pr`, `deploy`, and
-  `secrets-audit` JSON commands.
+  `publish-check`, `promote`, `release-evidence`, `deployment-pr`, `deploy`,
+  `github-policy-audit`, and `secrets-audit` JSON commands.
   Remaining lifecycle commands are added only with their executable
   provider/evidence contracts.
 - The bridge authenticates GitHub webhook bytes before parsing, minimizes
@@ -63,6 +63,10 @@ Paperclip project → ready task → isolated implementation → signed prefligh
   claims, non-shared least-privilege identities, public-PR isolation, trusted-job
   separation, scoped Secret Syncs, direct-destination exceptions, and rotation
   state. No live mapping, identity, sync, or secret has been created or read.
+- Phase 3 also has an identifier-free GitHub policy audit for Fast/Major branch
+  protections, Actions trust, security/supply-chain features, deployment review,
+  scoped App posture, and runner separation. Authoritative collection and all
+  settings changes remain pending scoped App identities and explicit authority.
 
 The live snapshot includes private repository names and is deliberately stored
 outside this public repository. Only the generator, schemas, aggregate policy,

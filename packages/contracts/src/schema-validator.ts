@@ -23,6 +23,8 @@ const schemaFiles = {
   "inventory-audit-result": "inventory-audit-result.schema.json",
   "governance-input": "governance-input.schema.json",
   "governance-result": "governance-result.schema.json",
+  "github-policy-audit-input": "github-policy-audit-input.schema.json",
+  "github-policy-audit-result": "github-policy-audit-result.schema.json",
   "preflight-evidence": "preflight-evidence.schema.json",
   "preflight-run-input": "preflight-run-input.schema.json",
   "preflight-run-result": "preflight-run-result.schema.json",

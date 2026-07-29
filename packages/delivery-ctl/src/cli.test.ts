@@ -56,6 +56,9 @@ const paperclipRoutinesInputPath = fileURLToPath(
 const reconciliationInputPath = fileURLToPath(
   new URL("../../../tests/fixtures/reconciliation/valid.json", import.meta.url),
 );
+const githubPolicyInputPath = fileURLToPath(
+  new URL("../../../tests/fixtures/github-policy/valid.json", import.meta.url),
+);
 
 describe("delivery CLI", () => {
   it("returns versioned JSON validation output", async () => {
@@ -472,6 +475,23 @@ describe("delivery CLI", () => {
     } finally {
       await rm(temporary, { recursive: true, force: true });
     }
+  });
+
+  it("audits normalized GitHub settings without requesting an identity", async () => {
+    const io = new MemoryIo();
+    const exitCode = await runCli(
+      ["github-policy-audit", "--input", githubPolicyInputPath],
+      io,
+      repositoryRoot,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(io.stdout)).toMatchObject({
+      command: "github-policy-audit",
+      ok: true,
+      result: { status: "passed", profile: "fast", findingCount: 0, findings: [] },
+    });
+    expect(io.stderr).toBe("");
   });
 
   it("dry-runs an exact transition authorization without requesting database identity", async () => {

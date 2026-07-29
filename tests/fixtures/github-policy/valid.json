@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "repository": {
+    "profile": "fast",
+    "visibility": "public",
+    "isFork": false,
+    "isArchived": false,
+    "defaultBranch": "main",
+    "autoMerge": true,
+    "deleteHeadBranch": true
+  },
+  "protectedBranches": [
+    {
+      "name": "main",
+      "requiredChecks": ["Branch Guard", "Paperclip Preflight", "Final Gate"],
+      "pullRequestRequired": true,
+      "strictChecks": true,
+      "signedCommits": true,
+      "conversationResolution": true,
+      "forcePush": false,
+      "deletion": false,
+      "bypassActorCount": 0
+    }
+  ],
+  "merge": { "squash": true, "mergeCommit": false, "rebase": false },
+  "actions": {
+    "defaultWorkflowPermissions": "read",
+    "workflowCanApprovePullRequests": false,
+    "policy": "selected",
+    "thirdPartyFullShaPins": true,
+    "pullRequestTarget": false
+  },
+  "security": {
+    "vulnerabilityAlerts": true,
+    "dependabotAlerts": true,
+    "dependabotSecurityUpdates": true,
+    "secretScanning": { "available": true, "enabled": true },
+    "pushProtection": { "available": true, "enabled": true }
+  },
+  "supplyChain": {
+    "protectedVersionTags": {
+      "available": true,
+      "enabled": true,
+      "pattern": "v*",
+      "forceUpdate": false,
+      "deletion": false
+    },
+    "immutableReleases": { "available": false, "enabled": false }
+  },
+  "deployment": {
+    "codeOwners": true,
+    "staleReviewDismissal": true,
+    "pathRestricted": true,
+    "exactShaApproval": true
+  },
+  "githubApp": {
+    "ownerScoped": true,
+    "repositorySelection": "selected",
+    "installationTokens": "short_lived",
+    "leastPrivilegePermissions": true,
+    "webhookEventsExact": true,
+    "administration": false,
+    "secretAdministration": false
+  },
+  "runners": {
+    "paperclipPreflight": "ephemeral",
+    "githubVerification": "github_hosted_or_disposable",
+    "deployment": "hardened_separate",
+    "deploymentSeparated": true,
+    "publicPullRequestProductionNetwork": false
+  },
+  "mutationAllowed": false
+}

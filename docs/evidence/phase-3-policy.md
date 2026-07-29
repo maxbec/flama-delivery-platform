@@ -32,14 +32,21 @@ Implemented controls:
 - Results contain only stable finding codes and coarse locations. They do not
   return project slugs, paths, identity IDs, secret names, reasons, owners, or
   values.
+- `github-policy-audit` compares normalized read-only observations with the
+  exact Fast/Major default branches, required checks, protection controls,
+  profile-specific merge methods, Actions permissions/pinning, available
+  security features, version-tag and immutable-release controls, deployment
+  review boundary, owner-scoped selected-repository App posture, and separated
+  preflight/verification/deployment runners. Its result is identifier-free and
+  includes only drift codes plus a policy digest.
 
 Still pending:
 
 - authoritative private project/environment/path and identity mappings;
 - scoped GitHub App installation and permission verification;
-- read-only collection plus comparison of repository rulesets, Actions
-  settings, Dependabot, security features, app/webhook permissions, and runner
-  separation;
+- authoritative read-only collection of repository rulesets, Actions settings,
+  Dependabot, security features, app/webhook permissions, and runner separation
+  into the normalized audit input;
 - explicit review and approval of any real destination-secret exceptions;
 - live OIDC, Secret Sync, and rotation tests in the Phase 4 canaries.
 

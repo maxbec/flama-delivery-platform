@@ -13,6 +13,11 @@ import { classifyInventory, type ClassificationInput } from "./classify.js";
 import { auditDeploymentPullRequest, type DeploymentPullRequestInput } from "./deployment-pr.js";
 import { RenderConflictError, renderTemplates, type RenderInput } from "./render.js";
 import { auditSecrets, type SecretsAuditInput } from "./secrets-audit.js";
+import {
+  auditGitHubPolicy,
+  type BranchProfilesPolicy,
+  type GitHubPolicyAuditInput,
+} from "./github-policy-audit.js";
 import { PreflightError, runPreflight, type PreflightRunInput } from "./preflight.js";
 import { auditInventory, InventoryAuditError, type InventoryAuditInput } from "./inventory.js";
 import {
@@ -128,6 +133,8 @@ function isSchemaName(value: string | undefined): value is SchemaName {
     "inventory-audit-result",
     "governance-input",
     "governance-result",
+    "github-policy-audit-input",
+    "github-policy-audit-result",
     "preflight-evidence",
     "preflight-run-input",
     "preflight-run-result",
@@ -235,6 +242,7 @@ export async function runCli(
     command !== "promote" &&
     command !== "release-evidence" &&
     command !== "reconcile" &&
+    command !== "github-policy-audit" &&
     command !== "secrets-audit" &&
     command !== "render"
   ) {
@@ -734,6 +742,29 @@ export async function runCli(
       if (!resultValidation.ok) return fail(io, "result_validation_failed");
       await writeEvidence(options.output, result);
       io.writeStdout(jsonLine({ command, ok: result.status === "passed", toolVersion, result }));
+      return result.status === "passed" ? 0 : 1;
+    }
+
+    if (command === "github-policy-audit") {
+      const validation = validator.validate("github-policy-audit-input", input);
+      if (!validation.ok) {
+        io.writeStdout(jsonLine({ command, ok: false, errors: validation.errors, toolVersion }));
+        return 1;
+      }
+      const policy = JSON.parse(await readFile(
+        join(repositoryRoot, "policies", "branch-profiles.json"),
+        "utf8",
+      )) as BranchProfilesPolicy;
+      const result = auditGitHubPolicy(input as GitHubPolicyAuditInput, policy);
+      const resultValidation = validator.validate("github-policy-audit-result", result);
+      if (!resultValidation.ok) return fail(io, "result_validation_failed");
+      io.writeStdout(jsonLine({
+        command,
+        dryRun: options["dry-run"] ?? false,
+        ok: result.status === "passed",
+        toolVersion,
+        result,
+      }));
       return result.status === "passed" ? 0 : 1;
     }
 

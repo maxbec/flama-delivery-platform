@@ -103,6 +103,12 @@ Implemented commands:
   selection, direct-destination exceptions, rotation dates, and secret-free
   repository variables/generated configuration/Paperclip prompts. Inputs carry
   names and metadata only—never values—and output uses redacted finding codes.
+- `github-policy-audit --input <normalized-observation>` compares read-only,
+  identifier-free repository metadata with the exact Fast/Major branch profile,
+  required checks, merge settings, Actions trust boundary, security features,
+  version-tag/release protection, deployment review controls, owner-scoped App
+  posture, and three-class runner separation. It returns drift codes and a
+  policy digest without repository or installation identifiers.
 
 Every command accepts `--dry-run`; only `bootstrap`, `paperclip-foundation`, `paperclip-controllers`, `paperclip-bindings`, `paperclip-transition-authorize`, `paperclip-routines`,
 `reconcile`, `preflight`, `publish-check`, `promote`, `release-evidence`, and
