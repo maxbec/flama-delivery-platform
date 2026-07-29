@@ -6,6 +6,8 @@ ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 required_schemas=(
   bootstrap-input.schema.json
   bootstrap-result.schema.json
+  canary-input.schema.json
+  canary-result.schema.json
   repository-inventory.schema.json
   inventory-audit-result.schema.json
   governance-input.schema.json

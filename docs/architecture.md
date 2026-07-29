@@ -112,6 +112,24 @@ destination secrets, production credentials in build/release jobs, and any
 secret-classified repository variable, generated field, or Paperclip prompt.
 Findings contain stable codes and coarse locations, never secret names or values.
 
+## Canary boundary
+
+Representative canary selection and evidence are private operational inputs.
+The deterministic canary gate requires coverage of both profiles and
+visibilities, each approved owner, a legacy stack, a library release, Docker,
+and a managed platform. It binds every candidate to an exact source SHA,
+inventory digest, platform commit, and GitHub, Infisical, and Paperclip policy
+digests. Forks, archived repositories, stale profile branches, duplicate
+candidates, and incomplete coverage fail closed.
+
+The audit requires exact-SHA proof of preflight, auto-merge, release,
+deployment approval, secret isolation, Infisical OIDC and Secret Sync, rollback,
+event replay, and pooled-cost targets where applicable. Its public result is
+identifier-free: aggregate booleans and proof states, stable finding codes, and
+content digests only. Planning and auditing do not select a live repository,
+read a credential, mutate a consumer, approve production, or execute a canary.
+Those actions remain separately gated by private mappings and scoped authority.
+
 ## Migration gates
 
 1. Prove the inventory and exclusions.

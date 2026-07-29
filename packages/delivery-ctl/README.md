@@ -109,12 +109,23 @@ Implemented commands:
   version-tag/release protection, deployment review controls, owner-scoped App
   posture, and three-class runner separation. It returns drift codes and a
   policy digest without repository or installation identifiers.
+- `canary-plan --input <private-plan>` validates a non-mutating representative
+  set across Fast/Major, private/public, all three owners, legacy, library,
+  Docker, and managed-platform coverage. The input must remain outside the
+  public checkout; output contains aggregate coverage and a plan digest, never
+  repository names, source SHAs, or candidate keys.
+- `canary-audit --input <private-evidence>` fails closed unless exact-SHA
+  evidence proves preflight, auto-merge, release, deployment approval, secret
+  isolation, Infisical OIDC/Sync, rollback, event replay, and pooled-cost
+  requirements. It performs no live reads or writes and emits only aggregate
+  proof states, redacted findings, and digests.
 
 Every command accepts `--dry-run`; only `bootstrap`, `paperclip-foundation`, `paperclip-controllers`, `paperclip-bindings`, `paperclip-transition-authorize`, `paperclip-routines`,
 `reconcile`, `preflight`, `publish-check`, `promote`, `release-evidence`, and
 `deploy` currently perform external reads, writes, or execution when dry-run is
 absent. `reconcile` is externally read-only and writes only its requested local
-evidence file. Inputs are JSON files capped at 10 MiB.
+evidence file. `canary-plan` and `canary-audit` are always local, non-mutating
+evaluators even when `--dry-run` is omitted. Inputs are JSON files capped at 10 MiB.
 Secret values are not valid fields in the secret-audit schema.
 
 Development:

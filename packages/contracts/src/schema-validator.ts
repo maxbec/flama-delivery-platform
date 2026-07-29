@@ -16,6 +16,8 @@ const addFormats = ("default" in formatsNamespace
 const schemaFiles = {
   "bootstrap-input": "bootstrap-input.schema.json",
   "bootstrap-result": "bootstrap-result.schema.json",
+  "canary-input": "canary-input.schema.json",
+  "canary-result": "canary-result.schema.json",
   "delivery-contract": "delivery-contract.schema.json",
   "deployment-manifest": "deployment-manifest.schema.json",
   "deployment-pr-input": "deployment-pr-input.schema.json",

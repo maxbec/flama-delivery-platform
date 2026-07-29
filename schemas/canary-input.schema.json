@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/canary-input.schema.json",
+  "title": "Private representative canary plan and evidence input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "platformRef", "inventoryDigest", "candidates", "mutationAllowed"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "platformRef": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "inventoryDigest": { "$ref": "#/$defs/digest" },
+    "candidates": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 12,
+      "items": { "$ref": "#/$defs/candidate" }
+    },
+    "mutationAllowed": { "const": false }
+  },
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "repository", "profile", "source", "coverage", "policyDigests", "evidence"],
+      "properties": {
+        "key": { "type": "string", "pattern": "^canary-[a-z0-9][a-z0-9-]{0,62}$" },
+        "repository": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["nameWithOwner", "owner", "visibility", "isFork", "isArchived"],
+          "properties": {
+            "nameWithOwner": { "type": "string", "pattern": "^(maxbec|navigaite|edilio)/[A-Za-z0-9_.-]+$", "maxLength": 200 },
+            "owner": { "enum": ["maxbec", "navigaite", "edilio"] },
+            "visibility": { "enum": ["private", "public"] },
+            "isFork": { "const": false },
+            "isArchived": { "const": false }
+          }
+        },
+        "profile": { "enum": ["fast", "major"] },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["branch", "sha"],
+          "properties": {
+            "branch": { "enum": ["main", "dev"] },
+            "sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" }
+          }
+        },
+        "coverage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["legacyStack", "libraryRelease", "dockerDeployment", "managedPlatformDeployment"],
+          "properties": {
+            "legacyStack": { "type": "boolean" },
+            "libraryRelease": { "type": "boolean" },
+            "dockerDeployment": { "type": "boolean" },
+            "managedPlatformDeployment": { "type": "boolean" }
+          }
+        },
+        "policyDigests": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["github", "secrets", "paperclipBinding"],
+          "properties": {
+            "github": { "$ref": "#/$defs/digest" },
+            "secrets": { "$ref": "#/$defs/digest" },
+            "paperclipBinding": { "$ref": "#/$defs/digest" }
+          }
+        },
+        "evidence": {
+          "oneOf": [
+            { "type": "null" },
+            { "$ref": "#/$defs/evidence" }
+          ]
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceSha", "observedAt", "evidenceDigest", "proofs"],
+      "properties": {
+        "sourceSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "observedAt": { "type": "string", "format": "date-time" },
+        "evidenceDigest": { "$ref": "#/$defs/digest" },
+        "proofs": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["preflight", "autoMerge", "release", "deploymentApproval", "secretIsolation", "infisicalOidc", "infisicalSync", "rollback", "eventReplay", "pooledCost"],
+          "properties": {
+            "preflight": { "$ref": "#/$defs/proofStatus" },
+            "autoMerge": { "$ref": "#/$defs/proofStatus" },
+            "release": { "$ref": "#/$defs/proofStatus" },
+            "deploymentApproval": { "$ref": "#/$defs/proofStatus" },
+            "secretIsolation": { "$ref": "#/$defs/proofStatus" },
+            "infisicalOidc": { "$ref": "#/$defs/proofStatus" },
+            "infisicalSync": { "$ref": "#/$defs/proofStatus" },
+            "rollback": { "$ref": "#/$defs/proofStatus" },
+            "eventReplay": { "$ref": "#/$defs/proofStatus" },
+            "pooledCost": { "$ref": "#/$defs/proofStatus" }
+          }
+        }
+      }
+    },
+    "proofStatus": { "enum": ["passed", "failed", "not_applicable"] }
+  }
+}

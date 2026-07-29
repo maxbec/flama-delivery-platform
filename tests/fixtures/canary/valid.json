@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "platformRef": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "inventoryDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "candidates": [
+    {
+      "key": "canary-fast-private-docker",
+      "repository": {
+        "nameWithOwner": "maxbec/example-fast-canary",
+        "owner": "maxbec",
+        "visibility": "private",
+        "isFork": false,
+        "isArchived": false
+      },
+      "profile": "fast",
+      "source": { "branch": "main", "sha": "1111111111111111111111111111111111111111" },
+      "coverage": {
+        "legacyStack": true,
+        "libraryRelease": false,
+        "dockerDeployment": true,
+        "managedPlatformDeployment": false
+      },
+      "policyDigests": {
+        "github": "sha256:1111111111111111111111111111111111111111111111111111111111111111",
+        "secrets": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+        "paperclipBinding": "sha256:3333333333333333333333333333333333333333333333333333333333333333"
+      },
+      "evidence": {
+        "sourceSha": "1111111111111111111111111111111111111111",
+        "observedAt": "2026-07-29T00:00:00.000Z",
+        "evidenceDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "proofs": {
+          "preflight": "passed",
+          "autoMerge": "passed",
+          "release": "not_applicable",
+          "deploymentApproval": "passed",
+          "secretIsolation": "passed",
+          "infisicalOidc": "passed",
+          "infisicalSync": "passed",
+          "rollback": "passed",
+          "eventReplay": "passed",
+          "pooledCost": "passed"
+        }
+      }
+    },
+    {
+      "key": "canary-major-library-managed",
+      "repository": {
+        "nameWithOwner": "navigaite/example-major-canary",
+        "owner": "navigaite",
+        "visibility": "private",
+        "isFork": false,
+        "isArchived": false
+      },
+      "profile": "major",
+      "source": { "branch": "dev", "sha": "2222222222222222222222222222222222222222" },
+      "coverage": {
+        "legacyStack": false,
+        "libraryRelease": true,
+        "dockerDeployment": false,
+        "managedPlatformDeployment": true
+      },
+      "policyDigests": {
+        "github": "sha256:4444444444444444444444444444444444444444444444444444444444444444",
+        "secrets": "sha256:5555555555555555555555555555555555555555555555555555555555555555",
+        "paperclipBinding": "sha256:6666666666666666666666666666666666666666666666666666666666666666"
+      },
+      "evidence": {
+        "sourceSha": "2222222222222222222222222222222222222222",
+        "observedAt": "2026-07-29T00:00:00.000Z",
+        "evidenceDigest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        "proofs": {
+          "preflight": "passed",
+          "autoMerge": "passed",
+          "release": "passed",
+          "deploymentApproval": "passed",
+          "secretIsolation": "passed",
+          "infisicalOidc": "passed",
+          "infisicalSync": "passed",
+          "rollback": "passed",
+          "eventReplay": "passed",
+          "pooledCost": "passed"
+        }
+      }
+    },
+    {
+      "key": "canary-fast-public",
+      "repository": {
+        "nameWithOwner": "edilio/example-public-canary",
+        "owner": "edilio",
+        "visibility": "public",
+        "isFork": false,
+        "isArchived": false
+      },
+      "profile": "fast",
+      "source": { "branch": "main", "sha": "3333333333333333333333333333333333333333" },
+      "coverage": {
+        "legacyStack": false,
+        "libraryRelease": false,
+        "dockerDeployment": false,
+        "managedPlatformDeployment": false
+      },
+      "policyDigests": {
+        "github": "sha256:7777777777777777777777777777777777777777777777777777777777777777",
+        "secrets": "sha256:8888888888888888888888888888888888888888888888888888888888888888",
+        "paperclipBinding": "sha256:9999999999999999999999999999999999999999999999999999999999999999"
+      },
+      "evidence": {
+        "sourceSha": "3333333333333333333333333333333333333333",
+        "observedAt": "2026-07-29T00:00:00.000Z",
+        "evidenceDigest": "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+        "proofs": {
+          "preflight": "passed",
+          "autoMerge": "passed",
+          "release": "not_applicable",
+          "deploymentApproval": "not_applicable",
+          "secretIsolation": "passed",
+          "infisicalOidc": "not_applicable",
+          "infisicalSync": "not_applicable",
+          "rollback": "not_applicable",
+          "eventReplay": "passed",
+          "pooledCost": "passed"
+        }
+      }
+    }
+  ],
+  "mutationAllowed": false
+}

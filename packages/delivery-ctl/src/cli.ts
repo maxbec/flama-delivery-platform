@@ -13,6 +13,7 @@ import { classifyInventory, type ClassificationInput } from "./classify.js";
 import { auditDeploymentPullRequest, type DeploymentPullRequestInput } from "./deployment-pr.js";
 import { RenderConflictError, renderTemplates, type RenderInput } from "./render.js";
 import { auditSecrets, type SecretsAuditInput } from "./secrets-audit.js";
+import { auditCanaries, planCanaries, type CanaryInput } from "./canary.js";
 import {
   auditGitHubPolicy,
   type BranchProfilesPolicy,
@@ -126,6 +127,8 @@ function isSchemaName(value: string | undefined): value is SchemaName {
   return [
     "bootstrap-input",
     "bootstrap-result",
+    "canary-input",
+    "canary-result",
     "delivery-contract",
     "deployment-manifest",
     "deployment-pr-input",
@@ -228,6 +231,8 @@ export async function runCli(
   if (
     command !== "validate" &&
     command !== "bootstrap" &&
+    command !== "canary-audit" &&
+    command !== "canary-plan" &&
     command !== "inventory" &&
     command !== "paperclip-foundation" &&
     command !== "paperclip-bindings" &&
@@ -743,6 +748,22 @@ export async function runCli(
       await writeEvidence(options.output, result);
       io.writeStdout(jsonLine({ command, ok: result.status === "passed", toolVersion, result }));
       return result.status === "passed" ? 0 : 1;
+    }
+
+    if (command === "canary-plan" || command === "canary-audit") {
+      const validation = validator.validate("canary-input", input);
+      if (!validation.ok) {
+        io.writeStdout(jsonLine({ command, ok: false, errors: validation.errors, toolVersion }));
+        return 1;
+      }
+      const result = command === "canary-plan"
+        ? planCanaries(input as CanaryInput)
+        : auditCanaries(input as CanaryInput);
+      const resultValidation = validator.validate("canary-result", result);
+      if (!resultValidation.ok) return fail(io, "result_validation_failed");
+      const ok = command === "canary-plan" ? result.status === "planned" : result.status === "passed";
+      io.writeStdout(jsonLine({ command, dryRun: true, ok, toolVersion, result }));
+      return ok ? 0 : 1;
     }
 
     if (command === "github-policy-audit") {

@@ -1,4 +1,4 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -58,6 +58,9 @@ const reconciliationInputPath = fileURLToPath(
 );
 const githubPolicyInputPath = fileURLToPath(
   new URL("../../../tests/fixtures/github-policy/valid.json", import.meta.url),
+);
+const canaryInputPath = fileURLToPath(
+  new URL("../../../tests/fixtures/canary/valid.json", import.meta.url),
 );
 
 describe("delivery CLI", () => {
@@ -492,6 +495,42 @@ describe("delivery CLI", () => {
       result: { status: "passed", profile: "fast", findingCount: 0, findings: [] },
     });
     expect(io.stderr).toBe("");
+  });
+
+  it("plans and audits representative canaries without exposing candidate identifiers", async () => {
+    const privateRepository = "maxbec/example-fast-canary";
+    const auditIo = new MemoryIo();
+    const auditExit = await runCli(["canary-audit", "--input", canaryInputPath], auditIo, repositoryRoot);
+    expect(auditExit).toBe(0);
+    expect(JSON.parse(auditIo.stdout)).toMatchObject({
+      command: "canary-audit",
+      dryRun: true,
+      ok: true,
+      result: { status: "passed", findingCount: 0, findings: [] },
+    });
+    expect(auditIo.stdout).not.toContain(privateRepository);
+
+    const temporary = await mkdtemp(join(tmpdir(), "flama-canary-plan-"));
+    const planPath = join(temporary, "plan.json");
+    const source = JSON.parse(await readFile(canaryInputPath, "utf8")) as {
+      candidates: Array<{ evidence: unknown }>;
+    };
+    for (const candidate of source.candidates) candidate.evidence = null;
+    await writeFile(planPath, JSON.stringify(source));
+    try {
+      const planIo = new MemoryIo();
+      const planExit = await runCli(["canary-plan", "--input", planPath], planIo, repositoryRoot);
+      expect(planExit).toBe(0);
+      expect(JSON.parse(planIo.stdout)).toMatchObject({
+        command: "canary-plan",
+        dryRun: true,
+        ok: true,
+        result: { status: "planned", findingCount: 0, findings: [] },
+      });
+      expect(planIo.stdout).not.toContain(privateRepository);
+    } finally {
+      await rm(temporary, { recursive: true, force: true });
+    }
   });
 
   it("dry-runs an exact transition authorization without requesting database identity", async () => {

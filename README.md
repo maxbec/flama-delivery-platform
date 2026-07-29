@@ -30,7 +30,8 @@ Paperclip project → ready task → isolated implementation → signed prefligh
   `paperclip-controllers`, `paperclip-bindings`,
   `paperclip-transition-authorize`, `paperclip-routines`, `reconcile`,
   `publish-check`, `promote`, `release-evidence`, `deployment-pr`, `deploy`,
-  `github-policy-audit`, and `secrets-audit` JSON commands.
+  `github-policy-audit`, `secrets-audit`, `canary-plan`, and `canary-audit`
+  JSON commands.
   Remaining lifecycle commands are added only with their executable
   provider/evidence contracts.
 - The bridge authenticates GitHub webhook bytes before parsing, minimizes
@@ -67,6 +68,11 @@ Paperclip project → ready task → isolated implementation → signed prefligh
   protections, Actions trust, security/supply-chain features, deployment review,
   scoped App posture, and runner separation. Authoritative collection and all
   settings changes remain pending scoped App identities and explicit authority.
+- Phase 4 now has a deterministic, identifier-free canary plan and evidence
+  gate for every approved profile, owner, visibility, stack, release, deployment,
+  secret, replay, rollback, and pooled-cost dimension. Candidate selection and
+  live execution remain pending private mappings and explicit scoped authority;
+  no consumer repository has been selected or changed.
 
 The live snapshot includes private repository names and is deliberately stored
 outside this public repository. Only the generator, schemas, aggregate policy,
@@ -128,5 +134,7 @@ See [Architecture](docs/architecture.md) and
 [Inventory operations](docs/operations/inventory.md). Platform artifact
 operations are documented in [Platform releases](docs/operations/platform-release.md),
 and the current Paperclip rollout evidence is summarized in
-[Phase 2 Paperclip evidence](docs/evidence/phase-2-paperclip.md).
+[Phase 2 Paperclip evidence](docs/evidence/phase-2-paperclip.md). The current
+canary boundary is summarized in
+[Phase 4 canary evidence](docs/evidence/phase-4-canaries.md).
 Flama software delivery platform: deterministic lifecycle orchestration, reusable workflows, policies, and evidence
