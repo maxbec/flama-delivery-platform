@@ -1,4 +1,4 @@
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -387,6 +387,91 @@ describe("delivery CLI", () => {
     });
     expect(io.stdout).not.toContain("10000000-0000-4000-8000-000000000001");
     expect(io.stderr).toBe("");
+  });
+
+  it("audits secret metadata without reflecting secret names", async () => {
+    const io = new MemoryIo();
+    const temporary = await mkdtemp(join(tmpdir(), "flama-secrets-audit-"));
+    const inputPath = join(temporary, "input.json");
+    const dateAfter = (days: number): string => new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
+    const privateKeyName = "TEST_PRIVATE_VALUE_NAME";
+    await writeFile(inputPath, JSON.stringify({
+      schemaVersion: 1,
+      repository: { visibility: "public", isFork: false },
+      infisical: {
+        sourceOfTruth: true,
+        projectSlug: "example-project",
+        environmentMappings: [{ environment: "production", paths: ["/application/production"] }],
+        machineIdentity: {
+          method: "oidc",
+          hardcodedClaims: true,
+          shortLived: true,
+          sharedAcrossRepositories: false,
+          projectScoped: true,
+          environmentScoped: true,
+          pathScoped: true,
+          claims: {
+            issuerExact: true,
+            audienceExact: true,
+            repositoryExact: true,
+            workflowExact: true,
+            refOrEnvironmentExact: true,
+          },
+        },
+      },
+      publicPullRequest: {
+        secrets: false,
+        idToken: false,
+        infisical: false,
+        trustedCacheWrite: false,
+        privateRunner: false,
+        productionNetwork: false,
+        pullRequestTarget: false,
+      },
+      trustedJobs: {
+        broadSecretInheritance: false,
+        leastPrivilegePath: true,
+        buildProductionSecrets: false,
+        releaseProductionSecrets: false,
+        productionAfterApprovalOnly: true,
+        deployApprovalBound: true,
+      },
+      secretSyncs: [],
+      destinationSecrets: [{
+        key: privateKeyName,
+        destination: "github_dependabot_secret",
+        delivery: "approved_destination_exception",
+        rotationDays: 365,
+        lastRotatedAt: new Date().toISOString().slice(0, 10),
+      }],
+      exceptions: [{
+        key: privateKeyName,
+        destination: "github_dependabot_secret",
+        reason: "Runtime retrieval is unsupported by the dependency update service",
+        owner: "security-owner",
+        scope: "repository",
+        rotationDays: 365,
+        expiresAt: dateAfter(364),
+        reviewAfter: dateAfter(180),
+        status: "approved",
+      }],
+      repositoryVariables: [],
+      generatedConfiguration: [],
+      paperclipPrompts: [],
+    }));
+    try {
+      const exitCode = await runCli(["secrets-audit", "--input", inputPath], io, repositoryRoot);
+      expect(exitCode).toBe(0);
+      expect(JSON.parse(io.stdout)).toMatchObject({
+        command: "secrets-audit",
+        ok: true,
+        result: { status: "passed", findingCount: 0, findings: [] },
+      });
+      expect(io.stdout).not.toContain(privateKeyName);
+      expect(io.stderr).toBe("");
+    } finally {
+      await rm(temporary, { recursive: true, force: true });
+    }
   });
 
   it("dry-runs an exact transition authorization without requesting database identity", async () => {

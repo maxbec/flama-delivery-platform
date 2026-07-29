@@ -97,8 +97,12 @@ Implemented commands:
 - `deploy --format yaml --input <manifest> --adapter <module> --output <file>`
   runs the provider-neutral deployment/soak/rollback state machine. Dry-run
   validates and plans without importing the adapter or requesting identity.
-- `secrets-audit --input <audit>` validates and audits an Infisical-first secret
-  configuration using redacted finding codes.
+- `secrets-audit --input <audit>` validates an Infisical-first secret boundary:
+  exact short-lived GitHub OIDC claims, project/environment/path scope, public
+  PR isolation, trusted-job separation, explicit Secret Sync targets and key
+  selection, direct-destination exceptions, rotation dates, and secret-free
+  repository variables/generated configuration/Paperclip prompts. Inputs carry
+  names and metadata only—never values—and output uses redacted finding codes.
 
 Every command accepts `--dry-run`; only `bootstrap`, `paperclip-foundation`, `paperclip-controllers`, `paperclip-bindings`, `paperclip-transition-authorize`, `paperclip-routines`,
 `reconcile`, `preflight`, `publish-check`, `promote`, `release-evidence`, and

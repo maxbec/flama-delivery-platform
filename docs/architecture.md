@@ -104,6 +104,14 @@ direct-destination exception. Public PR jobs cannot request an identity token or
 reach Infisical. Machine-readable configuration contains identifiers and paths,
 never values.
 
+The secret audit consumes metadata only. It requires a non-shared, short-lived
+machine identity with exact issuer, audience, repository, workflow, and
+ref/environment claims plus project/environment/path scope. It rejects broad
+Secret Sync targets, implicit key selection, stale rotations, unapproved direct
+destination secrets, production credentials in build/release jobs, and any
+secret-classified repository variable, generated field, or Paperclip prompt.
+Findings contain stable codes and coarse locations, never secret names or values.
+
 ## Migration gates
 
 1. Prove the inventory and exclusions.

@@ -59,6 +59,10 @@ Paperclip project → ready task → isolated implementation → signed prefligh
   manifest, and SHA-256 checksum.
   Publication remains disabled until the scoped release App is available through
   the approved Infisical/OIDC path.
+- Phase 3 now has a metadata-only Infisical policy audit covering exact OIDC
+  claims, non-shared least-privilege identities, public-PR isolation, trusted-job
+  separation, scoped Secret Syncs, direct-destination exceptions, and rotation
+  state. No live mapping, identity, sync, or secret has been created or read.
 
 The live snapshot includes private repository names and is deliberately stored
 outside this public repository. Only the generator, schemas, aggregate policy,
@@ -72,8 +76,9 @@ repository.
 
 - Never modify a fork or archived repository.
 - Never print, persist, cache, or publish secret values.
-- Infisical is the default secret source; destination secrets require a current
-  machine-readable exception.
+- Infisical is the default secret source; direct destination secrets require a
+  current machine-readable exception, while synced destinations remain scoped
+  and authoritative from Infisical.
 - Public and fork PRs receive no secrets, OIDC token, trusted cache writes, or
   private runner access.
 - Production requires Max's approval of the exact deployment PR SHA.
