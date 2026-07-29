@@ -54,6 +54,15 @@ Implemented and verified:
   its third-party notices. PostgreSQL 18 integration tests cover migration
   replay, exact authorization resolution, publication recording, and rejection
   after repository-binding drift.
+- The global governance controller is an external Node.js 26 executable, not a
+  Paperclip agent. It enforces fixed company/owner pairings, distinct read-only
+  credentials per scope, GET-only Paperclip and GitHub transports, bounded
+  metadata pagination, and private mode-0600 detailed evidence while exposing
+  only an evidence digest to ordinary logs.
+- Governance unit tests cover cross-company substitution, shared-credential
+  rejection, response-body suppression, exact-attempt GitHub job reads,
+  identifier-free aggregation, timestamp validation, and private evidence
+  permissions. The bundle is included in deterministic platform artifacts.
 
 Still pending:
 
@@ -63,6 +72,10 @@ Still pending:
 - Live bridge deployment, scoped machine identity injection, and controller
   authorization writes remain pending explicit deployment authority and the
   private repository/case mappings. The runtime does not infer those mappings.
+- Live governance collection remains pending the six separately scoped
+  read-only identities and a private repository/profile selector file. Cache-hit
+  coverage stays explicitly unavailable until generated workflows emit the
+  bounded signal required for an actual rate.
 - Consumer repository migration, GitHub App installation, and production
   deployment remain separate later-phase work with their own canaries and
   approvals.

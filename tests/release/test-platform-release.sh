@@ -19,6 +19,7 @@ archive_listing=$(tar -tzf "$FIRST/$artifact")
 grep -Fqx 'flama-delivery-platform-v0.1.0/bin/flama-delivery-ctl.js' <<< "$archive_listing"
 grep -Fqx 'flama-delivery-platform-v0.1.0/bin/bridge/index.js' <<< "$archive_listing"
 grep -Fqx 'flama-delivery-platform-v0.1.0/bin/bridge/worker.js' <<< "$archive_listing"
+grep -Fqx 'flama-delivery-platform-v0.1.0/bin/governance/index.js' <<< "$archive_listing"
 grep -Fqx 'flama-delivery-platform-v0.1.0/release-manifest.json' <<< "$archive_listing"
 grep -Fqx "flama-delivery-platform-v0.1.0/$sbom" <<< "$archive_listing"
 grep -Fqx 'flama-delivery-platform-v0.1.0/lifecycles/feature-fix.json' <<< "$archive_listing"
@@ -46,6 +47,7 @@ jq -e '
   .nodeMajor == 26 and
   .cli == "bin/flama-delivery-ctl.js" and
   .bridge == "bin/bridge/index.js" and
+  .governance == "bin/governance/index.js" and
   (.commitSha | test("^[0-9a-f]{40}$")) and
   (.files | length > 10)
 ' "$release_root/release-manifest.json" >/dev/null

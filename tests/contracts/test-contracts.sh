@@ -8,6 +8,8 @@ required_schemas=(
   bootstrap-result.schema.json
   repository-inventory.schema.json
   inventory-audit-result.schema.json
+  governance-input.schema.json
+  governance-result.schema.json
   delivery-contract.schema.json
   preflight-evidence.schema.json
   preflight-run-input.schema.json

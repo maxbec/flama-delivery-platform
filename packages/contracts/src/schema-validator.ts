@@ -21,6 +21,8 @@ const schemaFiles = {
   "deployment-pr-input": "deployment-pr-input.schema.json",
   "deployment-result": "deployment-result.schema.json",
   "inventory-audit-result": "inventory-audit-result.schema.json",
+  "governance-input": "governance-input.schema.json",
+  "governance-result": "governance-result.schema.json",
   "preflight-evidence": "preflight-evidence.schema.json",
   "preflight-run-input": "preflight-run-input.schema.json",
   "preflight-run-result": "preflight-run-result.schema.json",

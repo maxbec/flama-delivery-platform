@@ -60,6 +60,16 @@ separate read-only identity for each company, aggregates metadata only, and has
 no Paperclip, GitHub, release, deployment, approval, or secret-write authority.
 The exact topology is enforced by `policies/paperclip-topology.json`.
 
+The governance runtime additionally enforces that boundary in code: it has only
+a GET request primitive, derives each allowed company/owner pair from a fixed
+contract, rejects credentials reused across scopes, bounds pagination, response
+size, latency, and collection windows, and suppresses all response bodies on
+failure. Detailed results are create-only mode-0600 evidence outside the public
+checkout; ordinary logs receive only a status and evidence digest. GitHub run
+and exact-attempt job metadata provide duration, queue, retry, and runner-time
+measurements. Cache-hit coverage is explicitly unavailable until generated
+consumer workflows emit a bounded signal.
+
 ## Artifact and deployment contract
 
 Release packaging produces an immutable artifact with digest, SBOM, signature,
@@ -105,6 +115,10 @@ The bridge remains undeployed until its Phase 2 deployment is separately
 approved with scoped identities and private mappings. Provider credentials,
 GitHub App installation, and production authority are not implied by this
 runtime choice.
+
+The governance collector is likewise deployment-ready but undeployed. Running
+it requires six newly provisioned read-only identities and a private selector
+file, neither of which is embedded in the public artifact.
 
 The trusted deploy workflow verifies the GitHub OIDC token's issuer, audience,
 repository, production subject, and `job_workflow_ref` for the exact platform

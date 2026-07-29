@@ -203,10 +203,12 @@ const temporaryRoot = await mkdtemp(join(tmpdir(), "flama-platform-release-"));
 try {
   const bundleDirectory = join(temporaryRoot, "bundle");
   const bridgeBundleDirectory = join(temporaryRoot, "bridge-bundle");
+  const governanceBundleDirectory = join(temporaryRoot, "governance-bundle");
   const stageDirectory = join(temporaryRoot, releaseName);
   await mkdir(join(stageDirectory, "bin"), { recursive: true });
   await run("bash", ["scripts/build-cli-bundle.sh", bundleDirectory]);
   await run("bash", ["scripts/build-bridge-bundle.sh", bridgeBundleDirectory]);
+  await run("bash", ["scripts/build-governance-bundle.sh", governanceBundleDirectory]);
   await copyFile(join(bundleDirectory, "index.js"), join(stageDirectory, "bin", "flama-delivery-ctl.js"));
   await chmod(join(stageDirectory, "bin", "flama-delivery-ctl.js"), 0o755);
   await copyFile(
@@ -218,6 +220,11 @@ try {
     errorOnExist: true,
   });
   await chmod(join(stageDirectory, "bin", "bridge", "index.js"), 0o755);
+  await cp(governanceBundleDirectory, join(stageDirectory, "bin", "governance"), {
+    recursive: true,
+    errorOnExist: true,
+  });
+  await chmod(join(stageDirectory, "bin", "governance", "index.js"), 0o755);
   await writeFile(
     join(stageDirectory, "package.json"),
     `${JSON.stringify({ name: packageJson.name, version, private: true, type: "module", engines: packageJson.engines }, null, 2)}\n`,
@@ -269,6 +276,7 @@ try {
     nodeMajor: 26,
     cli: "bin/flama-delivery-ctl.js",
     bridge: "bin/bridge/index.js",
+    governance: "bin/governance/index.js",
     sbom: sbomName,
     files,
   };

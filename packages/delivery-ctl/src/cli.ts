@@ -111,6 +111,8 @@ function isSchemaName(value: string | undefined): value is SchemaName {
     "deployment-pr-input",
     "deployment-result",
     "inventory-audit-result",
+    "governance-input",
+    "governance-result",
     "preflight-evidence",
     "preflight-run-input",
     "preflight-run-result",

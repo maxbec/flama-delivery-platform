@@ -110,6 +110,21 @@ jq -e '
   .additionalProperties == false
 ' "$ROOT_DIR/schemas/paperclip-transition-authorization-result.schema.json" >/dev/null
 
+jq -e '
+  .properties.scopes.minItems == 3 and
+  .properties.scopes.maxItems == 3 and
+  (.properties.scopes.allOf | length) == 3 and
+  .properties.scopes.items.properties.companyId.format == "uuid" and
+  .properties.scopes.items.properties.repositories.maxItems == 100
+' "$ROOT_DIR/schemas/governance-input.schema.json" >/dev/null
+
+jq -e '
+  ."$defs".paperclip.additionalProperties == false and
+  ."$defs".delivery.additionalProperties == false and
+  (.properties.scopes.items.properties | has("companyId") | not) and
+  (.properties.scopes.items.properties | has("repositories") | not)
+' "$ROOT_DIR/schemas/governance-result.schema.json" >/dev/null
+
 jq -e '.states == ["Intake", "Classified", "Repository Prepared", "Baseline Green", "Ready"]' \
   "$ROOT_DIR/lifecycles/project-bootstrap.json" >/dev/null
 jq -e '.states == ["Backlog", "Spec Ready", "Implementing", "Preflight Passed", "PR Open", "Merged", "Done"]' \

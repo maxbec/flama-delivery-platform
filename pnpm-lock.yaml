@@ -54,6 +54,8 @@ importers:
 
   services/bridge: {}
 
+  services/governance: {}
+
 packages:
 
   '@balena/dockerignore@1.0.2':

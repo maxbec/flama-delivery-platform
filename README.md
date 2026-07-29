@@ -37,14 +37,19 @@ Paperclip project → ready task → isolated implementation → signed prefligh
   claims, and bounds inbox/outbox retries with payload-free dead-letter records.
 - The validated `flama-paperclip-delivery` skill and enforced canonical
   lifecycle pipelines are installed in the approved live Paperclip scope from
-  pinned source. Controller authority contracts remain packaged but controller
-  agents are not deployed until the documented company-scoping decision is
-  approved.
+  pinned source. Two zero-budget company controllers are verified paused; the
+  remaining native hire request is still behind Paperclip's board approval and
+  has not been bypassed.
+- The external governance controller is implemented as a deterministic Node.js
+  26 bundle. It uses distinct read-only identities per company/owner, a GET-only
+  transport, metadata-only aggregation, and mode-0600 private evidence; live
+  collection remains gated on the scoped identities and private selectors.
 - Production deployment has a separate exact-SHA trust gate, strict manifest
   validation, provider-neutral health/version/smoke soak, and one-attempt
   rollback state machine. No concrete provider is configured or invoked here.
-- Platform release packaging produces a reproducible self-contained CLI archive,
-  SPDX 2.3 SBOM, third-party licenses, per-file manifest, and SHA-256 checksum.
+- Platform release packaging produces a reproducible self-contained CLI,
+  bridge, and governance archive, SPDX 2.3 SBOM, third-party licenses, per-file
+  manifest, and SHA-256 checksum.
   Publication remains disabled until the scoped release App is available through
   the approved Infisical/OIDC path.
 
@@ -76,6 +81,7 @@ repository.
 .github/workflows/       reusable GitHub workflows
 packages/delivery-ctl/   flama-delivery-ctl
 services/bridge/         flama-delivery-bridge
+services/governance/     external read-only governance collector
 skills/                  Paperclip skills
 lifecycles/              Paperclip pipeline templates
 policies/                scope, GitHub, secrets, Dependabot and cost policy

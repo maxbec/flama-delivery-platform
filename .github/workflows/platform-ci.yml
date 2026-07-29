@@ -47,8 +47,10 @@ jobs:
           bash -n tests/templates/test-workflow-templates.sh
           bash -n scripts/build-cli-bundle.sh
           bash -n scripts/build-bridge-bundle.sh
+          bash -n scripts/build-governance-bundle.sh
           bash -n tests/release/test-cli-bundle.sh
           bash -n tests/release/test-bridge-bundle.sh
+          bash -n tests/release/test-governance-bundle.sh
           bash -n tests/release/test-platform-release.sh
           bash -n scripts/public-repository-audit.sh
           bash -n scripts/delivery
@@ -112,4 +114,5 @@ jobs:
           pnpm build
           bash tests/release/test-cli-bundle.sh
           bash tests/release/test-bridge-bundle.sh
+          bash tests/release/test-governance-bundle.sh
           bash tests/release/test-platform-release.sh
