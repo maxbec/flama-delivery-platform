@@ -52,6 +52,14 @@ source, add a source submodule, or depend on repository-local package patches.
 Compatibility logic belongs in Flama-owned clients and contracts, and an
 upstream incompatibility must fail closed or be resolved upstream.
 
+Company-local Delivery Controllers are zero-budget Paperclip `process` agents
+and remain paused until their deterministic runtime and scoped identity are
+verified. Because Paperclip agents are company-scoped, the approved
+`flama-governance-controller` is an external read-only service. It uses a
+separate read-only identity for each company, aggregates metadata only, and has
+no Paperclip, GitHub, release, deployment, approval, or secret-write authority.
+The exact topology is enforced by `policies/paperclip-topology.json`.
+
 ## Artifact and deployment contract
 
 Release packaging produces an immutable artifact with digest, SBOM, signature,

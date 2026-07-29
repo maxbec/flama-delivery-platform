@@ -49,6 +49,15 @@ import {
   PaperclipRestFoundationClient,
   planPaperclipFoundation,
 } from "./paperclip-foundation.js";
+import {
+  applyPaperclipControllers,
+  controllerRuntimeEntry,
+  type ControllerContract,
+  PaperclipControllersError,
+  type PaperclipControllersInput,
+  PaperclipRestControllersClient,
+  planPaperclipControllers,
+} from "./paperclip-controllers.js";
 
 const toolVersion = "0.1.0";
 const maximumInputBytes = 10 * 1024 * 1024;
@@ -98,9 +107,12 @@ function isSchemaName(value: string | undefined): value is SchemaName {
     "release-evidence-result",
     "platform-release-manifest",
     "paperclip-controller",
+    "paperclip-controllers-input",
+    "paperclip-controllers-result",
     "paperclip-foundation-input",
     "paperclip-foundation-result",
     "paperclip-lifecycle",
+    "paperclip-topology",
     "repository-inventory",
     "repository-scope-policy",
     "render-input",
@@ -169,6 +181,7 @@ export async function runCli(
     command !== "bootstrap" &&
     command !== "inventory" &&
     command !== "paperclip-foundation" &&
+    command !== "paperclip-controllers" &&
     command !== "classify" &&
     command !== "deployment-pr" &&
     command !== "deploy" &&
@@ -322,6 +335,37 @@ export async function runCli(
       if (!options["dry-run"]) {
         if (typeof outputPath !== "string") return fail(io, "output_required");
         await writeEvidence(outputPath, result);
+      }
+      io.writeStdout(jsonLine({ command, dryRun: options["dry-run"], ok: true, toolVersion, result }));
+      return 0;
+    }
+
+    if (command === "paperclip-controllers") {
+      const validation = validator.validate("paperclip-controllers-input", input);
+      if (!validation.ok) {
+        io.writeStdout(jsonLine({ command, ok: false, errors: validation.errors, toolVersion }));
+        return 1;
+      }
+      const controllersInput = input as PaperclipControllersInput;
+      const contract = JSON.parse(await readFile(
+        join(repositoryRoot, "lifecycles", "controllers", `${controllersInput.controller}.json`),
+        "utf8",
+      )) as ControllerContract;
+      const contractValidation = validator.validate("paperclip-controller", contract);
+      if (!contractValidation.ok) return fail(io, "paperclip_contract_invalid");
+      if (!options["dry-run"] && typeof options.output !== "string") return fail(io, "output_required");
+      if (!options["dry-run"]) {
+        const entry = await stat(controllerRuntimeEntry(controllersInput.runtimeRoot));
+        if (!entry.isFile()) return fail(io, "controller_runtime_unavailable");
+      }
+      const result = options["dry-run"]
+        ? planPaperclipControllers(controllersInput, contract)
+        : await applyPaperclipControllers(controllersInput, contract, new PaperclipRestControllersClient(process.env));
+      const resultValidation = validator.validate("paperclip-controllers-result", result);
+      if (!resultValidation.ok) return fail(io, "result_validation_failed");
+      if (!options["dry-run"]) {
+        if (typeof options.output !== "string") return fail(io, "output_required");
+        await writeEvidence(options.output, result);
       }
       io.writeStdout(jsonLine({ command, dryRun: options["dry-run"], ok: true, toolVersion, result }));
       return 0;
@@ -546,7 +590,7 @@ export async function runCli(
     if (error instanceof PublishCheckError) return fail(io, error.code);
     if (error instanceof PromotionError) return fail(io, error.code);
     if (error instanceof ReleaseEvidenceError) return fail(io, error.code);
-    if (error instanceof PaperclipFoundationError) return fail(io, error.code);
+    if (error instanceof PaperclipFoundationError || error instanceof PaperclipControllersError) return fail(io, error.code);
     return fail(io, "input_processing_failed");
   }
 }

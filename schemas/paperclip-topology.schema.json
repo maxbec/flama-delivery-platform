@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/paperclip-topology.schema.json",
+  "title": "Approved Flama Paperclip controller topology",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "upstream", "deliveryControllers", "governanceController"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "upstream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["distribution", "integration", "sourceModification"],
+      "properties": {
+        "distribution": { "const": "released-package" },
+        "integration": { "const": "documented-apis-and-adapters" },
+        "sourceModification": { "const": "deny" }
+      }
+    },
+    "deliveryControllers": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "company", "githubOwner", "placement", "adapterType", "initialStatus", "budgetMonthlyCents"],
+        "properties": {
+          "name": { "enum": ["maxbec-delivery-controller", "navigaite-delivery-controller", "edilio-delivery-controller"] },
+          "company": { "enum": ["Private", "// Navigaite", "Edilio"] },
+          "githubOwner": { "enum": ["maxbec", "navigaite", "edilio"] },
+          "placement": { "const": "paperclip-company-agent" },
+          "adapterType": { "const": "process" },
+          "initialStatus": { "const": "paused" },
+          "budgetMonthlyCents": { "const": 0 }
+        }
+      },
+      "allOf": [
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "name": { "const": "maxbec-delivery-controller" },
+              "company": { "const": "Private" },
+              "githubOwner": { "const": "maxbec" }
+            },
+            "required": ["name", "company", "githubOwner"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "name": { "const": "navigaite-delivery-controller" },
+              "company": { "const": "// Navigaite" },
+              "githubOwner": { "const": "navigaite" }
+            },
+            "required": ["name", "company", "githubOwner"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "type": "object",
+            "properties": {
+              "name": { "const": "edilio-delivery-controller" },
+              "company": { "const": "Edilio" },
+              "githubOwner": { "const": "edilio" }
+            },
+            "required": ["name", "company", "githubOwner"]
+          },
+          "minContains": 1,
+          "maxContains": 1
+        }
+      ]
+    },
+    "governanceController": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "placement", "scope", "identityModel", "dataPolicy", "writeAuthority"],
+      "properties": {
+        "name": { "const": "flama-governance-controller" },
+        "placement": { "const": "external-service" },
+        "scope": { "const": "cross-company" },
+        "identityModel": { "const": "separate-read-only-identity-per-company" },
+        "dataPolicy": { "const": "metadata-only" },
+        "writeAuthority": { "type": "array", "maxItems": 0 }
+      }
+    }
+  }
+}

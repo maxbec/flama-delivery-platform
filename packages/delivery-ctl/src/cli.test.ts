@@ -44,6 +44,9 @@ const promotionInputPath = fileURLToPath(
 const paperclipFoundationInputPath = fileURLToPath(
   new URL("../../../tests/fixtures/paperclip-foundation/valid.json", import.meta.url),
 );
+const paperclipControllersInputPath = fileURLToPath(
+  new URL("../../../tests/fixtures/paperclip-controllers/valid.json", import.meta.url),
+);
 
 describe("delivery CLI", () => {
   it("returns versioned JSON validation output", async () => {
@@ -278,6 +281,31 @@ describe("delivery CLI", () => {
       },
     });
     expect(io.stdout).not.toContain("10000000-0000-4000-8000-000000000001");
+    expect(io.stderr).toBe("");
+  });
+
+  it("dry-runs paused Paperclip controller provisioning without requesting identity", async () => {
+    const io = new MemoryIo();
+    const exitCode = await runCli(
+      ["paperclip-controllers", "--dry-run", "--input", paperclipControllersInputPath],
+      io,
+      repositoryRoot,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(io.stdout)).toMatchObject({
+      command: "paperclip-controllers",
+      dryRun: true,
+      ok: true,
+      result: {
+        status: "planned",
+        disposition: "planned",
+        initialStatus: "paused",
+        budgetMonthlyCents: 0,
+      },
+    });
+    expect(io.stdout).not.toContain("10000000-0000-4000-8000-000000000001");
+    expect(io.stdout).not.toContain("/srv/flama-delivery-platform");
     expect(io.stderr).toBe("");
   });
 });

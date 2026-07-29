@@ -34,6 +34,11 @@ Implemented commands:
   no company or Paperclip object IDs. Dry-run requests no identity; live use
   accepts the API URL and scoped token only from the process environment and
   writes mode-0600 evidence outside the repository.
+- `paperclip-controllers --input <company-plan> --output <evidence>` creates or
+  reuses one exact company-local process agent using Paperclip's documented API.
+  The agent is zero-budget and immediately paused, cannot create agents, skills,
+  or assignments, and refuses configuration drift or board-approval bypasses.
+  The external governance controller is deliberately not a Paperclip agent.
 - `preflight --input <run-plan> --output <evidence>` verifies the clean exact
   Git SHA and executes only `./scripts/delivery buildable` followed by
   `./scripts/delivery affected`. Child output is never echoed or persisted;
@@ -64,7 +69,7 @@ Implemented commands:
 - `secrets-audit --input <audit>` validates and audits an Infisical-first secret
   configuration using redacted finding codes.
 
-Every command accepts `--dry-run`; only `bootstrap`, `paperclip-foundation`,
+Every command accepts `--dry-run`; only `bootstrap`, `paperclip-foundation`, `paperclip-controllers`,
 `preflight`, `publish-check`, `promote`, `release-evidence`, and `deploy`
 currently perform writes or execution when dry-run is absent. Inputs are JSON
 files capped at 10 MiB.

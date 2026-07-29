@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "upstream": {
+    "distribution": "released-package",
+    "integration": "documented-apis-and-adapters",
+    "sourceModification": "deny"
+  },
+  "deliveryControllers": [
+    {
+      "name": "maxbec-delivery-controller",
+      "company": "Private",
+      "githubOwner": "maxbec",
+      "placement": "paperclip-company-agent",
+      "adapterType": "process",
+      "initialStatus": "paused",
+      "budgetMonthlyCents": 0
+    },
+    {
+      "name": "navigaite-delivery-controller",
+      "company": "// Navigaite",
+      "githubOwner": "navigaite",
+      "placement": "paperclip-company-agent",
+      "adapterType": "process",
+      "initialStatus": "paused",
+      "budgetMonthlyCents": 0
+    },
+    {
+      "name": "edilio-delivery-controller",
+      "company": "Edilio",
+      "githubOwner": "edilio",
+      "placement": "paperclip-company-agent",
+      "adapterType": "process",
+      "initialStatus": "paused",
+      "budgetMonthlyCents": 0
+    }
+  ],
+  "governanceController": {
+    "name": "flama-governance-controller",
+    "placement": "external-service",
+    "scope": "cross-company",
+    "identityModel": "separate-read-only-identity-per-company",
+    "dataPolicy": "metadata-only",
+    "writeAuthority": []
+  }
+}

@@ -27,6 +27,29 @@ jq -e '
 ' "$ROOT_DIR/lifecycles/controllers/flama-governance-controller.json" >/dev/null
 
 jq -e '
+  .upstream == {
+    distribution: "released-package",
+    integration: "documented-apis-and-adapters",
+    sourceModification: "deny"
+  } and
+  (.deliveryControllers | length) == 3 and
+  all(.deliveryControllers[];
+    .placement == "paperclip-company-agent" and
+    .adapterType == "process" and
+    .initialStatus == "paused" and
+    .budgetMonthlyCents == 0
+  ) and
+  .governanceController == {
+    name: "flama-governance-controller",
+    placement: "external-service",
+    scope: "cross-company",
+    identityModel: "separate-read-only-identity-per-company",
+    dataPolicy: "metadata-only",
+    writeAuthority: []
+  }
+' "$ROOT_DIR/policies/paperclip-topology.json" >/dev/null
+
+jq -e '
   .company.name == "Private" and
   .controller == "maxbec-delivery-controller" and
   .mutationAllowed == true
@@ -45,6 +68,18 @@ jq -e '
   .properties.pipelines.items.additionalProperties == false and
   .properties.summary.additionalProperties == false
 ' "$ROOT_DIR/schemas/paperclip-foundation-result.schema.json" >/dev/null
+
+jq -e '
+  .properties.runtimeRoot.type == "string" and
+  .properties.mutationAllowed.const == true and
+  (.allOf | length) == 3
+' "$ROOT_DIR/schemas/paperclip-controllers-input.schema.json" >/dev/null
+
+jq -e '
+  .properties.initialStatus.const == "paused" and
+  .properties.budgetMonthlyCents.const == 0 and
+  .properties.contractDigest.pattern == "^sha256:[0-9a-f]{64}$"
+' "$ROOT_DIR/schemas/paperclip-controllers-result.schema.json" >/dev/null
 
 jq -e '.states == ["Intake", "Classified", "Repository Prepared", "Baseline Green", "Ready"]' \
   "$ROOT_DIR/lifecycles/project-bootstrap.json" >/dev/null
