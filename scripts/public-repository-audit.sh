@@ -7,6 +7,10 @@ if ! git -C "$ROOT_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo 'public repository audit requires a Git worktree' >&2
   exit 2
 fi
+if ! command -v jq >/dev/null 2>&1; then
+  echo 'public repository audit requires jq' >&2
+  exit 3
+fi
 
 findings=()
 scanner=${FLAMA_AUDIT_SCANNER:-auto}
@@ -75,6 +79,12 @@ while IFS= read -r -d '' relative_path; do
       ;;
   esac
 
+  case "/$relative_path" in
+    /paperclipai/*|/vendor/paperclipai/*|/vendor/paperclip/*|/third_party/paperclipai/*|/third_party/paperclip/*|/patches/*paperclip*|/.yarn/patches/*paperclip*)
+      findings+=("paperclip_source_copy_or_patch")
+      ;;
+  esac
+
   [[ "$relative_path" == "scripts/public-repository-audit.sh" ]] && continue
   path="$ROOT_DIR/$relative_path"
   [[ -f "$path" ]] || continue
@@ -106,6 +116,18 @@ while IFS= read -r -d '' relative_path; do
     findings+=("paperclip_inventory_measurement")
   fi
 done < <(git -C "$ROOT_DIR" ls-files --cached --others --exclude-standard -z)
+
+if [[ -f "$ROOT_DIR/package.json" ]] &&
+  jq -e '
+    ((.pnpm.patchedDependencies // {}) | keys | any(test("(^|/)paperclipai($|@)|@paperclipai/"; "i")))
+  ' "$ROOT_DIR/package.json" >/dev/null 2>&1; then
+  findings+=("paperclip_package_patch")
+fi
+
+if [[ -f "$ROOT_DIR/.gitmodules" ]] &&
+  contains_pattern '(?i)(?:github\.com[/:]paperclipai/paperclip(?:\.git)?|paperclipai/paperclip)' "$ROOT_DIR/.gitmodules"; then
+  findings+=("paperclip_source_submodule")
+fi
 
 if (( ${#findings[@]} > 0 )); then
   printf 'public repository audit failed: %d sanitized finding(s)\n' "${#findings[@]}" >&2

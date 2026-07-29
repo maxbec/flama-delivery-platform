@@ -45,6 +45,13 @@ trusted cache writes, production network, homelab runner, or
 for protected internal commits, request narrowly scoped short-lived identity,
 and receive production values only after owner approval.
 
+Paperclip is an external platform boundary. Flama uses the released PaperclipAI
+package and its documented APIs, adapters, skills, and configuration as-is. The
+delivery platform must not patch installed PaperclipAI code, vendor or fork its
+source, add a source submodule, or depend on repository-local package patches.
+Compatibility logic belongs in Flama-owned clients and contracts, and an
+upstream incompatibility must fail closed or be resolved upstream.
+
 ## Artifact and deployment contract
 
 Release packaging produces an immutable artifact with digest, SBOM, signature,

@@ -47,4 +47,24 @@ if bash "$ROOT_DIR/scripts/public-repository-audit.sh" "$TMP_DIR" >/dev/null 2>&
   exit 1
 fi
 
+git -C "$TMP_DIR" reset -q paperclip-inventory.txt
+rm -- "$TMP_DIR/paperclip-inventory.txt"
+mkdir -p "$TMP_DIR/vendor/paperclipai"
+printf '%s\n' 'vendored upstream source' >"$TMP_DIR/vendor/paperclipai/server.ts"
+git -C "$TMP_DIR" add vendor/paperclipai/server.ts
+if bash "$ROOT_DIR/scripts/public-repository-audit.sh" "$TMP_DIR" >/dev/null 2>&1; then
+  echo 'vendored PaperclipAI source was not rejected' >&2
+  exit 1
+fi
+
+git -C "$TMP_DIR" reset -q vendor/paperclipai/server.ts
+rm -- "$TMP_DIR/vendor/paperclipai/server.ts"
+rmdir "$TMP_DIR/vendor/paperclipai" "$TMP_DIR/vendor"
+printf '%s\n' '{"pnpm":{"patchedDependencies":{"paperclipai@1.2.3":"patches/paperclip.patch"}}}' >"$TMP_DIR/package.json"
+git -C "$TMP_DIR" add package.json
+if bash "$ROOT_DIR/scripts/public-repository-audit.sh" "$TMP_DIR" >/dev/null 2>&1; then
+  echo 'PaperclipAI package patch was not rejected' >&2
+  exit 1
+fi
+
 echo 'public repository audit regression tests passed'
