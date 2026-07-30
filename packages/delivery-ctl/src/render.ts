@@ -41,7 +41,7 @@ export interface RenderInput {
   readonly commands: Readonly<Record<"buildable" | "affected" | "full" | "smoke" | "health", readonly string[]>>;
 }
 
-export type RenderStatus = "planned" | "created" | "unchanged";
+export type RenderStatus = "planned" | "created" | "unchanged" | "replaced";
 
 export interface RenderResult {
   readonly schemaVersion: 1;
@@ -55,6 +55,12 @@ interface RenderOptions {
   readonly outputRoot: string;
   readonly input: RenderInput;
   readonly dryRun: boolean;
+  /**
+   * Exact generated paths whose existing content this run is authorized to
+   * replace. A repository already managed by an earlier delivery system is
+   * migrated by naming its files here; anything unnamed still fails closed.
+   */
+  readonly replaceExisting?: readonly string[];
 }
 
 interface TargetFile {
@@ -375,15 +381,25 @@ export async function renderTemplates(options: RenderOptions): Promise<RenderRes
     }
   }
 
-  if (conflicts.length > 0) throw new RenderConflictError(conflicts.sort());
+  const authorized = new Set(options.replaceExisting ?? []);
+  const generatedPaths = new Set(states.map(({ target }) => target.path));
+  for (const path of authorized) {
+    // Authorizing a path this run does not generate is a mistake, not a licence.
+    if (!generatedPaths.has(path)) throw new Error(`unknown replacement target: ${path}`);
+  }
+  const unauthorized = conflicts.filter((path) => !authorized.has(path));
+  if (unauthorized.length > 0) throw new RenderConflictError(unauthorized.sort());
 
   if (!options.dryRun) {
-    for (const state of states.filter(({ exists }) => !exists)) {
+    for (const state of states.filter(
+      ({ exists, same, target }) => !exists || (!same && authorized.has(target.path)),
+    )) {
       const destination = join(root, state.target.path);
       await mkdir(dirname(destination), { recursive: true });
+      // Create-only unless this exact path was authorized for replacement.
       await writeFile(destination, state.target.content, {
         encoding: "utf8",
-        flag: "wx",
+        flag: state.exists ? "w" : "wx",
         mode: state.target.mode,
       });
     }
@@ -393,9 +409,13 @@ export async function renderTemplates(options: RenderOptions): Promise<RenderRes
     schemaVersion: 1,
     profile: options.input.profile,
     platformRef: options.input.platformRef,
-    files: states.map(({ target, exists }) => ({
+    files: states.map(({ target, exists, same }) => ({
       path: target.path,
-      status: exists ? "unchanged" : options.dryRun ? "planned" : "created",
+      status: !exists
+        ? (options.dryRun ? "planned" : "created")
+        : same
+          ? "unchanged"
+          : (options.dryRun ? "planned" : "replaced"),
     })),
   };
 }

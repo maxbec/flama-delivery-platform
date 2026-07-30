@@ -131,4 +131,32 @@ describe("template renderer", () => {
     await expect(readFile(generatedPath, "utf8")).resolves.toContain("user-edited");
     await expect(readFile(ownedPath, "utf8")).resolves.toContain("user-owned");
   });
+
+  it("replaces a legacy generated file only when that exact path is authorized", async () => {
+    const outputRoot = await mkdtemp(join(tmpdir(), "flama-render-takeover-"));
+    await mkdir(join(outputRoot, ".github"), { recursive: true });
+    await writeFile(join(outputRoot, ".github/dependabot.yml"), "version: 2\n", "utf8");
+
+    // Unauthorized: the existing file is left alone and the run refuses.
+    await expect(renderTemplates({
+      repositoryRoot, outputRoot, input, dryRun: false,
+    })).rejects.toBeInstanceOf(RenderConflictError);
+
+    const replaced = await renderTemplates({
+      repositoryRoot, outputRoot, input, dryRun: false,
+      replaceExisting: [".github/dependabot.yml"],
+    });
+
+    expect(replaced.files).toContainEqual({ path: ".github/dependabot.yml", status: "replaced" });
+    expect(await readFile(join(outputRoot, ".github/dependabot.yml"), "utf8")).toContain("cooldown");
+  });
+
+  it("refuses an authorization for a path it does not generate", async () => {
+    const outputRoot = await mkdtemp(join(tmpdir(), "flama-render-takeover-"));
+
+    await expect(renderTemplates({
+      repositoryRoot, outputRoot, input, dryRun: false,
+      replaceExisting: ["src/index.ts"],
+    })).rejects.toThrow();
+  });
 });
