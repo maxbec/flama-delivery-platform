@@ -13,7 +13,7 @@ values, and raw API responses remain outside this public repository.
 | --- | --- | --- |
 | 0 — Authoritative inventory | Complete | Fresh inventory proves 64 owned, non-fork, non-archived consumers; 28 forks and 3 archived repositories are mutation-denied. |
 | 1 — Platform foundation | Foundation implementation complete | Node.js 26 platform, deterministic CLI, reusable workflows, schemas, policies, bridge, controller, governance job, release builder, and test harness are implemented and green. Publishing an immutable release remains gated on the scoped release identity. |
-| 2 — Paperclip foundation | In progress | Shared skill and enforced lifecycles are installed. Two company controllers are paused and zero-budget; one controller remains behind native board approval. Authoritative project/workspace bindings and live routines/bridge deployment are pending. |
+| 2 — Paperclip foundation | In progress | Shared skill and enforced lifecycles are installed and were re-read through the documented CLI. The HMAC routine installer and secret-safe Infisical receipt path are implemented locally. Two company controllers are paused and zero-budget; one remains behind native board approval. Immutable controller migration, authoritative project/workspace bindings, and live routines/bridge deployment are pending. |
 | 3 — GitHub and Infisical policy | Tooling implemented; live configuration pending | Metadata-only policy auditors exist. Scoped GitHub Apps, exact Infisical mappings, OIDC/Sync verification, runner separation, settings changes, and any exception approval are not yet applied. |
 | 4 — Canaries | Planning and audit gates implemented; live run pending | Deterministic coverage and evidence gates exist, but no real canary repository has been selected or changed. |
 | 5 — Migration waves | Not started | No consumer repository has been migrated. |
@@ -32,7 +32,8 @@ canaries pass.
 - Hosted Foundation Gate: [run 30530049431](https://github.com/maxbec/flama-delivery-platform/actions/runs/30530049431), passed for that exact baseline
 - Runtime: Node.js `26.3.0`
 - Released Paperclip dependency used as-is: `2026.722.0`
-- Local full gate: passed with 196 unit tests and 12 PostgreSQL 18 Testcontainers integration tests
+- Current local full gate: passed with 205 unit tests and 12 PostgreSQL 18
+  Testcontainers integration tests
 - Deterministic CLI, bridge, company-controller, governance, and complete platform-release bundles: reproducible
 - Public-repository audit: passed
 
@@ -75,40 +76,72 @@ captured directly into the authoritative Infisical mapping and injected into
 the bridge at runtime; it must never appear in source, CLI arguments, logs,
 evidence, artifacts, or this document.
 
+Released Paperclip necessarily retains its generated verifier copy. A live
+trigger therefore also requires a current machine-readable
+`provider_native_secret` exception. This narrow exception does not make
+Paperclip a reader account or secret source: Infisical remains the runtime
+delivery source for the bridge, and the installer verifies only non-secret
+receipt metadata on reruns.
+
 ## Phase 2 live checkpoint
 
-Verified before the current re-audit:
+The temporary read-only re-audit is complete:
 
-- the shared `flama-paperclip-delivery` skill was installed from pinned,
-  content-verified source across the eligible agent scope;
-- the three canonical enforced lifecycle pipelines were installed and read back
-  without managed drift;
-- two company-local controllers were created/reused as paused, zero-budget
-  process agents; and
-- the remaining controller hire request was left behind Paperclip's native
-  human board-approval boundary.
+- every eligible agent has the `flama-paperclip-delivery` skill in Paperclip's
+  desired state; ordinary adapters report synchronization support, while
+  process adapters retain the desired assignment without claiming unsupported
+  runtime synchronization;
+- every managed lifecycle pipeline in the approved company scope exactly
+  matches its versioned stages, enforced edges, and cancellation sentinel;
+- the company controller records remain zero-budget with agent/skill/assignment
+  creation denied; two are paused and the remaining hire request is still
+  behind Paperclip's human board-approval boundary;
+- all controller records still point to the exact legacy source entrypoint.
+  Their existing executables are present, but migration to the immutable
+  release entrypoint has not been performed or silently inferred;
+- no managed routine has been applied, and the available project/workspace
+  configuration is insufficient to infer authoritative repository bindings;
+  and
+- the temporary administrator CLI token used for this audit was revoked and
+  removed locally after the readback. No live Paperclip mutation was made.
+
+The repository now implements the missing GitHub-transition installer. It:
+
+- defaults to identity-free dry-run and always creates the routine paused;
+- validates the exact active company, paused zero-budget controller, selected
+  project, HMAC contract, Infisical mapping, and current secret-storage
+  exception before a live write;
+- captures Paperclip's one-time webhook URL and secret in memory only, then
+  upserts the exact bridge keys to Infisical using a short-lived injected token;
+- never reads Infisical secret values on rerun, instead comparing trigger-bound
+  receipt metadata requested with `viewSecretValue=false`;
+- reuses an exact receipt and rotates once to recover a missing or partial
+  two-secret handoff or to enforce the approved rotation interval; and
+- emits only planned/applied dispositions, synchronization state, and contract
+  and exception digests. It omits IDs, URLs, paths, timestamps, and values.
 
 Still pending:
 
-- completion of the temporary operator re-audit through Paperclip's documented
-  CLI;
 - native approval of the remaining company controller;
+- fail-closed migration of the approved controllers from the exact legacy
+  source entrypoint to the immutable release entrypoint;
 - authoritative selection of project/workspace mappings for every consumer;
 - creation of private repository bindings from those mappings;
 - deterministic installation of both paused routine types;
-- direct, non-logging capture of generated routine HMAC material into the exact
-  Infisical project/environment/path mapping;
+- approval of the exact Paperclip verifier-copy exception and private
+  Infisical project/environment/path mappings required before HMAC trigger
+  creation;
 - bridge deployment, scoped authorization writes, controlled routine
   activation, replay verification, and native governance attestations; and
 - the later GitHub App identities needed for authoritative missed-event
   discovery and governance aggregation.
 
-The scheduled reconciliation installer is implemented. The GitHub-transition
-routine contract, native execution path, HMAC publisher, and artifact boundary
-are implemented, but the deterministic live installer still needs its
-Infisical receipt/capture path before the webhook trigger may be created. This
-gap was found during the current checkpoint and is being closed before any live
-routine mutation.
+Both deterministic routine installers are implemented. Neither routine has
+been applied live. The scheduled routine still requires its authoritative
+project selection; the HMAC routine additionally requires the exact Infisical
+mapping and current Paperclip verifier-copy exception. Activation remains a
+separate, explicit production decision after bridge deployment and canary
+evidence.
 
 ## Secret and public-repository safety
 
@@ -134,14 +167,13 @@ restart.
 
 ## Next gates
 
-1. Complete the temporary read-only Paperclip re-audit and revoke the temporary
-   operator credential when the audit is finished.
-2. Finish and test the Infisical-safe GitHub-transition routine installer
-   without creating a live trigger.
-3. Obtain the remaining native controller approval and authoritative private
-   project/workspace mappings.
-4. Apply both routine types paused, using canary-first provisioning and private
-   identifier-free evidence.
+1. Finish the local and hosted gates for the Infisical-safe GitHub-transition
+   routine installer without creating a live trigger.
+2. Obtain the remaining native controller approval and migrate approved
+   controllers to the immutable release entrypoint.
+3. Obtain authoritative private project/workspace mappings.
+4. Approve the narrow verifier-copy exception, then apply both routine types
+   paused using canary-first provisioning and private identifier-free evidence.
 5. Configure scoped GitHub Apps and exact Infisical mappings only after their
    authority and secret exception state are confirmed.
 6. Select and execute the representative Phase 4 canaries before changing any

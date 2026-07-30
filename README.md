@@ -32,7 +32,8 @@ retains the major safety and phase boundaries.
 - `flama-delivery-ctl` currently implements secret-safe `validate`, `inventory`,
   `classify`, `bootstrap`, `render`, `paperclip-foundation`, `preflight`,
   `paperclip-controllers`, `paperclip-bindings`,
-  `paperclip-transition-authorize`, `paperclip-routines`, `reconcile`,
+  `paperclip-transition-authorize`, `paperclip-routines`,
+  `paperclip-github-transition-routine`, `reconcile`,
   `publish-check`, `promote`, `release-evidence`, `deployment-pr`, `deploy`,
   `github-policy-audit`, `secrets-audit`, `canary-plan`, and `canary-audit`
   JSON commands.
@@ -51,7 +52,9 @@ retains the major safety and phase boundaries.
   lifecycle pipelines are installed in the approved live Paperclip scope from
   pinned source. Two zero-budget company controllers are verified paused; the
   remaining native hire request is still behind Paperclip's board approval and
-  has not been bypassed.
+  has not been bypassed. Readback also found that the live controller records
+  still use the exact legacy source entrypoint; migration to the immutable
+  release entrypoint remains a separately authorized, fail-closed operation.
 - The governance controller is implemented as a deterministic Node.js 26 job
   orchestrated by Paperclip. Company-local controllers supply bounded
   Paperclip attestations through their native run context; the aggregator does
@@ -140,6 +143,8 @@ Do not write a live snapshot into this public checkout.
 See [Architecture](docs/architecture.md) and
 [Inventory operations](docs/operations/inventory.md). Platform artifact
 operations are documented in [Platform releases](docs/operations/platform-release.md),
+paused routine provisioning is documented in
+[Paperclip routines](docs/operations/paperclip-routines.md),
 and the current Paperclip rollout evidence is summarized in
 [Phase 2 Paperclip evidence](docs/evidence/phase-2-paperclip.md). The current
 canary boundary is summarized in

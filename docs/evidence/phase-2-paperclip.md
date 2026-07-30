@@ -93,6 +93,20 @@ Implemented and verified:
   `always_enqueue`. The resulting issue contains no free-form webhook body; the
   native controller reads the exact stored trigger payload, validates the
   linked routine run, and emits only the evidence digest after transition.
+- A separate deterministic installer now creates that second routine paused and
+  creates only its exact `hmac_sha256` trigger. Paperclip's one-time URL and
+  secret are held in memory while both exact bridge keys are upserted to one
+  explicit Infisical project/environment/path. Reruns request
+  `viewSecretValue=false` and compare only trigger-bound receipt metadata. An
+  exact receipt is reused; a missing or partial two-secret receipt rotates once
+  and repairs both entries, while a due rotation interval replaces both even
+  when their receipts are exact. Output and evidence contain no identifiers,
+  paths, URLs, timestamps, or values.
+- Because released Paperclip necessarily retains the generated verifier copy,
+  live trigger creation also requires a current `provider_native_secret`
+  exception. The installer validates and digests that approval record before
+  mutation. Infisical remains the bridge's authoritative runtime source, and
+  routine activation remains separately gated.
 - The immutable Node.js 26 platform archive now includes the company-controller
   executable. Controller provisioning points to that pinned release entrypoint
   instead of a mutable source checkout or Paperclip package modification. Its
@@ -103,10 +117,18 @@ Implemented and verified:
   the reconciliation evidence in the protected mode-0600 evidence directory,
   and returns only its digest. This replaces the rejected external Paperclip
   polling/account pattern without changing the released Paperclip package.
+- A documented-CLI re-audit confirmed exact lifecycle graphs and desired skill
+  assignments across the eligible scope. It also found that the live controller
+  records still use the exact legacy source entrypoint. Their least-privilege
+  permissions, zero budgets, and existing executables remain intact, but the
+  immutable-entrypoint migration has not been applied. The temporary operator
+  token was revoked and removed after this read-only audit.
 
 Still pending:
 
 - One company controller remains behind Paperclip's native board approval.
+- The approved controllers still require the installer's fail-closed migration
+  from the exact legacy source entrypoint to the immutable release entrypoint.
 - Selecting each repository's project/workspace mapping and applying private
   bindings remains pending; the command intentionally does not guess mappings.
 - Live bridge deployment, routine-trigger secret injection, and controller
@@ -118,10 +140,11 @@ Still pending:
   and a private repository/profile selector file. No Paperclip human account or
   board token is required. Cache-hit coverage stays explicitly unavailable
   until generated workflows emit the bounded signal required for an actual rate.
-- Routine application remains pending the authoritative project selection and
-  the remaining controller's native board approval. Activation remains gated
-  on the deployed bridge, private bindings, the HMAC trigger secret stored in
-  Infisical, and an explicit production authorization.
+- Routine application remains pending the authoritative project selection, the
+  remaining controller's native board approval, the exact Infisical mapping,
+  and approval of the Paperclip verifier-copy exception. Activation remains
+  gated on the deployed bridge, private bindings, successful receipt capture,
+  and an explicit production authorization.
 - Authoritative GitHub missed-event discovery remains pending the later scoped
   GitHub App identities and private repository selectors. The current audit
   intentionally does not guess either input or replay dead letters.

@@ -117,6 +117,18 @@ destination secrets, production credentials in build/release jobs, and any
 secret-classified repository variable, generated field, or Paperclip prompt.
 Findings contain stable codes and coarse locations, never secret names or values.
 
+The GitHub-transition routine is installed only in a paused state. Released
+Paperclip generates and retains the verifier copy of its trigger secret, so
+live creation additionally requires a current `provider_native_secret`
+exception; this is the narrow, machine-readable exception to Infisical's
+authoritative-source rule. The installer captures the one-time trigger URL and
+secret only in memory, upserts both to one exact Infisical mapping, and records
+trigger ID, public ID, rotation timestamp, and contract digest as non-secret
+metadata. A rerun reads metadata with `viewSecretValue=false`; exact receipts
+are reused, while missing or partial receipts cause one Paperclip rotation and
+replacement of both Infisical entries. Routine activation remains a separate
+production authorization.
+
 ## Canary boundary
 
 Representative canary selection and evidence are private operational inputs.

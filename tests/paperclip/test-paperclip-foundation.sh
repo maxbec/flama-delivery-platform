@@ -160,6 +160,32 @@ jq -e '
 ' "$ROOT_DIR/schemas/paperclip-routines-result.schema.json" >/dev/null
 
 jq -e '
+  .key == "flama-github-transition-v1" and
+  .initialStatus == "paused" and
+  .concurrencyPolicy == "always_enqueue" and
+  .trigger.kind == "webhook" and
+  .trigger.signingMode == "hmac_sha256" and
+  .trigger.replayWindowSeconds == 300 and
+  .trigger.credentialSource == "infisical-oidc"
+' "$ROOT_DIR/routines/github-transition.json" >/dev/null
+
+jq -e '
+  .properties.infisical.properties.sourceOfTruth.const == true and
+  .properties.infisical.properties.credentialSource.const == "infisical-oidc" and
+  .properties.paperclipSecretStorageException.properties.destination.const == "provider_native_secret" and
+  .properties.paperclipSecretStorageException.properties.status.const == "approved" and
+  .properties.mutationAllowed.const == true
+' "$ROOT_DIR/schemas/paperclip-github-transition-routine-input.schema.json" >/dev/null
+
+jq -e '
+  .properties.initialStatus.const == "paused" and
+  .properties.trigger.properties.signingMode.const == "hmac_sha256" and
+  .properties.infisicalSynced.type == "boolean" and
+  .properties.contractDigest.pattern == "^sha256:[0-9a-f]{64}$" and
+  .properties.exceptionDigest.pattern == "^sha256:[0-9a-f]{64}$"
+' "$ROOT_DIR/schemas/paperclip-github-transition-routine-result.schema.json" >/dev/null
+
+jq -e '
   .properties.company.properties.id.format == "uuid" and
   .properties.controls.properties.maximumAuthorizationRecords.maximum == 1000 and
   .properties.mutationAllowed.const == false and

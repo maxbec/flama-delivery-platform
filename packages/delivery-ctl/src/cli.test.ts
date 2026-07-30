@@ -53,6 +53,9 @@ const paperclipBindingsInputPath = fileURLToPath(
 const paperclipRoutinesInputPath = fileURLToPath(
   new URL("../../../tests/fixtures/paperclip-routines/valid.json", import.meta.url),
 );
+const paperclipGithubTransitionRoutineInputPath = fileURLToPath(
+  new URL("../../../tests/fixtures/paperclip-github-transition-routine/valid.json", import.meta.url),
+);
 const reconciliationInputPath = fileURLToPath(
   new URL("../../../tests/fixtures/reconciliation/valid.json", import.meta.url),
 );
@@ -369,6 +372,37 @@ describe("delivery CLI", () => {
     expect(io.stdout).not.toContain("10000000-0000-4000-8000-000000000001");
     expect(io.stdout).not.toContain("20000000-0000-4000-8000-000000000002");
     expect(io.stdout).not.toContain("30000000-0000-4000-8000-000000000003");
+    expect(io.stderr).toBe("");
+  });
+
+  it("dry-runs the HMAC routine without identity, secret material, or live IDs", async () => {
+    const io = new MemoryIo();
+    const exitCode = await runCli(
+      ["paperclip-github-transition-routine", "--dry-run", "--input", paperclipGithubTransitionRoutineInputPath],
+      io,
+      repositoryRoot,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(io.stdout)).toMatchObject({
+      command: "paperclip-github-transition-routine",
+      dryRun: true,
+      ok: true,
+      result: {
+        status: "planned",
+        routineDisposition: "planned",
+        triggerDisposition: "planned",
+        initialStatus: "paused",
+        infisicalSynced: false,
+        trigger: { kind: "webhook", signingMode: "hmac_sha256", replayWindowSeconds: 300 },
+      },
+    });
+    expect(io.stdout).not.toContain("10000000-0000-4000-8000-000000000001");
+    expect(io.stdout).not.toContain("20000000-0000-4000-8000-000000000002");
+    expect(io.stdout).not.toContain("30000000-0000-4000-8000-000000000003");
+    expect(io.stdout).not.toContain("40000000-0000-4000-8000-000000000004");
+    expect(io.stdout).not.toContain("/flama/paperclip/private");
+    expect(io.stdout).not.toContain("webhookSecret");
     expect(io.stderr).toBe("");
   });
 

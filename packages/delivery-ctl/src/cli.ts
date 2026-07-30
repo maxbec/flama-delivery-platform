@@ -88,6 +88,14 @@ import {
   planPaperclipRoutines,
 } from "./paperclip-routines.js";
 import {
+  applyPaperclipGithubTransitionRoutine,
+  InfisicalRestRoutineSecretStore,
+  type PaperclipGithubTransitionRoutineContract,
+  PaperclipGithubTransitionRoutineError,
+  type PaperclipGithubTransitionRoutineInput,
+  planPaperclipGithubTransitionRoutine,
+} from "./paperclip-github-transition-routine.js";
+import {
   auditReconciliation,
   createReconciliationRuntime,
   planReconciliation,
@@ -159,6 +167,8 @@ function isSchemaName(value: string | undefined): value is SchemaName {
     "paperclip-foundation-input",
     "paperclip-foundation-result",
     "paperclip-github-transition-routine",
+    "paperclip-github-transition-routine-input",
+    "paperclip-github-transition-routine-result",
     "paperclip-transition-authorization-input",
     "paperclip-transition-authorization-result",
     "paperclip-lifecycle",
@@ -239,6 +249,7 @@ export async function runCli(
     command !== "paperclip-bindings" &&
     command !== "paperclip-controllers" &&
     command !== "paperclip-routines" &&
+    command !== "paperclip-github-transition-routine" &&
     command !== "paperclip-transition-authorize" &&
     command !== "classify" &&
     command !== "deployment-pr" &&
@@ -511,6 +522,38 @@ export async function runCli(
         ? planPaperclipRoutines(routinesInput, contract)
         : await applyPaperclipRoutines(routinesInput, contract, new PaperclipRestRoutinesClient(process.env));
       const resultValidation = validator.validate("paperclip-routines-result", result);
+      if (!resultValidation.ok) return fail(io, "result_validation_failed");
+      if (!options["dry-run"]) {
+        if (typeof options.output !== "string") return fail(io, "output_required");
+        await writeEvidence(options.output, result);
+      }
+      io.writeStdout(jsonLine({ command, dryRun: options["dry-run"], ok: true, toolVersion, result }));
+      return 0;
+    }
+
+    if (command === "paperclip-github-transition-routine") {
+      const validation = validator.validate("paperclip-github-transition-routine-input", input);
+      if (!validation.ok) {
+        io.writeStdout(jsonLine({ command, ok: false, errors: validation.errors, toolVersion }));
+        return 1;
+      }
+      const contract = JSON.parse(await readFile(
+        join(repositoryRoot, "routines", "github-transition.json"),
+        "utf8",
+      )) as PaperclipGithubTransitionRoutineContract;
+      const contractValidation = validator.validate("paperclip-github-transition-routine", contract);
+      if (!contractValidation.ok) return fail(io, "paperclip_contract_invalid");
+      const routineInput = input as PaperclipGithubTransitionRoutineInput;
+      if (!options["dry-run"] && typeof options.output !== "string") return fail(io, "output_required");
+      const result = options["dry-run"]
+        ? planPaperclipGithubTransitionRoutine(routineInput, contract)
+        : await applyPaperclipGithubTransitionRoutine(
+            routineInput,
+            contract,
+            new PaperclipRestRoutinesClient(process.env),
+            new InfisicalRestRoutineSecretStore(process.env),
+          );
+      const resultValidation = validator.validate("paperclip-github-transition-routine-result", result);
       if (!resultValidation.ok) return fail(io, "result_validation_failed");
       if (!options["dry-run"]) {
         if (typeof options.output !== "string") return fail(io, "output_required");
@@ -818,7 +861,8 @@ export async function runCli(
     if (
       error instanceof PaperclipFoundationError || error instanceof PaperclipControllersError ||
       error instanceof PaperclipBindingsError || error instanceof PaperclipTransitionAuthorizationError ||
-      error instanceof PaperclipRoutinesError || error instanceof ReconciliationError
+      error instanceof PaperclipRoutinesError || error instanceof PaperclipGithubTransitionRoutineError ||
+      error instanceof ReconciliationError
     ) return fail(io, error.code);
     return fail(io, "input_processing_failed");
   }

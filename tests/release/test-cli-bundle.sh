@@ -158,6 +158,24 @@ if grep -Fq '10000000-0000-4000-8000-000000000001' "$FIRST/reconciliation-plan.j
   exit 1
 fi
 
+(cd "$ROOT_DIR" && node "$FIRST/index.js" paperclip-github-transition-routine \
+  --dry-run \
+  --input tests/fixtures/paperclip-github-transition-routine/valid.json \
+  > "$FIRST/github-transition-routine-plan.json")
+jq -e '
+  .ok == true and
+  .command == "paperclip-github-transition-routine" and
+  .result.status == "planned" and
+  .result.initialStatus == "paused" and
+  .result.infisicalSynced == false and
+  .result.trigger.signingMode == "hmac_sha256"
+' "$FIRST/github-transition-routine-plan.json" >/dev/null
+if grep -Eq '10000000-0000-4000-8000-000000000001|40000000-0000-4000-8000-000000000004|/flama/paperclip/private|webhookSecret' \
+  "$FIRST/github-transition-routine-plan.json"; then
+  echo 'bundled GitHub-transition routine command exposed private mapping or secret material' >&2
+  exit 1
+fi
+
 evidence="$FIRST/deployment-result.json"
 if (cd "$ROOT_DIR" && node "$FIRST/index.js" deploy \
   --format yaml \

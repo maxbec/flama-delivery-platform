@@ -56,6 +56,17 @@ Implemented commands:
   project, rejects board-approval bypass and drift, and always creates the
   routine paused. Dry-run requests no identity and live evidence omits object
   identifiers.
+- `paperclip-github-transition-routine --input <routine-plan> --output
+  <evidence>` creates or reuses the paused GitHub-evidence routine and exact
+  HMAC webhook trigger. The generated URL and secret exist only in memory while
+  they are upserted to one explicit Infisical project/environment/path using a
+  short-lived injected token. Reruns verify non-secret receipt metadata without
+  reading values; an interrupted capture rotates once before repairing both
+  entries, and an otherwise exact receipt rotates when its approved interval is
+  due. Live use requires a current machine-readable exception for the
+  verifier copy that released Paperclip necessarily stores. Output and evidence
+  contain only dispositions and digests, never trigger IDs, URLs, paths, or
+  secret values.
 - `reconcile --input <company-audit> --output <evidence>` performs a bounded,
   repeatable-read PostgreSQL audit of one company's bindings, inbox/outbox,
   dead letters, and transition authorizations, then verifies recent case and
@@ -121,7 +132,7 @@ Implemented commands:
   requirements. It performs no live reads or writes and emits only aggregate
   proof states, redacted findings, and digests.
 
-Every command accepts `--dry-run`; only `bootstrap`, `paperclip-foundation`, `paperclip-controllers`, `paperclip-bindings`, `paperclip-transition-authorize`, `paperclip-routines`,
+Every command accepts `--dry-run`; only `bootstrap`, `paperclip-foundation`, `paperclip-controllers`, `paperclip-bindings`, `paperclip-transition-authorize`, `paperclip-routines`, `paperclip-github-transition-routine`,
 `reconcile`, `preflight`, `publish-check`, `promote`, `release-evidence`, and
 `deploy` currently perform external reads, writes, or execution when dry-run is
 absent. `reconcile` is externally read-only and writes only its requested local

@@ -36,6 +36,8 @@ required_schemas=(
   paperclip-foundation-input.schema.json
   paperclip-foundation-result.schema.json
   paperclip-github-transition-routine.schema.json
+  paperclip-github-transition-routine-input.schema.json
+  paperclip-github-transition-routine-result.schema.json
   paperclip-transition-authorization-input.schema.json
   paperclip-transition-authorization-result.schema.json
   paperclip-lifecycle.schema.json

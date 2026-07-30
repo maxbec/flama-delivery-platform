@@ -73,6 +73,28 @@ interface RoutineSpec {
   readonly contractDigest: string;
 }
 
+export interface PaperclipRoutineCreateInput {
+  readonly title: string;
+  readonly description: string;
+  readonly projectId: string;
+  readonly assigneeAgentId: string;
+  readonly priority: "low" | "high";
+  readonly status: "paused";
+  readonly concurrencyPolicy: "coalesce_if_active" | "always_enqueue";
+  readonly catchUpPolicy: "skip_missed";
+  readonly variables: readonly [];
+}
+
+export interface PaperclipWebhookSecretMaterial {
+  readonly trigger: {
+    readonly id: string;
+    readonly publicId: string;
+    readonly lastRotatedAt: string;
+  };
+  readonly webhookUrl: string;
+  readonly webhookSecret: string;
+}
+
 export interface ResolvedPaperclipRoutineContract {
   readonly key: "flama-nightly-reconciliation-v1";
   readonly title: "Flama Nightly Delivery Reconciliation";
@@ -107,8 +129,10 @@ export interface PaperclipRoutineDetail {
     readonly enabled: boolean;
     readonly cronExpression: string | null;
     readonly timezone: string | null;
+    readonly publicId?: string | null;
     readonly signingMode?: string | null;
     readonly replayWindowSec?: number | null;
+    readonly lastRotatedAt?: string | null;
   }[];
 }
 
@@ -130,9 +154,20 @@ export interface PaperclipRoutinesClient {
     readonly archivedAt?: string | null;
   }>;
   listRoutines(companyId: string): Promise<readonly { readonly id: string; readonly title: string }[]>;
-  createRoutine(companyId: string, input: Omit<RoutineSpec, "key" | "trigger" | "contractDigest">): Promise<{ readonly id: string }>;
+  createRoutine(companyId: string, input: PaperclipRoutineCreateInput): Promise<{ readonly id: string }>;
   getRoutine(routineId: string): Promise<PaperclipRoutineDetail>;
   createScheduleTrigger(routineId: string, input: RoutineSpec["trigger"]): Promise<void>;
+}
+
+export interface PaperclipWebhookRoutinesClient extends PaperclipRoutinesClient {
+  createWebhookTrigger(routineId: string, input: {
+    readonly kind: "webhook";
+    readonly label: "flama-github-transition-v1";
+    readonly enabled: true;
+    readonly signingMode: "hmac_sha256";
+    readonly replayWindowSec: 300;
+  }): Promise<PaperclipWebhookSecretMaterial>;
+  rotateWebhookTriggerSecret(triggerId: string): Promise<PaperclipWebhookSecretMaterial>;
 }
 
 export interface PaperclipRoutinesResult {
@@ -369,7 +404,7 @@ export async function applyPaperclipRoutines(
 type Environment = Readonly<Record<string, string | undefined>>;
 type FetchImplementation = (input: string | URL, init?: RequestInit) => Promise<Response>;
 
-export class PaperclipRestRoutinesClient implements PaperclipRoutinesClient {
+export class PaperclipRestRoutinesClient implements PaperclipWebhookRoutinesClient {
   readonly #apiBase: string;
   readonly #token: string;
 
@@ -393,7 +428,12 @@ export class PaperclipRestRoutinesClient implements PaperclipRoutinesClient {
     this.#token = token;
   }
 
-  async #request(method: "GET" | "POST", path: string, body?: unknown): Promise<unknown> {
+  async #request(
+    method: "GET" | "POST",
+    path: string,
+    body?: unknown,
+    expectedStatuses: readonly number[] = method === "POST" ? [201] : [200],
+  ): Promise<unknown> {
     let response: Response;
     try {
       response = await this.fetchImplementation(`${this.#apiBase}${path}`, {
@@ -410,7 +450,7 @@ export class PaperclipRestRoutinesClient implements PaperclipRoutinesClient {
     } catch {
       throw new PaperclipRoutinesError("paperclip_api_rejected");
     }
-    if (response.status !== (method === "POST" ? 201 : 200)) {
+    if (!expectedStatuses.includes(response.status)) {
       await response.body?.cancel();
       throw new PaperclipRoutinesError("paperclip_api_rejected");
     }
@@ -474,7 +514,7 @@ export class PaperclipRestRoutinesClient implements PaperclipRoutinesClient {
 
   async createRoutine(
     companyId: string,
-    input: Omit<RoutineSpec, "key" | "trigger" | "contractDigest">,
+    input: PaperclipRoutineCreateInput,
   ): Promise<{ readonly id: string }> {
     const value = await this.#request("POST", `/api/companies/${encodeURIComponent(companyId)}/routines`, input);
     if (!isRecord(value) || typeof value["id"] !== "string") throw new PaperclipRoutinesError("paperclip_response_invalid");
@@ -500,10 +540,14 @@ export class PaperclipRestRoutinesClient implements PaperclipRoutinesClient {
         (trigger["label"] !== null && typeof trigger["label"] !== "string") || typeof trigger["enabled"] !== "boolean" ||
         (trigger["cronExpression"] !== null && typeof trigger["cronExpression"] !== "string") ||
         (trigger["timezone"] !== null && typeof trigger["timezone"] !== "string") ||
+        (trigger["publicId"] !== undefined && trigger["publicId"] !== null &&
+          typeof trigger["publicId"] !== "string") ||
         (trigger["signingMode"] !== undefined && trigger["signingMode"] !== null &&
           typeof trigger["signingMode"] !== "string") ||
         (trigger["replayWindowSec"] !== undefined && trigger["replayWindowSec"] !== null &&
-          !Number.isSafeInteger(trigger["replayWindowSec"]))) {
+          !Number.isSafeInteger(trigger["replayWindowSec"])) ||
+        (trigger["lastRotatedAt"] !== undefined && trigger["lastRotatedAt"] !== null &&
+          typeof trigger["lastRotatedAt"] !== "string")) {
         throw new PaperclipRoutinesError("paperclip_response_invalid");
       }
     }
@@ -516,4 +560,65 @@ export class PaperclipRestRoutinesClient implements PaperclipRoutinesClient {
       throw new PaperclipRoutinesError("paperclip_response_invalid");
     }
   }
+
+  async createWebhookTrigger(
+    routineId: string,
+    input: Parameters<PaperclipWebhookRoutinesClient["createWebhookTrigger"]>[1],
+  ): Promise<PaperclipWebhookSecretMaterial> {
+    const value = await this.#request(
+      "POST",
+      `/api/routines/${encodeURIComponent(routineId)}/triggers`,
+      input,
+      [200, 201],
+    );
+    return parseWebhookSecretMaterial(value);
+  }
+
+  async rotateWebhookTriggerSecret(triggerId: string): Promise<PaperclipWebhookSecretMaterial> {
+    const value = await this.#request(
+      "POST",
+      `/api/routine-triggers/${encodeURIComponent(triggerId)}/rotate-secret`,
+      {},
+      [200, 201],
+    );
+    return parseWebhookSecretMaterial(value);
+  }
+}
+
+function parseWebhookSecretMaterial(value: unknown): PaperclipWebhookSecretMaterial {
+  if (!isRecord(value) || !isRecord(value["trigger"]) || !isRecord(value["secretMaterial"])) {
+    throw new PaperclipRoutinesError("paperclip_response_invalid");
+  }
+  const trigger = value["trigger"];
+  const material = value["secretMaterial"];
+  const id = trigger["id"];
+  const publicId = trigger["publicId"];
+  const lastRotatedAt = trigger["lastRotatedAt"];
+  const webhookUrl = material["webhookUrl"];
+  const webhookSecret = material["webhookSecret"];
+  if (
+    typeof id !== "string" || !uuidPattern.test(id) || typeof publicId !== "string" ||
+    !/^[A-Za-z0-9_-]{8,255}$/u.test(publicId) || typeof lastRotatedAt !== "string" ||
+    !validIsoTimestamp(lastRotatedAt) || typeof webhookUrl !== "string" || typeof webhookSecret !== "string" ||
+    webhookSecret.length < 32 || webhookSecret.length > 4_096 || /[\r\n]/u.test(webhookSecret) ||
+    !validWebhookUrl(webhookUrl, publicId)
+  ) throw new PaperclipRoutinesError("paperclip_response_invalid");
+  return { trigger: { id, publicId, lastRotatedAt }, webhookUrl, webhookSecret };
+}
+
+function validIsoTimestamp(value: string): boolean {
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) && new Date(parsed).toISOString() === value;
+}
+
+function validWebhookUrl(value: string, publicId: string): boolean {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    return false;
+  }
+  const localHttp = url.protocol === "http:" && ["127.0.0.1", "localhost", "::1", "[::1]"].includes(url.hostname);
+  return (url.protocol === "https:" || localHttp) && !url.username && !url.password && !url.search && !url.hash &&
+    url.pathname === `/api/routine-triggers/public/${publicId}/fire`;
 }

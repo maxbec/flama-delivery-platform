@@ -26,6 +26,11 @@ Implemented controls:
   Synced secrets cannot simultaneously claim an exception path. Duplicate,
   orphaned, expired, review-due, rotation-due, future-dated, or scope-mismatched
   records fail closed.
+- The Paperclip HMAC routine installer applies this same rule to the verifier
+  copy that released Paperclip necessarily retains: live creation requires an
+  exact current `provider_native_secret` exception, while the bridge receives
+  its runtime copy from the authoritative Infisical path. A digest of the
+  exception is emitted; its owner and reason are not.
 - Repository variables, generated configuration, and Paperclip prompts are
   audited by classification. A secret-classified field fails without returning
   its name.
@@ -48,6 +53,8 @@ Still pending:
   Dependabot, security features, app/webhook permissions, and runner separation
   into the normalized audit input;
 - explicit review and approval of any real destination-secret exceptions;
+- explicit review of the Paperclip verifier-copy exception before any live
+  HMAC trigger is created;
 - live OIDC, Secret Sync, and rotation tests in the Phase 4 canaries.
 
 Those inputs must be collected privately from authoritative APIs. The platform

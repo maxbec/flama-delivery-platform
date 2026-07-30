@@ -48,6 +48,8 @@ const schemaFiles = {
   "paperclip-foundation-input": "paperclip-foundation-input.schema.json",
   "paperclip-foundation-result": "paperclip-foundation-result.schema.json",
   "paperclip-github-transition-routine": "paperclip-github-transition-routine.schema.json",
+  "paperclip-github-transition-routine-input": "paperclip-github-transition-routine-input.schema.json",
+  "paperclip-github-transition-routine-result": "paperclip-github-transition-routine-result.schema.json",
   "paperclip-transition-authorization-input": "paperclip-transition-authorization-input.schema.json",
   "paperclip-transition-authorization-result": "paperclip-transition-authorization-result.schema.json",
   "paperclip-lifecycle": "paperclip-lifecycle.schema.json",
