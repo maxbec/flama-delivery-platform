@@ -118,6 +118,8 @@ interface OwnedTarget {
   readonly content: string;
   readonly mode: number;
   readonly appendToExisting?: true;
+  /** Marker pair proving this block is already present, for appendable files. */
+  readonly markers?: readonly [string, string];
 }
 
 interface OwnedState {
@@ -274,7 +276,26 @@ function agentsBlock(input: BootstrapInput): string {
   ].join("\n");
 }
 
-async function ownedTargets(repositoryRoot: string, input: BootstrapInput): Promise<readonly OwnedTarget[]> {
+// A repository whose formatting is driven by Trunk keeps its prettier ignore
+// list beside its other linter configuration, and a root-level file is never
+// read. The location is discovered from the repository rather than assumed.
+async function prettierIgnorePath(outputRoot: string): Promise<string> {
+  for (const candidate of [".trunk/configs/.prettierignore", "configs/.prettierignore"]) {
+    try {
+      await lstat(join(outputRoot, candidate));
+      return candidate;
+    } catch {
+      continue;
+    }
+  }
+  return ".prettierignore";
+}
+
+async function ownedTargets(
+  repositoryRoot: string,
+  input: BootstrapInput,
+  outputRoot: string,
+): Promise<readonly OwnedTarget[]> {
   const common = join(repositoryRoot, "templates", "common");
   return [
     {
@@ -312,8 +333,11 @@ async function ownedTargets(repositoryRoot: string, input: BootstrapInput): Prom
       // formatter that rewrote them would fight the platform on every run.
       // Created once: a repository that already has this file keeps its own,
       // and the exclusions are then the repository owner's to add.
-      path: ".prettierignore",
+      path: await prettierIgnorePath(outputRoot),
+      appendToExisting: true as const,
+      markers: ["# flama-delivery:start", "# flama-delivery:end"] as const,
       content: [
+        "# flama-delivery:start",
         "# Flama delivery platform: generated and drift-protected.",
         ".flama/",
         ".paperclip/",
@@ -323,6 +347,7 @@ async function ownedTargets(repositoryRoot: string, input: BootstrapInput): Prom
         ".release-please-config.json",
         ".release-please-manifest.json",
         "scripts/delivery",
+        "# flama-delivery:end",
         "",
       ].join("\n"),
       mode: 0o644,
@@ -366,14 +391,15 @@ async function planOwnedTargets(
         throw new BootstrapError("bootstrap_invalid_agents_file");
       }
       const originalContent = await readFile(destination, "utf8");
-      const startCount = markerCount(originalContent, agentsStartMarker);
-      const endCount = markerCount(originalContent, agentsEndMarker);
+      const [startMarker, endMarker] = target.markers ?? [agentsStartMarker, agentsEndMarker];
+      const startCount = markerCount(originalContent, startMarker);
+      const endCount = markerCount(originalContent, endMarker);
       if (startCount === 0 && endCount === 0) {
         states.push({ target, exists: true, append: true, originalContent });
       } else if (
         startCount === 1 &&
         endCount === 1 &&
-        originalContent.indexOf(agentsStartMarker) < originalContent.indexOf(agentsEndMarker)
+        originalContent.indexOf(startMarker) < originalContent.indexOf(endMarker)
       ) {
         states.push({ target, exists: true, append: false });
       } else {
@@ -432,7 +458,7 @@ export async function bootstrapRepository(options: BootstrapOptions): Promise<Bo
       ? {}
       : { replaceExisting: options.input.replaceExisting }),
   });
-  const owned = await planOwnedTargets(root, await ownedTargets(options.repositoryRoot, options.input));
+  const owned = await planOwnedTargets(root, await ownedTargets(options.repositoryRoot, options.input, root));
 
   const generated = options.dryRun
     ? generatedPlan

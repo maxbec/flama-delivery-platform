@@ -265,4 +265,30 @@ describe("repository bootstrap", () => {
     ).rejects.toEqual(new BootstrapError("bootstrap_scope_denied"));
     await expect(access(join(repository.root, ".flama/platform-lock.json"))).rejects.toThrow();
   });
+
+  it("writes the formatter exclusion where the repository actually keeps it", async () => {
+    const repository = await initializeRepository();
+    // Trunk-managed repositories keep the prettier ignore list beside their
+    // other linter configuration; a root-level file is never read there.
+    await mkdir(join(repository.root, "configs"), { recursive: true });
+    await writeFile(join(repository.root, "configs/.prettierignore"), "dist\n", "utf8");
+    await git(repository.root, "add", "configs/.prettierignore");
+    await git(repository.root, "commit", "-m", "add prettier ignore");
+    const sha = await git(repository.root, "rev-parse", "HEAD");
+    await git(repository.root, "update-ref", "refs/remotes/origin/main", sha);
+
+    const prepared = await bootstrapRepository({
+      repositoryRoot: platformRoot,
+      outputRoot: repository.root,
+      input: bootstrapInput(sha),
+      dryRun: false,
+    });
+
+    expect(prepared.repositoryOwned.map(({ path }) => path)).toContain("configs/.prettierignore");
+    expect(prepared.repositoryOwned.map(({ path }) => path)).not.toContain(".prettierignore");
+    // The exclusions have to actually reach the file the formatter reads.
+    const ignore = await readFile(join(repository.root, "configs/.prettierignore"), "utf8");
+    expect(ignore).toContain("dist");
+    expect(ignore).toContain(".flama/");
+  });
 });
