@@ -83,9 +83,9 @@
       "required": ["name", "placement", "scope", "identityModel", "dataPolicy", "writeAuthority"],
       "properties": {
         "name": { "const": "flama-governance-controller" },
-        "placement": { "const": "external-service" },
+        "placement": { "const": "paperclip-orchestrated-job" },
         "scope": { "const": "cross-company" },
-        "identityModel": { "const": "separate-read-only-identity-per-company" },
+        "identityModel": { "const": "native-company-controller-attestations" },
         "dataPolicy": { "const": "metadata-only" },
         "writeAuthority": { "type": "array", "maxItems": 0 }
       }

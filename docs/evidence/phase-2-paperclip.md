@@ -35,7 +35,7 @@ Implemented and verified:
   Retained evidence is mode `0600`, identifier-free, and outside the public
   checkout.
 - The approved topology uses three company-local, zero-budget process agents
-  and an external read-only governance service. Two company controllers are
+  and a Paperclip-orchestrated read-only governance job. Two company controllers are
   verified paused; the remaining native hire request awaits its company's human
   board approval and has not been bypassed.
 - `paperclip-bindings` now provides the fail-closed project/workspace binding
@@ -54,15 +54,18 @@ Implemented and verified:
   its third-party notices. PostgreSQL 18 integration tests cover migration
   replay, exact authorization resolution, publication recording, and rejection
   after repository-binding drift.
-- The global governance controller is an external Node.js 26 executable, not a
-  Paperclip agent. It enforces fixed company/owner pairings, distinct read-only
-  credentials per scope, GET-only Paperclip and GitHub transports, bounded
-  metadata pagination, and private mode-0600 detailed evidence while exposing
+- The global governance controller is a deterministic Node.js 26 executable
+  orchestrated by Paperclip. It accepts fresh, digest-bound attestations
+  produced under native company-controller runs instead of polling Paperclip or
+  holding board credentials. Its only network transport is GET-only GitHub,
+  with fixed company/owner pairings, distinct owner-scoped App identities,
+  bounded metadata pagination, and private mode-0600 evidence while exposing
   only an evidence digest to ordinary logs.
-- Governance unit tests cover cross-company substitution, shared-credential
-  rejection, response-body suppression, exact-attempt GitHub job reads,
-  identifier-free aggregation, timestamp validation, and private evidence
-  permissions. The bundle is included in deterministic platform artifacts.
+- Governance unit tests cover cross-company substitution, stale or malformed
+  Paperclip-attestation rejection, shared GitHub-credential rejection,
+  response-body suppression, exact-attempt GitHub job reads, identifier-free
+  aggregation, timestamp validation, and private evidence permissions. The
+  bundle is included in deterministic platform artifacts.
 - A versioned nightly reconciliation routine contract uses per-company
   staggered schedules, coalesces overlapping runs, skips missed schedules, and
   starts paused. The deterministic installer verifies the exact company,
@@ -81,6 +84,11 @@ Implemented and verified:
   the fixed read-only audit. Arbitrary assignments and manual or drifted runs
   fail closed. Detailed evidence remains create-only mode `0600` outside the
   checkout; the issue receives only the audit status and evidence digest.
+- The same native controller run now reads only its own company, identity, and
+  managed lifecycle metadata, emits a digest-bound governance attestation beside
+  the reconciliation evidence in the protected mode-0600 evidence directory,
+  and returns only its digest. This replaces the rejected external Paperclip
+  polling/account pattern without changing the released Paperclip package.
 
 Still pending:
 
@@ -90,10 +98,11 @@ Still pending:
 - Live bridge deployment, scoped machine identity injection, and controller
   authorization writes remain pending explicit deployment authority and the
   private repository/case mappings. The runtime does not infer those mappings.
-- Live governance collection remains pending the six separately scoped
-  read-only identities and a private repository/profile selector file. Cache-hit
-  coverage stays explicitly unavailable until generated workflows emit the
-  bounded signal required for an actual rate.
+- Live governance collection remains pending three owner-scoped read-only
+  GitHub App identities, native attestations from all three company controllers,
+  and a private repository/profile selector file. No Paperclip human account or
+  board token is required. Cache-hit coverage stays explicitly unavailable
+  until generated workflows emit the bounded signal required for an actual rate.
 - Routine application remains pending the authoritative project selection and
   the remaining controller's native board approval. Activation remains gated
   on the deployed bridge, private bindings, scoped runtime identity injection,

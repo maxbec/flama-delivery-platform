@@ -20,6 +20,9 @@ not consumer 65 and does not change the approved 64-consumer completion target.
 
 Safety proof:
 
+- the live inventory was revalidated at `2026-07-30T08:31:24Z`; its protected
+  snapshot digest is
+  `sha256:c8d83a95c3798195ae3aaba41007aaf20fc86c0904f707ba0677f68f5d76eed1`;
 - 96 owned records observed: 64 consumers, 31 inventory-only exclusions, and one
   central platform repository;
 - zero fork or archived records allow mutation;
@@ -27,7 +30,8 @@ Safety proof:
 - 42 consumers require legacy default-branch normalization;
 - initial automatic profiles are 57 Fast and 7 Major;
 - zero consumers currently contain any new Flama delivery entrypoint;
-- default-branch status rollup: 4 green, 3 red, 7 unknown, and 50 with no runs.
+- default-branch status rollup: 4 green, 2 red, 1 pending, 7 unknown, and 50
+  with no runs.
 
 Detected provider indicators include seven Docker repositories and two Vercel
 repositories. These are indicators for canary selection, not authorization to

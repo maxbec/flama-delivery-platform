@@ -50,6 +50,20 @@ function identity() {
     role: "devops",
     adapterType: "process",
     budgetMonthlyCents: 0,
+    status: "running",
+    desiredSkills: ["flama-paperclip-delivery"],
+    permissions: { canCreateAgents: false, canCreateSkills: false, canAssignTasks: false },
+    metadata: { managedBy: "flama-delivery-platform", topologyVersion: 1 },
+  };
+}
+
+async function attestationEnvironment() {
+  const root = await mkdtemp(join(tmpdir(), "flama-controller-attestation-runtime-"));
+  const directory = join(root, "evidence");
+  await mkdir(directory);
+  return {
+    root,
+    environment: { ...environment, FLAMA_RECONCILIATION_EVIDENCE_DIR: directory },
   };
 }
 
@@ -145,6 +159,16 @@ function fetchFor(
       body: typeof init?.body === "string" ? JSON.parse(init.body) as unknown : null,
     });
     if (url.pathname === "/api/agents/me") return jsonResponse(identity());
+    if (url.pathname === `/api/companies/${companyId}`) {
+      return jsonResponse({ id: companyId, name: "Private", status: "active" });
+    }
+    if (url.pathname === `/api/companies/${companyId}/pipelines`) {
+      return jsonResponse([
+        { key: "flama-project-bootstrap-v1", enforceTransitions: true, archivedAt: null },
+        { key: "flama-feature-fix-v1", enforceTransitions: true, archivedAt: null },
+        { key: "flama-release-deployment-v1", enforceTransitions: true, archivedAt: null },
+      ]);
+    }
     if (url.pathname.endsWith("/issues") && method === "GET") {
       expect(url.searchParams.get("assigneeAgentId")).toBe(agentId);
       return jsonResponse(assignments);
@@ -219,12 +243,19 @@ describe("deterministic delivery controller runtime", () => {
   it("runs only the exact schedule-bound routine issue and emits a digest-only completion", async () => {
     const observed: ObservedRequest[] = [];
     const reconcile = executor("compliant");
-    const result = await runControllerRuntime(
-      environment,
-      process.cwd(),
-      fetchFor([assignment()], observed),
-      reconcile,
-    );
+    const runtime = await attestationEnvironment();
+    let result: Awaited<ReturnType<typeof runControllerRuntime>>;
+    try {
+      result = await runControllerRuntime(
+        runtime.environment,
+        process.cwd(),
+        fetchFor([assignment()], observed),
+        reconcile,
+        () => new Date("2026-07-29T00:00:00.000Z"),
+      );
+    } finally {
+      await rm(runtime.root, { recursive: true, force: true });
+    }
 
     expect(reconcile).toHaveBeenCalledOnce();
     expect(reconcile).toHaveBeenCalledWith({
@@ -239,7 +270,7 @@ describe("deterministic delivery controller runtime", () => {
         maximumAuthorizationRecords: 500,
       },
       mutationAllowed: false,
-    }, environment, heartbeatRunId);
+    }, runtime.environment, heartbeatRunId);
     expect(observed.at(-1)).toMatchObject({
       path: `/api/issues/${issueId}`,
       method: "PATCH",
@@ -250,7 +281,12 @@ describe("deterministic delivery controller runtime", () => {
         comment: `Read-only reconciliation completed. Evidence digest: ${evidenceDigest}.`,
       },
     });
-    expect(result).toMatchObject({ schemaVersion: 1, status: "compliant", evidenceDigest });
+    expect(result).toMatchObject({
+      schemaVersion: 1,
+      status: "compliant",
+      evidenceDigest,
+      governanceAttestationDigest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
+    });
     expect(JSON.stringify(result)).not.toContain(agentId);
     expect(JSON.stringify(result)).not.toContain(companyId);
     expect(JSON.stringify(result)).not.toContain(issueId);
@@ -259,12 +295,18 @@ describe("deterministic delivery controller runtime", () => {
 
   it("routes non-compliant evidence to review without exposing audit details", async () => {
     const observed: ObservedRequest[] = [];
-    const result = await runControllerRuntime(
-      environment,
-      process.cwd(),
-      fetchFor([assignment()], observed),
-      executor("attention"),
-    );
+    const runtime = await attestationEnvironment();
+    let result: Awaited<ReturnType<typeof runControllerRuntime>>;
+    try {
+      result = await runControllerRuntime(
+        runtime.environment,
+        process.cwd(),
+        fetchFor([assignment()], observed),
+        executor("attention"),
+      );
+    } finally {
+      await rm(runtime.root, { recursive: true, force: true });
+    }
 
     expect(observed.at(-1)?.body).toEqual({
       status: "in_review",

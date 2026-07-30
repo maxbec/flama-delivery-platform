@@ -38,7 +38,8 @@ Implemented commands:
   reuses one exact company-local process agent using Paperclip's documented API.
   The agent is zero-budget and immediately paused, cannot create agents, skills,
   or assignments, and refuses configuration drift or board-approval bypasses.
-  The external governance controller is deliberately not a Paperclip agent.
+  The governance job is orchestrated by Paperclip and consumes native
+  company-controller attestations; it never polls Paperclip with a board token.
 - `paperclip-bindings --input <binding-plan> --output <evidence>` verifies one
   fresh, non-fork, non-archived inventory record against the exact Paperclip
   company, active project, project workspace, canonical GitHub remote, and

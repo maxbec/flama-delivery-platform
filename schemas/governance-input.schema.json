@@ -23,11 +23,10 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["key", "company", "companyId", "githubOwner", "controller", "repositories"],
+        "required": ["key", "company", "githubOwner", "controller", "paperclipAttestation", "repositories"],
         "properties": {
           "key": { "enum": ["maxbec", "navigaite", "edilio"] },
           "company": { "enum": ["Private", "// Navigaite", "Edilio"] },
-          "companyId": { "type": "string", "format": "uuid" },
           "githubOwner": { "enum": ["maxbec", "navigaite", "edilio"] },
           "controller": {
             "enum": [
@@ -35,6 +34,35 @@
               "navigaite-delivery-controller",
               "edilio-delivery-controller"
             ]
+          },
+          "paperclipAttestation": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["source", "company", "controller", "runId", "observedAt", "evidenceDigest", "checks"],
+            "properties": {
+              "source": { "const": "paperclip-company-controller" },
+              "company": { "enum": ["Private", "// Navigaite", "Edilio"] },
+              "controller": {
+                "enum": [
+                  "maxbec-delivery-controller",
+                  "navigaite-delivery-controller",
+                  "edilio-delivery-controller"
+                ]
+              },
+              "runId": { "type": "string", "format": "uuid" },
+              "observedAt": { "type": "string", "format": "date-time" },
+              "evidenceDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+              "checks": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["company", "controller", "lifecycles"],
+                "properties": {
+                  "company": { "enum": ["compliant", "drift"] },
+                  "controller": { "enum": ["compliant", "drift"] },
+                  "lifecycles": { "enum": ["compliant", "drift"] }
+                }
+              }
+            }
           },
           "repositories": {
             "type": "array",
@@ -60,9 +88,17 @@
               "key": { "const": "maxbec" },
               "company": { "const": "Private" },
               "githubOwner": { "const": "maxbec" },
-              "controller": { "const": "maxbec-delivery-controller" }
+              "controller": { "const": "maxbec-delivery-controller" },
+              "paperclipAttestation": {
+                "type": "object",
+                "properties": {
+                  "company": { "const": "Private" },
+                  "controller": { "const": "maxbec-delivery-controller" }
+                },
+                "required": ["company", "controller"]
+              }
             },
-            "required": ["key", "company", "githubOwner", "controller"]
+            "required": ["key", "company", "githubOwner", "controller", "paperclipAttestation"]
           },
           "minContains": 1,
           "maxContains": 1
@@ -74,9 +110,17 @@
               "key": { "const": "navigaite" },
               "company": { "const": "// Navigaite" },
               "githubOwner": { "const": "navigaite" },
-              "controller": { "const": "navigaite-delivery-controller" }
+              "controller": { "const": "navigaite-delivery-controller" },
+              "paperclipAttestation": {
+                "type": "object",
+                "properties": {
+                  "company": { "const": "// Navigaite" },
+                  "controller": { "const": "navigaite-delivery-controller" }
+                },
+                "required": ["company", "controller"]
+              }
             },
-            "required": ["key", "company", "githubOwner", "controller"]
+            "required": ["key", "company", "githubOwner", "controller", "paperclipAttestation"]
           },
           "minContains": 1,
           "maxContains": 1
@@ -88,9 +132,17 @@
               "key": { "const": "edilio" },
               "company": { "const": "Edilio" },
               "githubOwner": { "const": "edilio" },
-              "controller": { "const": "edilio-delivery-controller" }
+              "controller": { "const": "edilio-delivery-controller" },
+              "paperclipAttestation": {
+                "type": "object",
+                "properties": {
+                  "company": { "const": "Edilio" },
+                  "controller": { "const": "edilio-delivery-controller" }
+                },
+                "required": ["company", "controller"]
+              }
             },
-            "required": ["key", "company", "githubOwner", "controller"]
+            "required": ["key", "company", "githubOwner", "controller", "paperclipAttestation"]
           },
           "minContains": 1,
           "maxContains": 1

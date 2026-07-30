@@ -15,6 +15,11 @@ import {
   type PaperclipRoutineDetail,
   type ResolvedPaperclipRoutineContract,
 } from "../../../packages/delivery-ctl/src/paperclip-routines.js";
+import type { PaperclipGovernanceAttestation } from "../../../packages/contracts/src/paperclip-governance-attestation.js";
+import {
+  attestPaperclipGovernance,
+  writePaperclipGovernanceAttestation,
+} from "./governance-attestation.js";
 
 const controllerNames = [
   "maxbec-delivery-controller",
@@ -52,6 +57,22 @@ interface ControllerIdentity {
   readonly role: "devops";
   readonly adapterType: "process";
   readonly budgetMonthlyCents: 0;
+  readonly status: string;
+  readonly desiredSkills: readonly unknown[];
+  readonly permissions: Readonly<Record<string, unknown>> | null;
+  readonly metadata: Readonly<Record<string, unknown>> | null;
+}
+
+interface CompanyObservation {
+  readonly id: string;
+  readonly name: string;
+  readonly status?: string;
+}
+
+interface PipelineObservation {
+  readonly key: string;
+  readonly enforceTransitions: boolean;
+  readonly archivedAt: string | null;
 }
 
 interface ControllerContract {
@@ -106,6 +127,7 @@ export type ControllerRuntimeResult =
     readonly status: AuditStatus;
     readonly contractDigest: string;
     readonly evidenceDigest: string;
+    readonly governanceAttestationDigest: string;
   };
 
 export type ControllerRuntimeErrorCode =
@@ -113,6 +135,7 @@ export type ControllerRuntimeErrorCode =
   | "controller_assignment_unsupported"
   | "controller_contract_invalid"
   | "controller_evidence_unavailable"
+  | "controller_governance_attestation_failed"
   | "controller_identity_invalid"
   | "controller_identity_unavailable"
   | "controller_reconciliation_failed"
@@ -253,9 +276,32 @@ function parseIdentity(value: unknown, runtime: RuntimeIdentity): ControllerIden
   if (
     !isRecord(value) || value["id"] !== runtime.agentId || value["companyId"] !== runtime.companyId ||
     !isControllerName(value["name"]) || value["role"] !== "devops" || value["adapterType"] !== "process" ||
-    value["budgetMonthlyCents"] !== 0
+    value["budgetMonthlyCents"] !== 0 || typeof value["status"] !== "string" ||
+    !Array.isArray(value["desiredSkills"]) ||
+    (value["permissions"] !== null && !isRecord(value["permissions"])) ||
+    (value["metadata"] !== null && !isRecord(value["metadata"]))
   ) throw new ControllerRuntimeError("controller_identity_invalid");
   return value as unknown as ControllerIdentity;
+}
+
+function parseCompanyObservation(value: unknown): CompanyObservation {
+  if (
+    !isRecord(value) || typeof value["id"] !== "string" || typeof value["name"] !== "string" ||
+    (value["status"] !== undefined && typeof value["status"] !== "string")
+  ) throw new ControllerRuntimeError("controller_response_invalid");
+  return value as unknown as CompanyObservation;
+}
+
+function parsePipelineObservations(value: unknown): readonly PipelineObservation[] {
+  if (!Array.isArray(value) || value.length > 100) throw new ControllerRuntimeError("controller_response_invalid");
+  return value.map((pipeline) => {
+    if (
+      !isRecord(pipeline) || typeof pipeline["key"] !== "string" ||
+      typeof pipeline["enforceTransitions"] !== "boolean" ||
+      (pipeline["archivedAt"] !== null && typeof pipeline["archivedAt"] !== "string")
+    ) throw new ControllerRuntimeError("controller_response_invalid");
+    return pipeline as unknown as PipelineObservation;
+  });
 }
 
 function validateControllerContract(value: unknown, identity: ControllerIdentity): ControllerContract {
@@ -429,6 +475,7 @@ export async function runControllerRuntime(
   repositoryRoot: string,
   fetchImplementation: FetchImplementation = fetch,
   executeReconciliation: ManagedReconciliationExecutor = executeManagedReconciliation,
+  now: () => Date = () => new Date(),
 ): Promise<ControllerRuntimeResult> {
   const runtime = runtimeIdentity(environment);
   const identity = parseIdentity(
@@ -512,6 +559,31 @@ export async function runControllerRuntime(
   ) throw new ControllerRuntimeError("controller_routine_drift");
 
   const auditInput = reconciliationInput(runtime, identity, routineContract);
+  const [companyObservation, pipelineObservations] = await Promise.all([
+    requestJson(runtime, "GET", `/api/companies/${encodeURIComponent(runtime.companyId)}`, fetchImplementation)
+      .then(parseCompanyObservation),
+    requestJson(
+      runtime,
+      "GET",
+      `/api/companies/${encodeURIComponent(runtime.companyId)}/pipelines`,
+      fetchImplementation,
+    ).then(parsePipelineObservations),
+  ]);
+  let governanceAttestation: PaperclipGovernanceAttestation;
+  try {
+    governanceAttestation = attestPaperclipGovernance({
+      companyId: runtime.companyId,
+      controllerId: runtime.agentId,
+      controllerName: identity.name,
+      runId: runtime.runId,
+      observedAt: now().toISOString(),
+      company: companyObservation,
+      controller: identity,
+      pipelines: pipelineObservations,
+    });
+  } catch {
+    throw new ControllerRuntimeError("controller_governance_attestation_failed");
+  }
   let reconciliation: ReconciliationResult;
   try {
     reconciliation = await executeReconciliation(
@@ -525,6 +597,14 @@ export async function runControllerRuntime(
     throw new ControllerRuntimeError("controller_reconciliation_failed");
   }
   const evidenceDigest = reconciliation.evidenceDigest;
+  try {
+    await writePaperclipGovernanceAttestation(
+      environment["FLAMA_RECONCILIATION_EVIDENCE_DIR"],
+      governanceAttestation,
+    );
+  } catch {
+    throw new ControllerRuntimeError("controller_governance_attestation_failed");
+  }
   const nextStatus = reconciliation.status === "compliant" ? "done" : "in_review";
   const comment = reconciliation.status === "compliant"
     ? `Read-only reconciliation completed. Evidence digest: ${evidenceDigest}.`
@@ -545,5 +625,6 @@ export async function runControllerRuntime(
     status: reconciliation.status,
     contractDigest,
     evidenceDigest,
+    governanceAttestationDigest: governanceAttestation.evidenceDigest,
   };
 }

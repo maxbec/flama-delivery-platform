@@ -12,6 +12,10 @@ bash "$ROOT_DIR/scripts/build-governance-bundle.sh" "$SECOND"
 diff -rq "$FIRST" "$SECOND"
 [[ -x "$FIRST/index.js" ]]
 [[ "$(jq -r '.type' "$FIRST/package.json")" == "module" ]]
+if grep -aEq 'PAPERCLIP_API_(KEY|URL)|/api/companies/' "$FIRST/index.js"; then
+  echo 'Governance bundle must not contain a Paperclip API client or credential binding' >&2
+  exit 1
+fi
 if output=$(env -i PATH="$PATH" NODE_ENV=production node "$FIRST/index.js" 2>&1); then
   echo 'Governance bundle unexpectedly ran without private input and output paths' >&2
   exit 1

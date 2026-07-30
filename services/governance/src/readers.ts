@@ -1,17 +1,22 @@
-import { SecretValue } from "../../bridge/src/config.js";
 import {
   GovernanceError,
   type GitHubGovernanceReader,
   type GitHubWorkflowJob,
   type GitHubWorkflowRun,
   type GovernanceReaders,
-  type PaperclipGovernanceReader,
-  type PaperclipGovernanceSnapshot,
 } from "./governance.js";
 
 type ScopeKey = "maxbec" | "navigaite" | "edilio";
 type Environment = Readonly<Record<string, string | undefined>>;
 type FetchImplementation = (input: string | URL, init?: RequestInit) => Promise<Response>;
+interface SecretCredential { reveal(): string }
+
+class GovernanceCredential implements SecretCredential {
+  constructor(private readonly value: string) {}
+  reveal(): string { return this.value; }
+  toString(): string { return "[REDACTED]"; }
+  toJSON(): string { return "[REDACTED]"; }
+}
 
 const scopeKeys = ["maxbec", "navigaite", "edilio"] as const;
 const maximumResponseBytes = 2 * 1024 * 1024;
@@ -30,27 +35,10 @@ function validGitHubCredential(value: string | undefined): value is string {
   );
 }
 
-function safePaperclipBase(value: string | undefined): string {
-  if (value === undefined || value.length > 2_048 || /[\r\n]/u.test(value)) {
-    throw new GovernanceError("governance_identity_unavailable");
-  }
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    throw new GovernanceError("governance_identity_unavailable");
-  }
-  const loopback = url.protocol === "http:" && ["127.0.0.1", "localhost", "::1", "[::1]"].includes(url.hostname);
-  if ((url.protocol !== "https:" && !loopback) || url.username || url.password || url.search || url.hash) {
-    throw new GovernanceError("governance_identity_unavailable");
-  }
-  return url.toString().replace(/\/+$/u, "");
-}
-
 class ReadOnlyJsonClient {
   constructor(
     private readonly apiBase: string,
-    private readonly credential: SecretValue,
+    private readonly credential: SecretCredential,
     private readonly fetchImplementation: FetchImplementation,
     private readonly github: boolean,
   ) {}
@@ -103,72 +91,6 @@ class ReadOnlyJsonClient {
   }
 }
 
-function recordOrNull(value: unknown): Readonly<Record<string, unknown>> | null {
-  if (value === null) return null;
-  if (!isRecord(value)) throw new GovernanceError("governance_metadata_invalid");
-  return value;
-}
-
-export class PaperclipReadOnlyReader implements PaperclipGovernanceReader {
-  readonly #client: ReadOnlyJsonClient;
-
-  constructor(apiBase: string, credential: SecretValue, fetchImplementation: FetchImplementation = fetch) {
-    this.#client = new ReadOnlyJsonClient(safePaperclipBase(apiBase), credential, fetchImplementation, false);
-  }
-
-  async readSnapshot(companyId: string): Promise<PaperclipGovernanceSnapshot> {
-    if (!/^[0-9a-f-]{36}$/iu.test(companyId)) throw new GovernanceError("governance_input_invalid");
-    const encoded = encodeURIComponent(companyId);
-    const [companyValue, agentsValue, pipelinesValue] = await Promise.all([
-      this.#client.get(`/api/companies/${encoded}`),
-      this.#client.get(`/api/companies/${encoded}/agents`),
-      this.#client.get(`/api/companies/${encoded}/pipelines`),
-    ]);
-    if (!isRecord(companyValue) || typeof companyValue["id"] !== "string" || typeof companyValue["name"] !== "string" ||
-      (companyValue["status"] !== undefined && typeof companyValue["status"] !== "string") ||
-      !Array.isArray(agentsValue) || !Array.isArray(pipelinesValue)) {
-      throw new GovernanceError("governance_metadata_invalid");
-    }
-    const agents = agentsValue.map((value) => {
-      if (!isRecord(value) || typeof value["id"] !== "string" || typeof value["companyId"] !== "string" ||
-        typeof value["name"] !== "string" || typeof value["role"] !== "string" ||
-        typeof value["adapterType"] !== "string" || !Number.isSafeInteger(value["budgetMonthlyCents"]) ||
-        Number(value["budgetMonthlyCents"]) < 0 || typeof value["status"] !== "string" ||
-        (value["desiredSkills"] !== undefined && !Array.isArray(value["desiredSkills"]))) {
-        throw new GovernanceError("governance_metadata_invalid");
-      }
-      return {
-        id: value["id"],
-        companyId: value["companyId"],
-        name: value["name"],
-        role: value["role"],
-        adapterType: value["adapterType"],
-        budgetMonthlyCents: Number(value["budgetMonthlyCents"]),
-        status: value["status"],
-        ...(Array.isArray(value["desiredSkills"]) ? { desiredSkills: value["desiredSkills"] } : {}),
-        ...(value["permissions"] !== undefined ? { permissions: recordOrNull(value["permissions"]) } : {}),
-        ...(value["metadata"] !== undefined ? { metadata: recordOrNull(value["metadata"]) } : {}),
-      };
-    });
-    const pipelines = pipelinesValue.map((value) => {
-      if (!isRecord(value) || typeof value["key"] !== "string" || typeof value["enforceTransitions"] !== "boolean" ||
-        (value["archivedAt"] !== null && typeof value["archivedAt"] !== "string")) {
-        throw new GovernanceError("governance_metadata_invalid");
-      }
-      return { key: value["key"], enforceTransitions: value["enforceTransitions"], archivedAt: value["archivedAt"] };
-    });
-    return {
-      company: {
-        id: companyValue["id"],
-        name: companyValue["name"],
-        ...(typeof companyValue["status"] === "string" ? { status: companyValue["status"] } : {}),
-      },
-      agents,
-      pipelines,
-    };
-  }
-}
-
 function positiveInteger(value: unknown): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1) {
     throw new GovernanceError("governance_metadata_invalid");
@@ -187,7 +109,7 @@ function timestamp(value: unknown, nullable = false): string | null {
 export class GitHubReadOnlyReader implements GitHubGovernanceReader {
   readonly #client: ReadOnlyJsonClient;
 
-  constructor(credential: SecretValue, fetchImplementation: FetchImplementation = fetch, apiBase = "https://api.github.com") {
+  constructor(credential: SecretCredential, fetchImplementation: FetchImplementation = fetch, apiBase = "https://api.github.com") {
     if (apiBase !== "https://api.github.com" && !/^https:\/\/github\.example\.test$/u.test(apiBase)) {
       throw new GovernanceError("governance_identity_unavailable");
     }
@@ -279,33 +201,23 @@ export function createGovernanceReaders(
   environment: Environment,
   fetchImplementation: FetchImplementation = fetch,
 ): GovernanceReaders {
-  const readers = new Map<ScopeKey, { readonly paperclip: PaperclipGovernanceReader; readonly github: GitHubGovernanceReader }>();
+  const readers = new Map<ScopeKey, GitHubGovernanceReader>();
   const credentialValues: string[] = [];
   for (const key of scopeKeys) {
     const prefix = environmentPrefix(key);
-    const paperclipBase = environment[`${prefix}_PAPERCLIP_API_URL`];
-    const paperclipCredential = environment[`${prefix}_PAPERCLIP_API_KEY`];
     const githubCredential = environment[`${prefix}_GITHUB_TOKEN`];
-    if (!validCredential(paperclipCredential) || !validGitHubCredential(githubCredential)) {
+    if (!validGitHubCredential(githubCredential)) {
       throw new GovernanceError("governance_identity_unavailable");
     }
-    credentialValues.push(paperclipCredential, githubCredential);
-    readers.set(key, {
-      paperclip: new PaperclipReadOnlyReader(safePaperclipBase(paperclipBase), new SecretValue(paperclipCredential), fetchImplementation),
-      github: new GitHubReadOnlyReader(new SecretValue(githubCredential), fetchImplementation),
-    });
+    credentialValues.push(githubCredential);
+    readers.set(key, new GitHubReadOnlyReader(new GovernanceCredential(githubCredential), fetchImplementation));
   }
   if (new Set(credentialValues).size !== credentialValues.length) {
     throw new GovernanceError("governance_identity_unavailable");
   }
   return {
-    paperclip(key) {
-      const reader = readers.get(key)?.paperclip;
-      if (reader === undefined) throw new GovernanceError("governance_identity_unavailable");
-      return reader;
-    },
     github(key) {
-      const reader = readers.get(key)?.github;
+      const reader = readers.get(key);
       if (reader === undefined) throw new GovernanceError("governance_identity_unavailable");
       return reader;
     },

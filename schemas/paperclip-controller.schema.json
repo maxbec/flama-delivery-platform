@@ -23,7 +23,7 @@
       "additionalProperties": false,
       "required": ["read", "write", "deny"],
       "properties": {
-        "read": { "type": "array", "uniqueItems": true, "items": { "enum": ["paperclip_company", "github_metadata", "delivery_evidence", "ci_usage"] } },
+        "read": { "type": "array", "uniqueItems": true, "items": { "enum": ["paperclip_company", "paperclip_attestation", "github_metadata", "delivery_evidence", "ci_usage"] } },
         "write": { "type": "array", "uniqueItems": true, "items": { "enum": ["paperclip_company_transitions", "github_preflight_checks", "github_pull_requests"] } },
         "deny": {
           "type": "array",
@@ -46,7 +46,7 @@
       "properties": {
         "deterministic": { "const": true },
         "maxImplementationConcurrency": { "type": "integer", "minimum": 0, "maximum": 2 },
-        "credentialSource": { "const": "infisical-oidc" }
+        "credentialSource": { "enum": ["infisical-oidc", "paperclip-run+infisical-oidc"] }
       }
     }
   },
@@ -70,7 +70,7 @@
           "mode": { "const": "global-governance" },
           "scope": { "type": "object", "properties": { "companies": { "const": ["Private", "// Navigaite", "Edilio"] }, "githubOwners": { "const": ["maxbec", "navigaite", "edilio"] } } },
           "authority": { "type": "object", "properties": { "write": { "type": "array", "maxItems": 0 } } },
-          "runtime": { "type": "object", "properties": { "maxImplementationConcurrency": { "const": 0 } } }
+          "runtime": { "type": "object", "properties": { "maxImplementationConcurrency": { "const": 0 }, "credentialSource": { "const": "paperclip-run+infisical-oidc" } } }
         }
       }
     }

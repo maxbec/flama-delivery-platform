@@ -41,9 +41,9 @@ jq -e '
   ) and
   .governanceController == {
     name: "flama-governance-controller",
-    placement: "external-service",
+    placement: "paperclip-orchestrated-job",
     scope: "cross-company",
-    identityModel: "separate-read-only-identity-per-company",
+    identityModel: "native-company-controller-attestations",
     dataPolicy: "metadata-only",
     writeAuthority: []
   }
@@ -114,7 +114,10 @@ jq -e '
   .properties.scopes.minItems == 3 and
   .properties.scopes.maxItems == 3 and
   (.properties.scopes.allOf | length) == 3 and
-  .properties.scopes.items.properties.companyId.format == "uuid" and
+  (.properties.scopes.items.properties | has("companyId") | not) and
+  .properties.scopes.items.properties.paperclipAttestation.properties.runId.format == "uuid" and
+  .properties.scopes.items.properties.paperclipAttestation.properties.source.const == "paperclip-company-controller" and
+  .properties.scopes.items.properties.paperclipAttestation.properties.evidenceDigest.pattern == "^sha256:[0-9a-f]{64}$" and
   .properties.scopes.items.properties.repositories.maxItems == 100
 ' "$ROOT_DIR/schemas/governance-input.schema.json" >/dev/null
 

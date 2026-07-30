@@ -48,10 +48,13 @@ Paperclip project → ready task → isolated implementation → signed prefligh
   pinned source. Two zero-budget company controllers are verified paused; the
   remaining native hire request is still behind Paperclip's board approval and
   has not been bypassed.
-- The external governance controller is implemented as a deterministic Node.js
-  26 bundle. It uses distinct read-only identities per company/owner, a GET-only
-  transport, metadata-only aggregation, and mode-0600 private evidence; live
-  collection remains gated on the scoped identities and private selectors.
+- The governance controller is implemented as a deterministic Node.js 26 job
+  orchestrated by Paperclip. Company-local controllers supply bounded
+  Paperclip attestations through their native run context; the aggregator does
+  not poll Paperclip or hold board credentials. It uses distinct read-only
+  GitHub App identities per owner, metadata-only aggregation, and mode-0600
+  private evidence; live collection remains gated on those App identities,
+  controller attestations, and private selectors.
 - Production deployment has a separate exact-SHA trust gate, strict manifest
   validation, provider-neutral health/version/smoke soak, and one-attempt
   rollback state machine. No concrete provider is configured or invoked here.
@@ -103,7 +106,7 @@ repository.
 .github/workflows/       reusable GitHub workflows
 packages/delivery-ctl/   flama-delivery-ctl
 services/bridge/         flama-delivery-bridge
-services/governance/     external read-only governance collector
+services/governance/     Paperclip-orchestrated read-only governance job
 skills/                  Paperclip skills
 lifecycles/              Paperclip pipeline templates
 routines/                paused Paperclip routine contracts

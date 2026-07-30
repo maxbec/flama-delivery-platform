@@ -43,7 +43,7 @@
       "required": ["company", "controller", "lifecycles"],
       "properties": {
         "company": { "enum": ["compliant", "drift"] },
-        "controller": { "enum": ["compliant", "pending_approval", "drift"] },
+        "controller": { "enum": ["compliant", "drift"] },
         "lifecycles": { "enum": ["compliant", "drift"] }
       }
     },

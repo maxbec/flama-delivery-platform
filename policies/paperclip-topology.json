@@ -36,9 +36,9 @@
   ],
   "governanceController": {
     "name": "flama-governance-controller",
-    "placement": "external-service",
+    "placement": "paperclip-orchestrated-job",
     "scope": "cross-company",
-    "identityModel": "separate-read-only-identity-per-company",
+    "identityModel": "native-company-controller-attestations",
     "dataPolicy": "metadata-only",
     "writeAuthority": []
   }

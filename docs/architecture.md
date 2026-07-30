@@ -54,19 +54,24 @@ upstream incompatibility must fail closed or be resolved upstream.
 
 Company-local Delivery Controllers are zero-budget Paperclip `process` agents
 and remain paused until their deterministic runtime and scoped identity are
-verified. Because Paperclip agents are company-scoped, the approved
-`flama-governance-controller` is an external read-only service. It uses a
-separate read-only identity for each company, aggregates metadata only, and has
-no Paperclip, GitHub, release, deployment, approval, or secret-write authority.
-The exact topology is enforced by `policies/paperclip-topology.json`.
+verified. Paperclip is the orchestrator and does not authenticate back into
+itself through synthetic human or board identities. Each company controller
+uses its native, company-scoped run identity to produce a bounded governance
+attestation. The `flama-governance-controller` aggregates those attestations
+with read-only GitHub metadata as a Paperclip-orchestrated deterministic job.
+It has no Paperclip board credential and no GitHub, release, deployment,
+approval, or secret-write authority. The exact topology is enforced by
+`policies/paperclip-topology.json`.
 
-The governance runtime additionally enforces that boundary in code: it has only
-a GET request primitive, derives each allowed company/owner pair from a fixed
-contract, rejects credentials reused across scopes, bounds pagination, response
-size, latency, and collection windows, and suppresses all response bodies on
-failure. Detailed results are create-only mode-0600 evidence outside the public
-checkout; ordinary logs receive only a status and evidence digest. GitHub run
-and exact-attempt job metadata provide duration, queue, retry, and runner-time
+The governance runtime additionally enforces that boundary in code: its only
+network reader is a GET-only GitHub client, it derives each allowed
+company/owner pair from a fixed contract, rejects GitHub credentials reused
+across owners, requires fresh digest-bound attestations from all three native
+company-controller runs, bounds pagination, response size, latency, and
+collection windows, and suppresses all response bodies on failure. Detailed
+results are create-only mode-0600 evidence outside the public checkout;
+ordinary logs receive only a status and evidence digest. GitHub run and
+exact-attempt job metadata provide duration, queue, retry, and runner-time
 measurements. Cache-hit coverage is explicitly unavailable until generated
 consumer workflows emit a bounded signal.
 
@@ -160,9 +165,10 @@ approved with scoped identities and private mappings. Provider credentials,
 GitHub App installation, and production authority are not implied by this
 runtime choice.
 
-The governance collector is likewise deployment-ready but undeployed. Running
-it requires six newly provisioned read-only identities and a private selector
-file, neither of which is embedded in the public artifact.
+The governance job is likewise deployment-ready but inactive. Running it
+requires three owner-scoped read-only GitHub App identities, fresh native
+company-controller attestations, and a private selector file; none is embedded
+in the public artifact. It requires no Paperclip Viewer account or board token.
 
 The trusted deploy workflow verifies the GitHub OIDC token's issuer, audience,
 repository, production subject, and `job_workflow_ref` for the exact platform

@@ -1,3 +1,8 @@
+import {
+  verifyPaperclipGovernanceAttestationDigest,
+  type PaperclipGovernanceAttestation,
+} from "../../../packages/contracts/src/paperclip-governance-attestation.js";
+
 type ScopeKey = "maxbec" | "navigaite" | "edilio";
 type CompanyName = "Private" | "// Navigaite" | "Edilio";
 type ControllerName =
@@ -8,12 +13,8 @@ type Profile = "fast" | "major";
 type GovernanceStatus = "compliant" | "attention" | "insufficient_data";
 
 const scopeKeys = ["maxbec", "navigaite", "edilio"] as const;
-const managedPipelineKeys = [
-  "flama-project-bootstrap-v1",
-  "flama-feature-fix-v1",
-  "flama-release-deployment-v1",
-] as const;
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
+const digestPattern = /^sha256:[0-9a-f]{64}$/u;
 const repositoryPattern = /^[A-Za-z0-9._-]{1,100}$/u;
 const scopeContract: Readonly<Record<ScopeKey, {
   readonly company: CompanyName;
@@ -43,35 +44,14 @@ export interface GovernanceInput {
   readonly scopes: readonly {
     readonly key: ScopeKey;
     readonly company: CompanyName;
-    readonly companyId: string;
     readonly githubOwner: ScopeKey;
     readonly controller: ControllerName;
+    readonly paperclipAttestation: PaperclipGovernanceAttestation;
     readonly repositories: readonly {
       readonly name: string;
       readonly profile: Profile;
       readonly finalWorkflow: string;
     }[];
-  }[];
-}
-
-export interface PaperclipGovernanceSnapshot {
-  readonly company: { readonly id: string; readonly name: string; readonly status?: string };
-  readonly agents: readonly {
-    readonly id: string;
-    readonly companyId: string;
-    readonly name: string;
-    readonly role: string;
-    readonly adapterType: string;
-    readonly budgetMonthlyCents: number;
-    readonly status: string;
-    readonly desiredSkills?: readonly unknown[];
-    readonly permissions?: Readonly<Record<string, unknown>> | null;
-    readonly metadata?: Readonly<Record<string, unknown>> | null;
-  }[];
-  readonly pipelines: readonly {
-    readonly key: string;
-    readonly enforceTransitions: boolean;
-    readonly archivedAt: string | null;
   }[];
 }
 
@@ -95,17 +75,12 @@ export interface GitHubWorkflowJob {
   readonly completedAt: string | null;
 }
 
-export interface PaperclipGovernanceReader {
-  readSnapshot(companyId: string): Promise<PaperclipGovernanceSnapshot>;
-}
-
 export interface GitHubGovernanceReader {
   listRuns(owner: ScopeKey, repository: string, from: string, to: string): Promise<readonly GitHubWorkflowRun[]>;
   listJobs(owner: ScopeKey, repository: string, runId: number, attempt: number): Promise<readonly GitHubWorkflowJob[]>;
 }
 
 export interface GovernanceReaders {
-  paperclip(key: ScopeKey): PaperclipGovernanceReader;
   github(key: ScopeKey): GitHubGovernanceReader;
 }
 
@@ -139,7 +114,7 @@ export interface GovernanceResult {
     readonly status: GovernanceStatus;
     readonly paperclip: {
       readonly company: "compliant" | "drift";
-      readonly controller: "compliant" | "pending_approval" | "drift";
+      readonly controller: "compliant" | "drift";
       readonly lifecycles: "compliant" | "drift";
     };
     readonly delivery: DeliverySummary;
@@ -198,16 +173,46 @@ export function parseGovernanceInput(value: unknown): GovernanceInput {
   const seenScopes = new Set<ScopeKey>();
   const normalizedScopes: GovernanceInput["scopes"][number][] = [];
   for (const scope of scopes) {
-    if (!isRecord(scope) || !exactKeys(scope, ["key", "company", "companyId", "githubOwner", "controller", "repositories"])) {
+    if (!isRecord(scope) || !exactKeys(scope, [
+      "key", "company", "githubOwner", "controller", "paperclipAttestation", "repositories",
+    ])) {
       throw new GovernanceError("governance_input_invalid");
     }
     const key = asScopeKey(scope["key"]);
     const expected = key === undefined ? undefined : scopeContract[key];
     const repositories = scope["repositories"];
+    const attestation = scope["paperclipAttestation"];
     if (key === undefined || expected === undefined || seenScopes.has(key) ||
       scope["company"] !== expected.company || scope["githubOwner"] !== expected.githubOwner ||
-      scope["controller"] !== expected.controller || typeof scope["companyId"] !== "string" ||
-      !uuidPattern.test(scope["companyId"]) || !Array.isArray(repositories) || repositories.length > 100) {
+      scope["controller"] !== expected.controller || !isRecord(attestation) || !exactKeys(attestation, [
+        "source", "company", "controller", "runId", "observedAt", "evidenceDigest", "checks",
+      ]) || attestation["source"] !== "paperclip-company-controller" ||
+      attestation["company"] !== expected.company || attestation["controller"] !== expected.controller ||
+      typeof attestation["runId"] !== "string" || !uuidPattern.test(attestation["runId"]) ||
+      !validDateTime(attestation["observedAt"]) || Date.parse(attestation["observedAt"]) < from ||
+      Date.parse(attestation["observedAt"]) > to || typeof attestation["evidenceDigest"] !== "string" ||
+      !digestPattern.test(attestation["evidenceDigest"]) || !isRecord(attestation["checks"]) ||
+      !exactKeys(attestation["checks"], ["company", "controller", "lifecycles"]) ||
+      !["compliant", "drift"].includes(String(attestation["checks"]["company"])) ||
+      !["compliant", "drift"].includes(String(attestation["checks"]["controller"])) ||
+      !["compliant", "drift"].includes(String(attestation["checks"]["lifecycles"])) ||
+      !Array.isArray(repositories) || repositories.length > 100) {
+      throw new GovernanceError("governance_input_invalid");
+    }
+    const normalizedAttestation: PaperclipGovernanceAttestation = {
+      source: "paperclip-company-controller",
+      company: expected.company,
+      controller: expected.controller,
+      runId: attestation["runId"],
+      observedAt: attestation["observedAt"],
+      evidenceDigest: attestation["evidenceDigest"],
+      checks: {
+        company: attestation["checks"]["company"] as "compliant" | "drift",
+        controller: attestation["checks"]["controller"] as "compliant" | "drift",
+        lifecycles: attestation["checks"]["lifecycles"] as "compliant" | "drift",
+      },
+    };
+    if (!verifyPaperclipGovernanceAttestationDigest(normalizedAttestation)) {
       throw new GovernanceError("governance_input_invalid");
     }
     const seenRepositories = new Set<string>();
@@ -232,9 +237,9 @@ export function parseGovernanceInput(value: unknown): GovernanceInput {
     normalizedScopes.push({
       key,
       company: expected.company,
-      companyId: scope["companyId"],
       githubOwner: expected.githubOwner,
       controller: expected.controller,
+      paperclipAttestation: normalizedAttestation,
       repositories: normalizedRepositories,
     });
   }
@@ -248,46 +253,6 @@ export function parseGovernanceInput(value: unknown): GovernanceInput {
       return scope;
     }),
   };
-}
-
-function permissionsMatch(value: Readonly<Record<string, unknown>> | null | undefined): boolean {
-  return value === undefined || value === null || (
-    value["canCreateAgents"] === false && value["canCreateSkills"] === false && value["canAssignTasks"] === false
-  );
-}
-
-function metadataMatches(value: Readonly<Record<string, unknown>> | null | undefined): boolean {
-  return value === undefined || value === null || (
-    value["managedBy"] === "flama-delivery-platform" && value["topologyVersion"] === 1
-  );
-}
-
-function skillsMatch(value: readonly unknown[] | undefined): boolean {
-  return value === undefined || value.includes("flama-paperclip-delivery");
-}
-
-function assessPaperclip(
-  scope: GovernanceInput["scopes"][number],
-  snapshot: PaperclipGovernanceSnapshot,
-): GovernanceResult["scopes"][number]["paperclip"] {
-  const company = snapshot.company.id === scope.companyId && snapshot.company.name === scope.company &&
-    snapshot.company.status !== "archived" ? "compliant" : "drift";
-  const matches = snapshot.agents.filter((agent) => agent.name === scope.controller);
-  let controller: "compliant" | "pending_approval" | "drift" = "drift";
-  const candidate = matches.length === 1 ? matches[0] : undefined;
-  if (candidate !== undefined && candidate.companyId === scope.companyId && candidate.role === "devops" &&
-    candidate.adapterType === "process" && candidate.budgetMonthlyCents === 0 && permissionsMatch(candidate.permissions) &&
-    metadataMatches(candidate.metadata) && skillsMatch(candidate.desiredSkills)) {
-    if (candidate.status === "pending_approval") controller = "pending_approval";
-    else if (["paused", "idle", "running"].includes(candidate.status)) controller = "compliant";
-  }
-  const lifecycles = managedPipelineKeys.every((key) => {
-    const matching = snapshot.pipelines.filter((pipeline) => pipeline.key === key);
-    return matching.length === 1 && matching[0]?.enforceTransitions === true && matching[0]?.archivedAt === null;
-  }) && snapshot.pipelines.filter((pipeline) => pipeline.key.startsWith("flama-")).length === managedPipelineKeys.length
-    ? "compliant"
-    : "drift";
-  return { company, controller, lifecycles };
 }
 
 interface MetricSample {
@@ -406,18 +371,18 @@ export async function collectGovernance(
   const allSamples: MetricSample[] = [];
   const allProfiles = new Set<Profile>();
   for (const scope of input.scopes) {
-    let snapshot: PaperclipGovernanceSnapshot;
     let samples: readonly MetricSample[];
     try {
-      [snapshot, samples] = await Promise.all([
-        readers.paperclip(scope.key).readSnapshot(scope.companyId),
-        collectSamples(scope, readers.github(scope.key), input.window),
-      ]);
+      samples = await collectSamples(scope, readers.github(scope.key), input.window);
     } catch (error) {
       if (error instanceof GovernanceError) throw error;
       throw new GovernanceError("governance_read_failed");
     }
-    const paperclip = assessPaperclip(scope, snapshot);
+    const paperclip = {
+      company: scope.paperclipAttestation.checks.company,
+      controller: scope.paperclipAttestation.checks.controller,
+      lifecycles: scope.paperclipAttestation.checks.lifecycles,
+    };
     const configuredProfiles = new Set(scope.repositories.map((repository) => repository.profile));
     const delivery = deliverySummary(samples, configuredProfiles);
     const paperclipStatus: GovernanceStatus = paperclip.company === "compliant" &&

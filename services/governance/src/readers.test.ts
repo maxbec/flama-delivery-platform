@@ -1,47 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { SecretValue } from "../../bridge/src/config.js";
 import { GovernanceError } from "./governance.js";
-import { createGovernanceReaders, GitHubReadOnlyReader, PaperclipReadOnlyReader } from "./readers.js";
+import { createGovernanceReaders, GitHubReadOnlyReader } from "./readers.js";
 
 function json(value: unknown): Response {
   return new Response(JSON.stringify(value), { status: 200, headers: { "content-type": "application/json" } });
 }
 
 describe("read-only governance readers", () => {
-  it("uses only documented GET endpoints and projects bounded metadata", async () => {
-    const requests: Array<{ url: string; method: string | undefined; authorization: string | null }> = [];
-    const fetcher = vi.fn(async (input: string | URL, init?: RequestInit) => {
-      const url = String(input);
-      const headers = new Headers(init?.headers);
-      requests.push({ url, method: init?.method, authorization: headers.get("authorization") });
-      if (url.endsWith("/agents")) return json([{
-        id: "agent",
-        companyId: "11111111-1111-4111-8111-111111111111",
-        name: "maxbec-delivery-controller",
-        role: "devops",
-        adapterType: "process",
-        budgetMonthlyCents: 0,
-        status: "paused",
-      }]);
-      if (url.endsWith("/pipelines")) return json([{
-        key: "flama-project-bootstrap-v1",
-        enforceTransitions: true,
-        archivedAt: null,
-      }]);
-      return json({ id: "11111111-1111-4111-8111-111111111111", name: "Private", status: "active" });
-    });
-    const reader = new PaperclipReadOnlyReader(
-      "http://127.0.0.1:3100",
-      new SecretValue("test-only-paperclip-reader-key"),
-      fetcher,
-    );
-    const result = await reader.readSnapshot("11111111-1111-4111-8111-111111111111");
-    expect(result.company.name).toBe("Private");
-    expect(requests).toHaveLength(3);
-    expect(requests.every(({ method }) => method === "GET")).toBe(true);
-    expect(requests.every(({ authorization }) => authorization === "Bearer test-only-paperclip-reader-key")).toBe(true);
-  });
-
   it("reads GitHub runs and exact-attempt jobs through GET-only pagination", async () => {
     const urls: string[] = [];
     const fetcher = vi.fn(async (input: string | URL, init?: RequestInit) => {
@@ -79,13 +45,11 @@ describe("read-only governance readers", () => {
     expect(urls[1]).toContain("/runs/99/attempts/2/jobs?");
   });
 
-  it("rejects shared credentials across company boundaries", () => {
+  it("rejects shared GitHub credentials across owner boundaries", () => {
     const shared = "test-only-shared-reader-key";
     const environment: Record<string, string> = {};
     for (const key of ["MAXBEC", "NAVIGAITE", "EDILIO"] as const) {
-      environment[`FLAMA_GOVERNANCE_${key}_PAPERCLIP_API_URL`] = "http://127.0.0.1:3100";
-      environment[`FLAMA_GOVERNANCE_${key}_PAPERCLIP_API_KEY`] = shared;
-      environment[`FLAMA_GOVERNANCE_${key}_GITHUB_TOKEN`] = `test-only-${key.toLowerCase()}-github-token`;
+      environment[`FLAMA_GOVERNANCE_${key}_GITHUB_TOKEN`] = shared;
     }
     expect(() => createGovernanceReaders(environment)).toThrowError(
       expect.objectContaining<Partial<GovernanceError>>({ code: "governance_identity_unavailable" }),
@@ -95,8 +59,6 @@ describe("read-only governance readers", () => {
   it("rejects non-installation GitHub token forms", () => {
     const environment: Record<string, string> = {};
     for (const key of ["MAXBEC", "NAVIGAITE", "EDILIO"] as const) {
-      environment[`FLAMA_GOVERNANCE_${key}_PAPERCLIP_API_URL`] = "http://127.0.0.1:3100";
-      environment[`FLAMA_GOVERNANCE_${key}_PAPERCLIP_API_KEY`] = `test-only-${key.toLowerCase()}-paperclip-key`;
       environment[`FLAMA_GOVERNANCE_${key}_GITHUB_TOKEN`] = `personal-access-form-${key.toLowerCase()}-value`;
     }
     expect(() => createGovernanceReaders(environment)).toThrowError(
