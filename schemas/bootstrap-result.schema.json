@@ -4,20 +4,57 @@
   "title": "Secret-minimized consumer bootstrap result",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "status", "baseSha", "sourceBranch", "generated", "repositoryOwned"],
+  "required": [
+    "schemaVersion",
+    "status",
+    "baseSha",
+    "sourceBranch",
+    "generated",
+    "repositoryOwned"
+  ],
   "properties": {
-    "schemaVersion": { "const": 1 },
-    "status": { "enum": ["planned", "prepared"] },
-    "baseSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
-    "sourceBranch": { "enum": ["main", "dev"] },
+    "schemaVersion": {
+      "const": 1
+    },
+    "status": {
+      "enum": [
+        "planned",
+        "prepared"
+      ]
+    },
+    "baseSha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "sourceBranch": {
+      "enum": [
+        "main",
+        "dev"
+      ]
+    },
     "generated": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["schemaVersion", "profile", "platformRef", "files"],
+      "required": [
+        "schemaVersion",
+        "profile",
+        "platformRef",
+        "files"
+      ],
       "properties": {
-        "schemaVersion": { "const": 1 },
-        "profile": { "enum": ["fast", "major"] },
-        "platformRef": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "schemaVersion": {
+          "const": 1
+        },
+        "profile": {
+          "enum": [
+            "fast",
+            "major"
+          ]
+        },
+        "platformRef": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
         "files": {
           "type": "array",
           "minItems": 8,
@@ -25,7 +62,10 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["path", "status"],
+            "required": [
+              "path",
+              "status"
+            ],
             "properties": {
               "path": {
                 "enum": [
@@ -41,7 +81,14 @@
                   ".release-please-manifest.json"
                 ]
               },
-              "status": { "enum": ["planned", "created", "unchanged", "replaced"] }
+              "status": {
+                "enum": [
+                  "planned",
+                  "created",
+                  "unchanged",
+                  "replaced"
+                ]
+              }
             }
           }
         }
@@ -54,20 +101,42 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["path", "status"],
+        "required": [
+          "path",
+          "status"
+        ],
         "properties": {
           "path": {
-            "enum": [
-              ".prettierignore",
-            ".flama/commands.json",
-              ".flama/delivery-contract.json",
-              ".flama/run-command.mjs",
-              ".paperclip/project.yaml",
-              "AGENTS.md",
-              "scripts/delivery"
+            "anyOf": [
+              {
+                "enum": [
+                  ".flama/commands.json",
+                  ".flama/delivery-contract.json",
+                  ".flama/run-command.mjs",
+                  ".paperclip/project.yaml",
+                  "AGENTS.md",
+                  "scripts/delivery"
+                ]
+              },
+              {
+                "$comment": "The formatter exclusion is written wherever the repository keeps its ignore list.",
+                "enum": [
+                  ".prettierignore",
+                  "configs/.prettierignore",
+                  ".trunk/configs/.prettierignore"
+                ]
+              }
             ]
           },
-          "status": { "enum": ["planned", "created", "append_planned", "appended", "preserved"] }
+          "status": {
+            "enum": [
+              "planned",
+              "created",
+              "append_planned",
+              "appended",
+              "preserved"
+            ]
+          }
         }
       }
     }
