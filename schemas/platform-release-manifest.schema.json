@@ -4,7 +4,7 @@
   "title": "Deterministic Flama platform release artifact manifest",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "version", "commitSha", "createdAt", "nodeMajor", "cli", "bridge", "governance", "sbom", "files"],
+  "required": ["schemaVersion", "version", "commitSha", "createdAt", "nodeMajor", "cli", "bridge", "controller", "governance", "sbom", "files"],
   "properties": {
     "schemaVersion": { "const": 1 },
     "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
@@ -13,6 +13,7 @@
     "nodeMajor": { "const": 26 },
     "cli": { "const": "bin/flama-delivery-ctl.js" },
     "bridge": { "const": "bin/bridge/index.js" },
+    "controller": { "const": "bin/controller/index.js" },
     "governance": { "const": "bin/governance/index.js" },
     "sbom": { "type": "string", "pattern": "^flama-delivery-platform-v[0-9]+\\.[0-9]+\\.[0-9]+\\.sbom\\.spdx\\.json$" },
     "files": {

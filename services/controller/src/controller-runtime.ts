@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { lstat, readFile, realpath, writeFile } from "node:fs/promises";
 import { isAbsolute, join, normalize } from "node:path";
+import { Pool } from "pg";
 import {
   auditReconciliation,
   createReconciliationRuntime,
@@ -20,6 +21,13 @@ import {
   attestPaperclipGovernance,
   writePaperclipGovernanceAttestation,
 } from "./governance-attestation.js";
+import {
+  minimizedEventDigest,
+  PaperclipPublicationError,
+  PostgresTransitionAuthorizationStore,
+} from "../../bridge/src/paperclip-publisher.js";
+import type { PaperclipTransitionMessage } from "../../bridge/src/processor.js";
+import { AuthorizedPaperclipPublisher, PaperclipRestTransitionApi } from "./paperclip-transition.js";
 
 const controllerNames = [
   "maxbec-delivery-controller",
@@ -48,6 +56,7 @@ interface RuntimeIdentity {
   readonly agentId: string;
   readonly companyId: string;
   readonly runId: string;
+  readonly taskId: string | null;
 }
 
 interface ControllerIdentity {
@@ -114,6 +123,32 @@ interface RoutineRun {
   readonly status: string;
   readonly linkedIssueId: string;
   readonly completedAt: string | null;
+  readonly idempotencyKey: string | null;
+  readonly triggerPayload: unknown;
+}
+
+interface GitHubTransitionRoutineContract {
+  readonly schemaVersion: 1;
+  readonly key: "flama-github-transition-v1";
+  readonly title: "Flama GitHub Evidence Transition";
+  readonly description: string;
+  readonly priority: "high";
+  readonly initialStatus: "paused";
+  readonly concurrencyPolicy: "always_enqueue";
+  readonly catchUpPolicy: "skip_missed";
+  readonly execution: {
+    readonly command: "transition-external-evidence";
+    readonly mode: "paperclip-native";
+    readonly authorizationStore: "flama_delivery.external_transition_authorization";
+  };
+  readonly trigger: {
+    readonly kind: "webhook";
+    readonly label: "flama-github-transition-v1";
+    readonly enabled: true;
+    readonly signingMode: "hmac_sha256";
+    readonly replayWindowSeconds: 300;
+    readonly credentialSource: "infisical-oidc";
+  };
 }
 
 export type ControllerRuntimeResult =
@@ -128,6 +163,12 @@ export type ControllerRuntimeResult =
     readonly contractDigest: string;
     readonly evidenceDigest: string;
     readonly governanceAttestationDigest: string;
+  }
+  | {
+    readonly schemaVersion: 1;
+    readonly status: "transitioned";
+    readonly contractDigest: string;
+    readonly evidenceDigest: string;
   };
 
 export type ControllerRuntimeErrorCode =
@@ -140,7 +181,8 @@ export type ControllerRuntimeErrorCode =
   | "controller_identity_unavailable"
   | "controller_reconciliation_failed"
   | "controller_response_invalid"
-  | "controller_routine_drift";
+  | "controller_routine_drift"
+  | "controller_transition_failed";
 
 export class ControllerRuntimeError extends Error {
   constructor(readonly code: ControllerRuntimeErrorCode) {
@@ -154,6 +196,13 @@ export type ManagedReconciliationExecutor = (
   environment: Environment,
   runId: string,
 ) => Promise<ReconciliationResult>;
+
+export type ManagedTransitionExecutor = (
+  message: PaperclipTransitionMessage,
+  environment: Environment,
+  runtime: { readonly companyId: string },
+  fetchImplementation: FetchImplementation,
+) => Promise<void>;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -193,10 +242,12 @@ function runtimeIdentity(environment: Environment): RuntimeIdentity {
   const agentId = environment["PAPERCLIP_AGENT_ID"];
   const companyId = environment["PAPERCLIP_COMPANY_ID"];
   const runId = environment["PAPERCLIP_RUN_ID"];
+  const taskId = environment["PAPERCLIP_TASK_ID"];
   if (
     apiBase === undefined || token === undefined || agentId === undefined || companyId === undefined || runId === undefined ||
     token.length < 20 || token.length > 4_096 || /[\r\n]/u.test(token) ||
-    !isUuid(agentId) || !isUuid(companyId) || !isUuid(runId)
+    !isUuid(agentId) || !isUuid(companyId) || !isUuid(runId) ||
+    (taskId !== undefined && !isUuid(taskId))
   ) throw new ControllerRuntimeError("controller_identity_unavailable");
   let parsed: URL;
   try {
@@ -215,12 +266,13 @@ function runtimeIdentity(environment: Environment): RuntimeIdentity {
     agentId,
     companyId,
     runId,
+    taskId: taskId ?? null,
   };
 }
 
 async function requestJson(
   identity: RuntimeIdentity,
-  method: "GET" | "PATCH",
+  method: "GET" | "PATCH" | "POST",
   endpoint: string,
   fetchImplementation: FetchImplementation,
   body?: unknown,
@@ -360,7 +412,11 @@ function parseRoutine(value: unknown): PaperclipRoutineDetail {
       !isRecord(trigger) || typeof trigger["id"] !== "string" || typeof trigger["kind"] !== "string" ||
       (trigger["label"] !== null && typeof trigger["label"] !== "string") || typeof trigger["enabled"] !== "boolean" ||
       (trigger["cronExpression"] !== null && typeof trigger["cronExpression"] !== "string") ||
-      (trigger["timezone"] !== null && typeof trigger["timezone"] !== "string")
+      (trigger["timezone"] !== null && typeof trigger["timezone"] !== "string") ||
+      (trigger["signingMode"] !== undefined && trigger["signingMode"] !== null &&
+        typeof trigger["signingMode"] !== "string") ||
+      (trigger["replayWindowSec"] !== undefined && trigger["replayWindowSec"] !== null &&
+        !Number.isSafeInteger(trigger["replayWindowSec"]))
     ) throw new ControllerRuntimeError("controller_response_invalid");
   }
   return value as unknown as PaperclipRoutineDetail;
@@ -374,10 +430,130 @@ function parseRoutineRuns(value: unknown): readonly RoutineRun[] {
       typeof run["routineId"] !== "string" || typeof run["triggerId"] !== "string" ||
       typeof run["source"] !== "string" || typeof run["status"] !== "string" ||
       typeof run["linkedIssueId"] !== "string" ||
-      (run["completedAt"] !== null && typeof run["completedAt"] !== "string")
+      (run["completedAt"] !== null && typeof run["completedAt"] !== "string") ||
+      (run["idempotencyKey"] !== undefined && run["idempotencyKey"] !== null &&
+        typeof run["idempotencyKey"] !== "string")
     ) throw new ControllerRuntimeError("controller_response_invalid");
-    return run as unknown as RoutineRun;
+    return {
+      ...run,
+      idempotencyKey: typeof run["idempotencyKey"] === "string" ? run["idempotencyKey"] : null,
+      triggerPayload: run["triggerPayload"] ?? null,
+    } as unknown as RoutineRun;
   });
+}
+
+function validateGitHubTransitionRoutineContract(value: unknown): GitHubTransitionRoutineContract {
+  if (!isRecord(value) || !isRecord(value["execution"]) || !isRecord(value["trigger"])) {
+    throw new ControllerRuntimeError("controller_contract_invalid");
+  }
+  const execution = value["execution"];
+  const trigger = value["trigger"];
+  if (
+    value["schemaVersion"] !== 1 || value["key"] !== "flama-github-transition-v1" ||
+    value["title"] !== "Flama GitHub Evidence Transition" ||
+    typeof value["description"] !== "string" || value["description"].length < 100 ||
+    value["description"].length > 2_000 || /[\u0000\r]/u.test(value["description"]) ||
+    value["priority"] !== "high" || value["initialStatus"] !== "paused" ||
+    value["concurrencyPolicy"] !== "always_enqueue" || value["catchUpPolicy"] !== "skip_missed" ||
+    execution["command"] !== "transition-external-evidence" || execution["mode"] !== "paperclip-native" ||
+    execution["authorizationStore"] !== "flama_delivery.external_transition_authorization" ||
+    trigger["kind"] !== "webhook" || trigger["label"] !== "flama-github-transition-v1" ||
+    trigger["enabled"] !== true || trigger["signingMode"] !== "hmac_sha256" ||
+    trigger["replayWindowSeconds"] !== 300 || trigger["credentialSource"] !== "infisical-oidc"
+  ) throw new ControllerRuntimeError("controller_contract_invalid");
+  return value as unknown as GitHubTransitionRoutineContract;
+}
+
+function managedRoutineDescription(contract: GitHubTransitionRoutineContract): string {
+  return `Managed by flama-delivery-platform; key=${contract.key}; contract=${digest(contract)}\n\n${contract.description}`;
+}
+
+function parseTransitionMessage(value: unknown): PaperclipTransitionMessage {
+  if (!isRecord(value) || value["schemaVersion"] !== 1 || !isRecord(value["message"])) {
+    throw new ControllerRuntimeError("controller_transition_failed");
+  }
+  const message = value["message"];
+  const company = message["company"];
+  if (
+    typeof message["idempotencyKey"] !== "string" ||
+    !/^github:[A-Za-z0-9._:-]{1,128}:[a-z0-9_.]+$/u.test(message["idempotencyKey"]) ||
+    typeof message["deliveryId"] !== "string" || !/^[A-Za-z0-9._:-]{1,128}$/u.test(message["deliveryId"]) ||
+    !["Private", "// Navigaite", "Edilio"].includes(String(company)) ||
+    typeof message["transitionKind"] !== "string" || !/^[a-z0-9_.]{1,120}$/u.test(message["transitionKind"]) ||
+    !isRecord(message["payload"])
+  ) throw new ControllerRuntimeError("controller_transition_failed");
+  return message as unknown as PaperclipTransitionMessage;
+}
+
+function githubTransitionRoutineMatches(
+  routine: PaperclipRoutineDetail,
+  assignment: RoutineAssignment,
+  runtime: RuntimeIdentity,
+  contract: GitHubTransitionRoutineContract,
+): boolean {
+  const trigger = routine.triggers[0];
+  const description = managedRoutineDescription(contract);
+  return routine.id === assignment.originId && routine.companyId === runtime.companyId &&
+    routine.projectId === assignment.projectId && routine.folderId == null && routine.goalId === null &&
+    routine.parentIssueId === null && routine.title === contract.title && routine.description === description &&
+    routine.assigneeAgentId === runtime.agentId && routine.priority === "high" && routine.status === "active" &&
+    routine.concurrencyPolicy === "always_enqueue" && routine.catchUpPolicy === "skip_missed" &&
+    routine.variables.length === 0 && routine.triggers.length === 1 && trigger !== undefined && isUuid(trigger.id) &&
+    trigger.kind === "webhook" && trigger.label === contract.trigger.label && trigger.enabled === true &&
+    trigger.cronExpression === null && trigger.timezone === null && trigger.signingMode === "hmac_sha256" &&
+    trigger.replayWindowSec === 300 && assignment.title === contract.title && assignment.description === description &&
+    assignment.priority === "high";
+}
+
+async function executeGitHubTransition(
+  environment: Environment,
+  runtime: RuntimeIdentity,
+  identity: ControllerIdentity,
+  assignment: RoutineAssignment,
+  routine: PaperclipRoutineDetail,
+  runs: readonly RoutineRun[],
+  contract: GitHubTransitionRoutineContract,
+  fetchImplementation: FetchImplementation,
+  executeTransition: ManagedTransitionExecutor,
+): Promise<ControllerRuntimeResult> {
+  if (!githubTransitionRoutineMatches(routine, assignment, runtime, contract)) {
+    throw new ControllerRuntimeError("controller_routine_drift");
+  }
+  const trigger = routine.triggers[0];
+  const matchingRuns = runs.filter((run) => run.id === assignment.originRunId);
+  const routineRun = matchingRuns[0];
+  if (
+    trigger === undefined || matchingRuns.length !== 1 || routineRun === undefined ||
+    routineRun.companyId !== runtime.companyId || routineRun.routineId !== routine.id ||
+    routineRun.triggerId !== trigger.id || routineRun.source !== "webhook" ||
+    routineRun.status !== "issue_created" || routineRun.linkedIssueId !== assignment.id ||
+    routineRun.completedAt !== null
+  ) throw new ControllerRuntimeError("controller_routine_drift");
+  const message = parseTransitionMessage(routineRun.triggerPayload);
+  if (
+    routineRun.idempotencyKey !== message.idempotencyKey || message.company !== expectedCompanies[identity.name]
+  ) throw new ControllerRuntimeError("controller_transition_failed");
+  try {
+    await executeTransition(message, environment, runtime, fetchImplementation);
+  } catch (error) {
+    if (error instanceof PaperclipPublicationError) {
+      throw new ControllerRuntimeError("controller_transition_failed");
+    }
+    throw new ControllerRuntimeError("controller_transition_failed");
+  }
+  const evidenceDigest = minimizedEventDigest(message.payload);
+  const updated = await requestJson(
+    runtime,
+    "PATCH",
+    `/api/issues/${encodeURIComponent(assignment.id)}`,
+    fetchImplementation,
+    { status: "done", comment: `Verified GitHub evidence transitioned. Evidence digest: ${evidenceDigest}.` },
+  );
+  if (
+    !isRecord(updated) || updated["id"] !== assignment.id || updated["companyId"] !== runtime.companyId ||
+    updated["status"] !== "done"
+  ) throw new ControllerRuntimeError("controller_response_invalid");
+  return { schemaVersion: 1, status: "transitioned", contractDigest: digest(contract), evidenceDigest };
 }
 
 function reconciliationInput(
@@ -470,12 +646,41 @@ export const executeManagedReconciliation: ManagedReconciliationExecutor = async
   return audit.result;
 };
 
+export const executeManagedTransition: ManagedTransitionExecutor = async (
+  message,
+  environment,
+  runtime,
+  fetchImplementation,
+) => {
+  const databaseUrl = environment["DATABASE_URL"];
+  if (databaseUrl === undefined || databaseUrl.length < 10 || databaseUrl.length > 4_096 || /[\r\n]/u.test(databaseUrl)) {
+    throw new ControllerRuntimeError("controller_transition_failed");
+  }
+  const pool = new Pool({ connectionString: databaseUrl, max: 2 });
+  try {
+    const publisher = new AuthorizedPaperclipPublisher(
+      message.company,
+      runtime.companyId,
+      new PostgresTransitionAuthorizationStore(pool),
+      new PaperclipRestTransitionApi(environment, fetchImplementation),
+    );
+    await publisher.publish(message);
+  } finally {
+    try {
+      await pool.end();
+    } catch {
+      // Preserve the stable transition failure boundary after a broken pool.
+    }
+  }
+};
+
 export async function runControllerRuntime(
   environment: Environment,
   repositoryRoot: string,
   fetchImplementation: FetchImplementation = fetch,
   executeReconciliation: ManagedReconciliationExecutor = executeManagedReconciliation,
   now: () => Date = () => new Date(),
+  executeTransition: ManagedTransitionExecutor = executeManagedTransition,
 ): Promise<ControllerRuntimeResult> {
   const runtime = runtimeIdentity(environment);
   const identity = parseIdentity(
@@ -490,25 +695,36 @@ export async function runControllerRuntime(
     identity,
   );
   const contractDigest = digest(controllerContract);
-  const query = new URLSearchParams({
-    assigneeAgentId: runtime.agentId,
-    status: "todo,in_progress,in_review,blocked",
-    limit: "100",
-  });
-  const rawAssignments = await requestJson(
-    runtime,
-    "GET",
-    `/api/companies/${encodeURIComponent(runtime.companyId)}/issues?${query.toString()}`,
-    fetchImplementation,
-  );
-  if (!Array.isArray(rawAssignments)) throw new ControllerRuntimeError("controller_response_invalid");
-  if (rawAssignments.length === 0) return { schemaVersion: 1, status: "idle", contractDigest };
-  if (rawAssignments.length !== 1) throw new ControllerRuntimeError("controller_assignment_unsupported");
-  const assignment = parseAssignment(rawAssignments[0]);
+  let rawAssignment: unknown;
+  if (runtime.taskId !== null) {
+    rawAssignment = await requestJson(
+      runtime,
+      "GET",
+      `/api/issues/${encodeURIComponent(runtime.taskId)}`,
+      fetchImplementation,
+    );
+  } else {
+    const query = new URLSearchParams({
+      assigneeAgentId: runtime.agentId,
+      status: "todo,in_progress,in_review,blocked",
+      limit: "100",
+    });
+    const rawAssignments = await requestJson(
+      runtime,
+      "GET",
+      `/api/companies/${encodeURIComponent(runtime.companyId)}/issues?${query.toString()}`,
+      fetchImplementation,
+    );
+    if (!Array.isArray(rawAssignments)) throw new ControllerRuntimeError("controller_response_invalid");
+    if (rawAssignments.length === 0) return { schemaVersion: 1, status: "idle", contractDigest };
+    if (rawAssignments.length !== 1) throw new ControllerRuntimeError("controller_assignment_unsupported");
+    rawAssignment = rawAssignments[0];
+  }
+  const assignment = parseAssignment(rawAssignment);
   if (
     !isUuid(assignment.id) || assignment.companyId !== runtime.companyId || !isUuid(assignment.projectId) ||
     assignment.assigneeAgentId !== runtime.agentId || assignment.status !== "in_progress" ||
-    assignment.priority !== "low" || assignment.executionRunId !== runtime.runId ||
+    assignment.executionRunId !== runtime.runId ||
     assignment.originKind !== "routine_execution" || !isUuid(assignment.originId) || !isUuid(assignment.originRunId)
   ) throw new ControllerRuntimeError("controller_assignment_unsupported");
 
@@ -530,6 +746,29 @@ export async function runControllerRuntime(
     `/api/routines/${encodeURIComponent(assignment.originId)}`,
     fetchImplementation,
   ));
+  const runs = parseRoutineRuns(await requestJson(
+    runtime,
+    "GET",
+    `/api/routines/${encodeURIComponent(routine.id)}/runs?limit=50`,
+    fetchImplementation,
+  ));
+  const transitionContract = validateGitHubTransitionRoutineContract(await readJsonContract(
+    join(repositoryRoot, "routines", "github-transition.json"),
+    "controller_contract_invalid",
+  ));
+  if (routine.title === transitionContract.title || assignment.title === transitionContract.title) {
+    return executeGitHubTransition(
+      environment,
+      runtime,
+      identity,
+      assignment,
+      routine,
+      runs,
+      transitionContract,
+      fetchImplementation,
+      executeTransition,
+    );
+  }
   const trigger = routine.triggers[0];
   if (
     routine.id !== assignment.originId || routine.companyId !== runtime.companyId ||
@@ -540,16 +779,9 @@ export async function runControllerRuntime(
     routine.variables.length !== 0 || routine.triggers.length !== 1 || trigger === undefined || !isUuid(trigger.id) ||
     trigger.kind !== resolved.trigger.kind || trigger.label !== resolved.trigger.label ||
     trigger.enabled !== resolved.trigger.enabled || trigger.cronExpression !== resolved.trigger.cronExpression ||
-    trigger.timezone !== resolved.trigger.timezone || assignment.title !== resolved.title ||
+    trigger.timezone !== resolved.trigger.timezone || assignment.title !== resolved.title || assignment.priority !== "low" ||
     assignment.description !== resolved.description
   ) throw new ControllerRuntimeError("controller_routine_drift");
-
-  const runs = parseRoutineRuns(await requestJson(
-    runtime,
-    "GET",
-    `/api/routines/${encodeURIComponent(routine.id)}/runs?limit=50`,
-    fetchImplementation,
-  ));
   const matchingRuns = runs.filter((run) => run.id === assignment.originRunId);
   const routineRun = matchingRuns[0];
   if (

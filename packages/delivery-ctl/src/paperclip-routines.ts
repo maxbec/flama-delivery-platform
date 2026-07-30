@@ -107,6 +107,8 @@ export interface PaperclipRoutineDetail {
     readonly enabled: boolean;
     readonly cronExpression: string | null;
     readonly timezone: string | null;
+    readonly signingMode?: string | null;
+    readonly replayWindowSec?: number | null;
   }[];
 }
 
@@ -497,7 +499,11 @@ export class PaperclipRestRoutinesClient implements PaperclipRoutinesClient {
       if (!isRecord(trigger) || typeof trigger["id"] !== "string" || typeof trigger["kind"] !== "string" ||
         (trigger["label"] !== null && typeof trigger["label"] !== "string") || typeof trigger["enabled"] !== "boolean" ||
         (trigger["cronExpression"] !== null && typeof trigger["cronExpression"] !== "string") ||
-        (trigger["timezone"] !== null && typeof trigger["timezone"] !== "string")) {
+        (trigger["timezone"] !== null && typeof trigger["timezone"] !== "string") ||
+        (trigger["signingMode"] !== undefined && trigger["signingMode"] !== null &&
+          typeof trigger["signingMode"] !== "string") ||
+        (trigger["replayWindowSec"] !== undefined && trigger["replayWindowSec"] !== null &&
+          !Number.isSafeInteger(trigger["replayWindowSec"]))) {
         throw new PaperclipRoutinesError("paperclip_response_invalid");
       }
     }

@@ -161,7 +161,8 @@ Node.js 26 as the baseline:
 - Vitest unit tests and Testcontainers integration tests against PostgreSQL 18.
 
 The bridge remains undeployed until its Phase 2 deployment is separately
-approved with scoped identities and private mappings. Provider credentials,
+approved with a one-routine HMAC trigger secret and private mappings. It has no
+Paperclip account or case API credential. Provider credentials,
 GitHub App installation, and production authority are not implied by this
 runtime choice.
 

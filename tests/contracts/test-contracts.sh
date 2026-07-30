@@ -35,6 +35,7 @@ required_schemas=(
   paperclip-controllers-result.schema.json
   paperclip-foundation-input.schema.json
   paperclip-foundation-result.schema.json
+  paperclip-github-transition-routine.schema.json
   paperclip-transition-authorization-input.schema.json
   paperclip-transition-authorization-result.schema.json
   paperclip-lifecycle.schema.json
@@ -61,6 +62,14 @@ for schema in "${required_schemas[@]}"; do
     (.required | type == "array" and length > 0)
   ' "$path" >/dev/null
 done
+
+jq -e '
+  .schemaVersion == 1 and
+  .key == "flama-github-transition-v1" and
+  .trigger.signingMode == "hmac_sha256" and
+  .trigger.replayWindowSeconds == 300 and
+  .execution.mode == "paperclip-native"
+' "$ROOT_DIR/routines/github-transition.json" >/dev/null
 
 jq -e '
   .profiles.fast.requiredChecks == ["Branch Guard", "Paperclip Preflight", "Final Gate"] and

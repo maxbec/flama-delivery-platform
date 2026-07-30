@@ -12,6 +12,11 @@ bash "$ROOT_DIR/scripts/build-bridge-bundle.sh" "$SECOND"
 diff -rq "$FIRST" "$SECOND"
 [[ -x "$FIRST/index.js" ]]
 [[ "$(jq -r '.type' "$FIRST/package.json")" == "module" ]]
+grep -Fq 'PAPERCLIP_ROUTINE_WEBHOOK_SECRET' "$FIRST/index.js"
+if grep -Eq 'PAPERCLIP_API_KEY|/api/cases/' "$FIRST/index.js"; then
+  echo 'Bridge bundle contains forbidden Paperclip account or case API capability' >&2
+  exit 1
+fi
 if output=$(env -i PATH="$PATH" NODE_ENV=production node "$FIRST/index.js" 2>&1); then
   echo 'Bridge bundle unexpectedly started without injected configuration' >&2
   exit 1

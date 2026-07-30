@@ -14,7 +14,8 @@ const expectedControllers: Readonly<Record<CompanyName, ControllerName>> = {
 };
 
 const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
-const controllerEntry = "dist/services/controller/src/main.js";
+const controllerEntry = "bin/controller/index.js";
+const legacyControllerEntry = "dist/services/controller/src/main.js";
 
 export interface PaperclipControllersInput {
   readonly schemaVersion: 1;
@@ -53,7 +54,7 @@ interface ControllerSpec {
   };
   readonly metadata: {
     readonly managedBy: "flama-delivery-platform";
-    readonly topologyVersion: 1;
+    readonly topologyVersion: 2;
     readonly contractDigest: string;
   };
 }
@@ -83,6 +84,7 @@ export interface PaperclipControllersClient {
   listAgents(companyId: string): Promise<readonly PaperclipAgent[]>;
   listSkills(companyId: string): Promise<readonly { readonly key: string; readonly name: string }[]>;
   createAgent(companyId: string, agent: ControllerSpec): Promise<PaperclipAgent>;
+  updateAgent(agentId: string, agent: Pick<ControllerSpec, "adapterConfig" | "metadata">): Promise<PaperclipAgent>;
   getAgent(agentId: string): Promise<PaperclipAgent>;
   getAgentSkills(agentId: string): Promise<{
     readonly adapterType: string;
@@ -97,7 +99,7 @@ export interface PaperclipControllersResult {
   readonly schemaVersion: 1;
   readonly status: "planned" | "applied";
   readonly controller: ControllerName;
-  readonly disposition: "planned" | "created" | "reused";
+  readonly disposition: "planned" | "created" | "migrated" | "reused";
   readonly initialStatus: "paused";
   readonly budgetMonthlyCents: 0;
   readonly contractDigest: string;
@@ -182,7 +184,7 @@ function spec(
     permissions: { canCreateAgents: false, canCreateSkills: false, canAssignTasks: false },
     metadata: {
       managedBy: "flama-delivery-platform",
-      topologyVersion: 1,
+      topologyVersion: 2,
       contractDigest: digest(contract),
     },
   };
@@ -198,10 +200,23 @@ function matches(agent: PaperclipAgent, companyId: string, expected: ControllerS
     permissions["canAssignTasks"] === false && sameJson(agent.metadata ?? {}, expected.metadata);
 }
 
+function matchesLegacySourceEntrypoint(
+  agent: PaperclipAgent,
+  companyId: string,
+  expected: ControllerSpec,
+): boolean {
+  const legacy = {
+    ...expected,
+    adapterConfig: { ...expected.adapterConfig, args: [legacyControllerEntry] },
+    metadata: { ...expected.metadata, topologyVersion: 1 },
+  } as unknown as ControllerSpec;
+  return matches(agent, companyId, legacy);
+}
+
 function result(
   status: "planned" | "applied",
   expected: ControllerSpec,
-  disposition: "planned" | "created" | "reused",
+  disposition: "planned" | "created" | "migrated" | "reused",
 ): PaperclipControllersResult {
   return {
     schemaVersion: 1,
@@ -242,7 +257,7 @@ export async function applyPaperclipControllers(
   if (named.length > 1) throw new PaperclipControllersError("paperclip_agent_drift");
 
   let agent: PaperclipAgent;
-  let disposition: "created" | "reused";
+  let disposition: "created" | "migrated" | "reused";
   const existing = named[0];
   if (existing === undefined) {
     if (company.requireBoardApprovalForNewAgents === true) {
@@ -255,6 +270,18 @@ export async function applyPaperclipControllers(
     disposition = "reused";
   }
 
+  if (!matches(agent, input.company.id, expected) && matchesLegacySourceEntrypoint(agent, input.company.id, expected)) {
+    if (agent.status === "idle") agent = await client.pauseAgent(agent.id);
+    if (agent.status !== "paused") throw new PaperclipControllersError("paperclip_agent_drift");
+    agent = await client.updateAgent(agent.id, {
+      adapterConfig: {
+        ...expected.adapterConfig,
+        paperclipSkillSync: { desiredSkills: expected.desiredSkills },
+      } as unknown as ControllerSpec["adapterConfig"],
+      metadata: expected.metadata,
+    });
+    disposition = "migrated";
+  }
   if (!matches(agent, input.company.id, expected)) {
     throw new PaperclipControllersError("paperclip_agent_drift");
   }
@@ -300,7 +327,7 @@ export class PaperclipRestControllersClient implements PaperclipControllersClien
     this.#token = token;
   }
 
-  async #request(method: "GET" | "POST", path: string, body?: unknown): Promise<unknown> {
+  async #request(method: "GET" | "POST" | "PATCH", path: string, body?: unknown): Promise<unknown> {
     let response: Response;
     try {
       response = await this.fetchImplementation(`${this.#apiBase}${path}`, {
@@ -370,6 +397,16 @@ export class PaperclipRestControllersClient implements PaperclipControllersClien
 
   async createAgent(companyId: string, agent: ControllerSpec): Promise<PaperclipAgent> {
     return this.#agent(await this.#request("POST", `/api/companies/${encodeURIComponent(companyId)}/agents`, agent));
+  }
+
+  async updateAgent(
+    agentId: string,
+    agent: Pick<ControllerSpec, "adapterConfig" | "metadata">,
+  ): Promise<PaperclipAgent> {
+    return this.#agent(await this.#request("PATCH", `/api/agents/${encodeURIComponent(agentId)}`, {
+      ...agent,
+      replaceAdapterConfig: true,
+    }));
   }
 
   async getAgent(agentId: string): Promise<PaperclipAgent> {

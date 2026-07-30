@@ -130,11 +130,17 @@ export async function processNextTransition(
       "paperclip_response_invalid",
       "paperclip_state_conflict",
       "paperclip_unavailable",
+      "routine_identity_unavailable",
+      "routine_response_invalid",
+      "routine_unavailable",
     ]);
     const infrastructureCodes = new Set([
       "paperclip_identity_unavailable",
       "paperclip_response_invalid",
       "paperclip_unavailable",
+      "routine_identity_unavailable",
+      "routine_response_invalid",
+      "routine_unavailable",
     ]);
     const reasonCode = publicationCode !== undefined && recognizedCodes.has(publicationCode)
       ? publicationCode

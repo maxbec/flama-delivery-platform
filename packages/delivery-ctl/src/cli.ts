@@ -158,6 +158,7 @@ function isSchemaName(value: string | undefined): value is SchemaName {
     "paperclip-controllers-result",
     "paperclip-foundation-input",
     "paperclip-foundation-result",
+    "paperclip-github-transition-routine",
     "paperclip-transition-authorization-input",
     "paperclip-transition-authorization-result",
     "paperclip-lifecycle",

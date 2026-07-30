@@ -1,23 +1,30 @@
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import { inspect } from "node:util";
 import { describe, expect, it, vi } from "vitest";
 import type { PaperclipTransitionMessage } from "./processor.js";
 import {
-  AuthorizedPaperclipPublisher,
+  AuthorizedRoutineWebhookPublisher,
   PaperclipPublicationError,
-  PaperclipRestTransitionApi,
+  PaperclipSignedRoutineWebhookApi,
   minimizedEventDigest,
-  parsePaperclipPublisherConfig,
+  parsePaperclipRoutineWebhookConfig,
   type AuthorizedTransition,
+  type PaperclipRoutineWebhookApi,
+  type TransitionAuthorizationStore,
+} from "./paperclip-publisher.js";
+import {
+  AuthorizedPaperclipPublisher,
+  PaperclipRestTransitionApi,
+  parsePaperclipPublisherConfig,
   type PaperclipCaseDetail,
   type PaperclipTransitionApi,
   type PaperclipTransitionEvent,
-  type TransitionAuthorizationStore,
-} from "./paperclip-publisher.js";
+} from "../../controller/src/paperclip-transition.js";
 
 const companyId = "10000000-0000-4000-8000-000000000001";
 const caseId = "20000000-0000-4000-8000-000000000002";
 const pipelineId = "30000000-0000-4000-8000-000000000003";
+const heartbeatRunId = "40000000-0000-4000-8000-000000000004";
 const sha = "a".repeat(40);
 
 function featureMessage(headRef = "feature/verified-change"): PaperclipTransitionMessage {
@@ -112,6 +119,14 @@ class MemoryPaperclipApi implements PaperclipTransitionApi {
     this.calls.push(`transition:${requestedCaseId}`);
     this.transitions.push({ caseId: requestedCaseId, input });
     this.detail = { ...this.detail, stageKey: input.toStageKey, version: input.expectedVersion + 1 };
+  }
+}
+
+class MemoryRoutineWebhookApi implements PaperclipRoutineWebhookApi {
+  readonly messages: PaperclipTransitionMessage[] = [];
+
+  async fire(message: PaperclipTransitionMessage): Promise<void> {
+    this.messages.push(message);
   }
 }
 
@@ -236,9 +251,14 @@ describe("authorized Paperclip publication", () => {
     expect(() => parsePaperclipPublisherConfig({
       PAPERCLIP_API_URL: sensitive,
       PAPERCLIP_API_KEY: "x".repeat(32),
+      PAPERCLIP_RUN_ID: heartbeatRunId,
     })).toThrowError(new PaperclipPublicationError("paperclip_identity_unavailable"));
     try {
-      parsePaperclipPublisherConfig({ PAPERCLIP_API_URL: sensitive, PAPERCLIP_API_KEY: "x".repeat(32) });
+      parsePaperclipPublisherConfig({
+        PAPERCLIP_API_URL: sensitive,
+        PAPERCLIP_API_KEY: "x".repeat(32),
+        PAPERCLIP_RUN_ID: heartbeatRunId,
+      });
     } catch (error) {
       expect(String(error)).not.toContain(sensitive);
     }
@@ -249,6 +269,7 @@ describe("authorized Paperclip publication", () => {
     const config = parsePaperclipPublisherConfig({
       PAPERCLIP_API_URL: "https://paperclip.example.invalid",
       PAPERCLIP_API_KEY: apiKey,
+      PAPERCLIP_RUN_ID: heartbeatRunId,
     });
 
     expect(inspect(config)).not.toContain(apiKey);
@@ -260,6 +281,7 @@ describe("Paperclip REST transition API", () => {
   const environment = {
     PAPERCLIP_API_URL: "https://paperclip.example.invalid",
     PAPERCLIP_API_KEY: "test-only-paperclip-key-value",
+    PAPERCLIP_RUN_ID: heartbeatRunId,
   };
 
   it("validates case identity and uses only the documented transition endpoint", async () => {
@@ -299,6 +321,7 @@ describe("Paperclip REST transition API", () => {
     expect(requests[1]?.init?.headers).toMatchObject({
       authorization: `Bearer ${environment.PAPERCLIP_API_KEY}`,
       "content-type": "application/json",
+      "x-paperclip-run-id": heartbeatRunId,
     });
   });
 
@@ -349,5 +372,72 @@ describe("Paperclip REST transition API", () => {
       expect(error).toMatchObject({ code: "paperclip_unavailable" });
       expect(String(error)).not.toContain("sensitive-response-value");
     }
+  });
+});
+
+describe("Paperclip native routine webhook publication", () => {
+  it("delivers an authorized event without marking the transition complete", async () => {
+    const message = featureMessage();
+    const store = new MemoryAuthorizationStore(authorization(message));
+    const webhook = new MemoryRoutineWebhookApi();
+    const publisher = new AuthorizedRoutineWebhookPublisher("Private", store, webhook);
+
+    await expect(publisher.publish(message)).resolves.toBeUndefined();
+
+    expect(webhook.messages).toEqual([message]);
+    expect(store.marked).toEqual([]);
+  });
+
+  it("signs the exact minimized payload for one scoped routine trigger", async () => {
+    const message = featureMessage();
+    const secret = "routine-webhook-secret-value-1234567890";
+    const now = new Date("2026-07-30T10:00:00.000Z");
+    const requests: Array<{ readonly url: string; readonly init: RequestInit | undefined }> = [];
+    const api = new PaperclipSignedRoutineWebhookApi({
+      PAPERCLIP_ROUTINE_WEBHOOK_URL:
+        "http://127.0.0.1:3100/api/routine-triggers/public/routine_public_123456/fire",
+      PAPERCLIP_ROUTINE_WEBHOOK_SECRET: secret,
+    }, async (input, init) => {
+      requests.push({ url: String(input), init });
+      const payload = JSON.parse(String(init?.body)) as unknown;
+      return Response.json({
+        source: "webhook",
+        status: "issue_created",
+        idempotencyKey: message.idempotencyKey,
+        linkedIssueId: "50000000-0000-4000-8000-000000000005",
+        triggerPayload: payload,
+      }, { status: 202 });
+    }, () => now);
+
+    await expect(api.fire(message)).resolves.toBeUndefined();
+
+    const request = requests[0];
+    expect(request?.url).toBe(
+      "http://127.0.0.1:3100/api/routine-triggers/public/routine_public_123456/fire",
+    );
+    const body = String(request?.init?.body);
+    const headers = new Headers(request?.init?.headers);
+    const timestamp = String(now.getTime());
+    expect(headers.get("authorization")).toBeNull();
+    expect(headers.get("idempotency-key")).toBe(message.idempotencyKey);
+    expect(headers.get("x-paperclip-timestamp")).toBe(timestamp);
+    expect(headers.get("x-paperclip-signature")).toBe(
+      `sha256=${createHmac("sha256", secret).update(`${timestamp}.`).update(body).digest("hex")}`,
+    );
+  });
+
+  it("redacts the routine secret and rejects unscoped URLs", () => {
+    const secret = "routine-webhook-secret-value-1234567890";
+    const config = parsePaperclipRoutineWebhookConfig({
+      PAPERCLIP_ROUTINE_WEBHOOK_URL:
+        "https://paperclip.example.invalid/api/routine-triggers/public/routine_public_123456/fire",
+      PAPERCLIP_ROUTINE_WEBHOOK_SECRET: secret,
+    });
+    expect(inspect(config)).not.toContain(secret);
+    expect(JSON.stringify(config)).not.toContain(secret);
+    expect(() => parsePaperclipRoutineWebhookConfig({
+      PAPERCLIP_ROUTINE_WEBHOOK_URL: "https://paperclip.example.invalid/api/cases/anything",
+      PAPERCLIP_ROUTINE_WEBHOOK_SECRET: secret,
+    })).toThrowError(new PaperclipPublicationError("routine_identity_unavailable"));
   });
 });

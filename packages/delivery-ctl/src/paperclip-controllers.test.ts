@@ -36,6 +36,7 @@ class MemoryControllersClient implements PaperclipControllersClient {
   agent: PaperclipAgent | undefined;
   createCalls = 0;
   pauseCalls = 0;
+  updateCalls = 0;
   requireApproval = false;
   readonly skillKey = "flama-paperclip-delivery--managed";
 
@@ -76,6 +77,16 @@ class MemoryControllersClient implements PaperclipControllersClient {
 
   async getAgent(): Promise<PaperclipAgent> {
     if (this.agent === undefined) throw new Error("missing");
+    return this.agent;
+  }
+
+  async updateAgent(
+    _agentId: string,
+    patch: Parameters<PaperclipControllersClient["updateAgent"]>[1],
+  ): Promise<PaperclipAgent> {
+    if (this.agent === undefined) throw new Error("missing");
+    this.updateCalls += 1;
+    this.agent = { ...this.agent, ...patch };
     return this.agent;
   }
 
@@ -143,6 +154,33 @@ describe("Paperclip delivery-controller provisioning", () => {
     await expect(applyPaperclipControllers(input(), await contract(), client)).rejects.toEqual(
       expect.objectContaining<Partial<PaperclipControllersError>>({ code: "paperclip_agent_drift" }),
     );
+  });
+
+  it("migrates only the exact paused source-checkout controller to the immutable bundle", async () => {
+    const client = new MemoryControllersClient();
+    const controllerContract = await contract();
+    await applyPaperclipControllers(input(), controllerContract, client);
+    if (client.agent === undefined) throw new Error("test setup failed");
+    client.agent = {
+      ...client.agent,
+      adapterConfig: {
+        ...client.agent.adapterConfig,
+        args: ["dist/services/controller/src/main.js"],
+      },
+      metadata: {
+        ...client.agent.metadata,
+        topologyVersion: 1,
+      },
+    };
+
+    await expect(applyPaperclipControllers(input(), controllerContract, client)).resolves.toMatchObject({
+      disposition: "migrated",
+    });
+    expect(client.updateCalls).toBe(1);
+    expect(client.agent).toMatchObject({
+      adapterConfig: { args: ["bin/controller/index.js"] },
+      metadata: { topologyVersion: 2 },
+    });
   });
 
   it("suppresses credentials and rejected upstream bodies", async () => {

@@ -44,9 +44,12 @@ Implemented and verified:
   private bridge binding, while emitting no repository or object identifiers.
 - The bridge publisher now requires an exact, expiring controller authorization
   tied to the minimized-event digest, live repository-binding digest, company,
-  case, pipeline, and a database-constrained lifecycle edge. It validates the
-  live Paperclip company/pipeline/stage/version before and after the documented
-  transition call and uses paginated event history for crash-safe replay.
+  case, pipeline, and a database-constrained lifecycle edge. It can only fire
+  one exact timestamped-HMAC Paperclip routine webhook and holds no Paperclip
+  account, board token, agent API key, or case API access. The native company
+  controller revalidates the authorization and live company/pipeline/stage/
+  version, performs the documented transition under its current Paperclip run
+  identity, and uses paginated event history for crash-safe replay.
 - GitHub evidence minimization now retains the head/base branch and trusted
   workflow/check identity fields needed for deterministic routing, while
   continuing to discard bodies, sender records, and unknown fields.
@@ -84,6 +87,17 @@ Implemented and verified:
   the fixed read-only audit. Arbitrary assignments and manual or drifted runs
   fail closed. Detailed evidence remains create-only mode `0600` outside the
   checkout; the issue receives only the audit status and evidence digest.
+- A second versioned routine contract accepts one minimized bridge delivery
+  through Paperclip's released public routine-trigger endpoint using
+  `hmac_sha256`, a five-minute replay window, durable idempotency, and
+  `always_enqueue`. The resulting issue contains no free-form webhook body; the
+  native controller reads the exact stored trigger payload, validates the
+  linked routine run, and emits only the evidence digest after transition.
+- The immutable Node.js 26 platform archive now includes the company-controller
+  executable. Controller provisioning points to that pinned release entrypoint
+  instead of a mutable source checkout or Paperclip package modification. Its
+  installer can migrate only the exact paused, platform-managed topology-v1
+  source entrypoint; any other agent configuration drift still fails closed.
 - The same native controller run now reads only its own company, identity, and
   managed lifecycle metadata, emits a digest-bound governance attestation beside
   the reconciliation evidence in the protected mode-0600 evidence directory,
@@ -95,9 +109,10 @@ Still pending:
 - One company controller remains behind Paperclip's native board approval.
 - Selecting each repository's project/workspace mapping and applying private
   bindings remains pending; the command intentionally does not guess mappings.
-- Live bridge deployment, scoped machine identity injection, and controller
-  authorization writes remain pending explicit deployment authority and the
-  private repository/case mappings. The runtime does not infer those mappings.
+- Live bridge deployment, routine-trigger secret injection, and controller
+  authorization writes remain pending explicit deployment authority, Infisical
+  mapping, and the private repository/case mappings. The runtime does not infer
+  those mappings. No Paperclip reader or machine account is required.
 - Live governance collection remains pending three owner-scoped read-only
   GitHub App identities, native attestations from all three company controllers,
   and a private repository/profile selector file. No Paperclip human account or
@@ -105,8 +120,8 @@ Still pending:
   until generated workflows emit the bounded signal required for an actual rate.
 - Routine application remains pending the authoritative project selection and
   the remaining controller's native board approval. Activation remains gated
-  on the deployed bridge, private bindings, scoped runtime identity injection,
-  and an explicit production authorization.
+  on the deployed bridge, private bindings, the HMAC trigger secret stored in
+  Infisical, and an explicit production authorization.
 - Authoritative GitHub missed-event discovery remains pending the later scoped
   GitHub App identities and private repository selectors. The current audit
   intentionally does not guess either input or replay dead letters.

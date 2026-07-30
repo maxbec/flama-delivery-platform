@@ -1,11 +1,11 @@
-import { createHash } from "node:crypto";
+import { createHash, createHmac } from "node:crypto";
 import type { Pool } from "pg";
 import { SecretValue } from "./config.js";
 import { transitionKindForMinimizedEvent } from "./github-event.js";
 import type { PaperclipPublisher, PaperclipTransitionMessage } from "./processor.js";
 
-type CompanyName = "Private" | "// Navigaite" | "Edilio";
-type ControllerName =
+export type CompanyName = "Private" | "// Navigaite" | "Edilio";
+export type ControllerName =
   | "maxbec-delivery-controller"
   | "navigaite-delivery-controller"
   | "edilio-delivery-controller";
@@ -41,7 +41,10 @@ export type PaperclipPublicationErrorCode =
   | "paperclip_response_invalid"
   | "paperclip_scope_mismatch"
   | "paperclip_state_conflict"
-  | "paperclip_unavailable";
+  | "paperclip_unavailable"
+  | "routine_identity_unavailable"
+  | "routine_response_invalid"
+  | "routine_unavailable";
 
 export class PaperclipPublicationError extends Error {
   constructor(readonly code: PaperclipPublicationErrorCode) {
@@ -172,31 +175,8 @@ export class PostgresTransitionAuthorizationStore implements TransitionAuthoriza
   }
 }
 
-export interface PaperclipCaseDetail {
-  readonly caseId: string;
-  readonly companyId: string;
-  readonly pipelineId: string;
-  readonly pipelineKey: string;
-  readonly stageKey: string;
-  readonly version: number;
-  readonly terminalKind: string | null;
-}
-
-export interface PaperclipTransitionEvent {
-  readonly type: string;
-  readonly fromStageKey: string | null;
-  readonly toStageKey: string | null;
-  readonly reason: string | null;
-}
-
-export interface PaperclipTransitionApi {
-  getCase(caseId: string): Promise<PaperclipCaseDetail>;
-  listCaseEvents(caseId: string): Promise<readonly PaperclipTransitionEvent[]>;
-  transitionCase(caseId: string, input: {
-    readonly toStageKey: string;
-    readonly expectedVersion: number;
-    readonly reason: string;
-  }): Promise<void>;
+export interface PaperclipRoutineWebhookApi {
+  fire(message: PaperclipTransitionMessage): Promise<void>;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -219,16 +199,12 @@ export function minimizedEventDigest(value: JsonRecord): string {
   return `sha256:${createHash("sha256").update(JSON.stringify(stableValue(value))).digest("hex")}`;
 }
 
-function reasonFor(idempotencyKey: string): string {
-  return `flama-external:sha256:${createHash("sha256").update(idempotencyKey).digest("hex")}`;
-}
-
 function recordAt(value: JsonRecord, key: string): JsonRecord | undefined {
   const nested = value[key];
   return isRecord(nested) ? nested : undefined;
 }
 
-function validEventEvidence(message: PaperclipTransitionMessage, authorization: AuthorizedTransition): boolean {
+export function validEventEvidence(message: PaperclipTransitionMessage, authorization: AuthorizedTransition): boolean {
   const payload = message.payload;
   const eventName = payload["eventName"];
   const repository = payload["repository"];
@@ -271,7 +247,11 @@ function validEventEvidence(message: PaperclipTransitionMessage, authorization: 
   return false;
 }
 
-function validAuthorization(message: PaperclipTransitionMessage, authorization: AuthorizedTransition, digest: string): boolean {
+export function validAuthorization(
+  message: PaperclipTransitionMessage,
+  authorization: AuthorizedTransition,
+  digest: string,
+): boolean {
   const allowedEdge = [
     authorization.pipelineKey,
     authorization.transitionKind,
@@ -287,26 +267,13 @@ function validAuthorization(message: PaperclipTransitionMessage, authorization: 
     uuidPattern.test(authorization.pipelineId);
 }
 
-function hasTransitionEvent(
-  events: readonly PaperclipTransitionEvent[],
-  authorization: AuthorizedTransition,
-  reason: string,
-): boolean {
-  return events.some((event) => event.type === "transitioned" &&
-    event.fromStageKey === authorization.fromStageKey && event.toStageKey === authorization.toStageKey &&
-    event.reason === reason);
-}
-
-export class AuthorizedPaperclipPublisher implements PaperclipPublisher {
+export class AuthorizedRoutineWebhookPublisher implements PaperclipPublisher {
   constructor(
     private readonly company: CompanyName,
-    private readonly companyId: string,
     private readonly authorizations: TransitionAuthorizationStore,
-    private readonly api: PaperclipTransitionApi,
+    private readonly webhook: PaperclipRoutineWebhookApi,
     private readonly now: () => Date = () => new Date(),
-  ) {
-    if (!uuidPattern.test(companyId)) throw new PaperclipPublicationError("paperclip_identity_unavailable");
-  }
+  ) {}
 
   async publish(message: PaperclipTransitionMessage): Promise<void> {
     const expectedKey = `github:${message.deliveryId}:${message.transitionKind}`;
@@ -323,67 +290,36 @@ export class AuthorizedPaperclipPublisher implements PaperclipPublisher {
       throw new PaperclipPublicationError("event_evidence_invalid");
     }
     if (authorization.alreadyPublished) return;
-
-    const reason = reasonFor(message.idempotencyKey);
-    const detail = await this.api.getCase(authorization.caseId);
-    if (
-      detail.caseId !== authorization.caseId || detail.companyId !== this.companyId ||
-      detail.pipelineId !== authorization.pipelineId || detail.pipelineKey !== authorization.pipelineKey ||
-      detail.terminalKind !== null
-    ) throw new PaperclipPublicationError("paperclip_scope_mismatch");
-
-    if (detail.stageKey !== authorization.fromStageKey) {
-      const events = await this.api.listCaseEvents(authorization.caseId);
-      if (!hasTransitionEvent(events, authorization, reason)) {
-        throw new PaperclipPublicationError("paperclip_state_conflict");
-      }
-      await this.authorizations.markPublished(message.idempotencyKey, this.now());
-      return;
-    }
-
-    await this.api.transitionCase(authorization.caseId, {
-      toStageKey: authorization.toStageKey,
-      expectedVersion: detail.version,
-      reason,
-    });
-    const transitioned = await this.api.getCase(authorization.caseId);
-    if (
-      transitioned.caseId !== authorization.caseId || transitioned.companyId !== this.companyId ||
-      transitioned.pipelineId !== authorization.pipelineId || transitioned.pipelineKey !== authorization.pipelineKey ||
-      transitioned.version <= detail.version
-    ) throw new PaperclipPublicationError("paperclip_scope_mismatch");
-    if (transitioned.stageKey !== authorization.toStageKey) {
-      const events = await this.api.listCaseEvents(authorization.caseId);
-      if (!hasTransitionEvent(events, authorization, reason)) {
-        throw new PaperclipPublicationError("paperclip_state_conflict");
-      }
-    }
-    await this.authorizations.markPublished(message.idempotencyKey, this.now());
+    await this.webhook.fire(message);
   }
 }
 
-interface PaperclipPublisherConfig {
-  readonly apiBase: string;
-  readonly apiKey: SecretValue;
+interface PaperclipRoutineWebhookConfig {
+  readonly url: string;
+  readonly secret: SecretValue;
 }
 
-export function parsePaperclipPublisherConfig(environment: Readonly<Record<string, string | undefined>>): PaperclipPublisherConfig {
-  const rawBase = environment["PAPERCLIP_API_URL"];
-  const rawKey = environment["PAPERCLIP_API_KEY"];
-  if (rawBase === undefined || rawKey === undefined || rawKey.length < 20 || rawKey.length > 4_096 || /[\r\n]/u.test(rawKey)) {
-    throw new PaperclipPublicationError("paperclip_identity_unavailable");
-  }
+export function parsePaperclipRoutineWebhookConfig(
+  environment: Readonly<Record<string, string | undefined>>,
+): PaperclipRoutineWebhookConfig {
+  const rawUrl = environment["PAPERCLIP_ROUTINE_WEBHOOK_URL"];
+  const rawSecret = environment["PAPERCLIP_ROUTINE_WEBHOOK_SECRET"];
+  if (
+    rawUrl === undefined || rawSecret === undefined || rawSecret.length < 32 || rawSecret.length > 4_096 ||
+    /[\r\n]/u.test(rawSecret)
+  ) throw new PaperclipPublicationError("routine_identity_unavailable");
   let url: URL;
   try {
-    url = new URL(rawBase);
+    url = new URL(rawUrl);
   } catch {
-    throw new PaperclipPublicationError("paperclip_identity_unavailable");
+    throw new PaperclipPublicationError("routine_identity_unavailable");
   }
   const localHttp = url.protocol === "http:" && ["127.0.0.1", "localhost", "::1", "[::1]"].includes(url.hostname);
-  if ((url.protocol !== "https:" && !localHttp) || url.username || url.password || url.search || url.hash) {
-    throw new PaperclipPublicationError("paperclip_identity_unavailable");
-  }
-  return { apiBase: url.toString().replace(/\/+$/u, ""), apiKey: new SecretValue(rawKey) };
+  if (
+    (url.protocol !== "https:" && !localHttp) || url.username || url.password || url.search || url.hash ||
+    !/^\/api\/routine-triggers\/public\/[A-Za-z0-9_-]{8,255}\/fire$/u.test(url.pathname)
+  ) throw new PaperclipPublicationError("routine_identity_unavailable");
+  return { url: url.toString(), secret: new SecretValue(rawSecret) };
 }
 
 async function boundedJson(response: Response): Promise<unknown> {
@@ -414,121 +350,63 @@ async function boundedJson(response: Response): Promise<unknown> {
   }
 }
 
-export class PaperclipRestTransitionApi implements PaperclipTransitionApi {
-  readonly #apiBase: string;
-  readonly #apiKey: SecretValue;
+export class PaperclipSignedRoutineWebhookApi implements PaperclipRoutineWebhookApi {
+  readonly #url: string;
+  readonly #secret: SecretValue;
 
   constructor(
     environment: Readonly<Record<string, string | undefined>>,
     private readonly fetchImplementation: FetchImplementation = fetch,
+    private readonly now: () => Date = () => new Date(),
   ) {
-    const config = parsePaperclipPublisherConfig(environment);
-    this.#apiBase = config.apiBase;
-    this.#apiKey = config.apiKey;
+    const config = parsePaperclipRoutineWebhookConfig(environment);
+    this.#url = config.url;
+    this.#secret = config.secret;
   }
 
-  async #request(path: string, init: RequestInit = {}): Promise<unknown> {
+  async fire(message: PaperclipTransitionMessage): Promise<void> {
+    const body = JSON.stringify({ schemaVersion: 1, message });
+    const timestamp = String(this.now().getTime());
+    const hmac = createHmac("sha256", this.#secret.reveal())
+      .update(`${timestamp}.`)
+      .update(body)
+      .digest("hex");
     let response: Response;
     try {
-      response = await this.fetchImplementation(`${this.#apiBase}${path}`, {
-        ...init,
+      response = await this.fetchImplementation(this.#url, {
+        method: "POST",
         headers: {
           accept: "application/json",
-          authorization: `Bearer ${this.#apiKey.reveal()}`,
-          ...(init.body === undefined ? {} : { "content-type": "application/json" }),
+          "content-type": "application/json",
+          "idempotency-key": message.idempotencyKey,
+          "x-paperclip-signature": `sha256=${hmac}`,
+          "x-paperclip-timestamp": timestamp,
         },
+        body,
+        redirect: "error",
         signal: AbortSignal.timeout(15_000),
       });
     } catch {
-      throw new PaperclipPublicationError("paperclip_unavailable");
+      throw new PaperclipPublicationError("routine_unavailable");
     }
-    if (!response.ok) throw new PaperclipPublicationError("paperclip_unavailable");
+    if (response.status !== 202) {
+      await response.body?.cancel();
+      throw new PaperclipPublicationError("routine_unavailable");
+    }
     const contentType = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
     if (contentType !== "application/json") {
-      throw new PaperclipPublicationError("paperclip_response_invalid");
+      await response.body?.cancel();
+      throw new PaperclipPublicationError("routine_response_invalid");
     }
-    return boundedJson(response);
-  }
-
-  async getCase(caseId: string): Promise<PaperclipCaseDetail> {
-    if (!uuidPattern.test(caseId)) throw new PaperclipPublicationError("paperclip_scope_mismatch");
-    const value = await this.#request(`/api/cases/${encodeURIComponent(caseId)}`);
-    if (!isRecord(value) || !isRecord(value["case"]) || !isRecord(value["stage"]) || !isRecord(value["pipeline"])) {
-      throw new PaperclipPublicationError("paperclip_response_invalid");
-    }
-    const caseValue = value["case"];
-    const stage = value["stage"];
-    const pipeline = value["pipeline"];
-    const detail: PaperclipCaseDetail = {
-      caseId: typeof caseValue["id"] === "string" ? caseValue["id"] : "",
-      companyId: typeof caseValue["companyId"] === "string" ? caseValue["companyId"] : "",
-      pipelineId: typeof caseValue["pipelineId"] === "string" ? caseValue["pipelineId"] : "",
-      pipelineKey: typeof pipeline["key"] === "string" ? pipeline["key"] : "",
-      stageKey: typeof stage["key"] === "string" ? stage["key"] : "",
-      version: typeof caseValue["version"] === "number" ? caseValue["version"] : 0,
-      terminalKind: caseValue["terminalKind"] === null || typeof caseValue["terminalKind"] === "string"
-        ? caseValue["terminalKind"]
-        : "invalid",
-    };
+    const value = await boundedJson(response);
     if (
-      !uuidPattern.test(detail.caseId) || !uuidPattern.test(detail.companyId) ||
-      !uuidPattern.test(detail.pipelineId) || pipeline["id"] !== detail.pipelineId ||
-      pipeline["companyId"] !== detail.companyId ||
-      !/^[a-z][a-z0-9-]{0,119}$/u.test(detail.pipelineKey) ||
-      !/^[a-z][a-z0-9_]{0,119}$/u.test(detail.stageKey) ||
-      !Number.isSafeInteger(detail.version) || detail.version < 1
-    ) throw new PaperclipPublicationError("paperclip_response_invalid");
-    return detail;
-  }
-
-  async listCaseEvents(caseId: string): Promise<readonly PaperclipTransitionEvent[]> {
-    if (!uuidPattern.test(caseId)) throw new PaperclipPublicationError("paperclip_scope_mismatch");
-    const events: PaperclipTransitionEvent[] = [];
-    for (let offset = 0; offset < 10_000; offset += 100) {
-      const value = await this.#request(`/api/cases/${encodeURIComponent(caseId)}/events?limit=100&offset=${offset}`);
-      if (!isRecord(value) || !Array.isArray(value["items"]) || !isRecord(value["pagination"])) {
-        throw new PaperclipPublicationError("paperclip_response_invalid");
-      }
-      for (const item of value["items"] as unknown[]) {
-        if (!isRecord(item)) throw new PaperclipPublicationError("paperclip_response_invalid");
-        const payload = isRecord(item["payload"]) ? item["payload"] : {};
-        const fromStage = isRecord(item["fromStage"]) ? item["fromStage"] : undefined;
-        const toStage = isRecord(item["toStage"]) ? item["toStage"] : undefined;
-        events.push({
-          type: typeof item["type"] === "string" ? item["type"] : "",
-          fromStageKey: typeof fromStage?.["key"] === "string" ? fromStage["key"] : null,
-          toStageKey: typeof toStage?.["key"] === "string" ? toStage["key"] : null,
-          reason: typeof payload["reason"] === "string" ? payload["reason"] : null,
-        });
-      }
-      const pagination = value["pagination"];
-      if (pagination["hasMore"] === false && pagination["nextOffset"] === null) return events;
-      if (pagination["hasMore"] !== true || pagination["nextOffset"] !== offset + 100) {
-        throw new PaperclipPublicationError("paperclip_response_invalid");
-      }
-    }
-    throw new PaperclipPublicationError("paperclip_response_invalid");
-  }
-
-  async transitionCase(caseId: string, input: {
-    readonly toStageKey: string;
-    readonly expectedVersion: number;
-    readonly reason: string;
-  }): Promise<void> {
-    if (
-      !uuidPattern.test(caseId) || !/^[a-z][a-z0-9_]{0,119}$/u.test(input.toStageKey) ||
-      !Number.isSafeInteger(input.expectedVersion) || input.expectedVersion < 1 ||
-      !/^flama-external:sha256:[0-9a-f]{64}$/u.test(input.reason)
-    ) throw new PaperclipPublicationError("paperclip_scope_mismatch");
-    const value = await this.#request(`/api/cases/${encodeURIComponent(caseId)}/transition`, {
-      method: "POST",
-      body: JSON.stringify(input),
-    });
-    if (
-      !isRecord(value) || !isRecord(value["case"]) || value["case"]["id"] !== caseId ||
-      value["case"]["version"] !== input.expectedVersion + 1
-    ) {
-      throw new PaperclipPublicationError("paperclip_response_invalid");
+      !isRecord(value) || value["source"] !== "webhook" || value["idempotencyKey"] !== message.idempotencyKey ||
+      !["issue_created", "completed"].includes(String(value["status"])) ||
+      typeof value["linkedIssueId"] !== "string" || !uuidPattern.test(value["linkedIssueId"])
+    ) throw new PaperclipPublicationError("routine_response_invalid");
+    const expectedPayload = { schemaVersion: 1, message };
+    if (JSON.stringify(stableValue(value["triggerPayload"])) !== JSON.stringify(stableValue(expectedPayload))) {
+      throw new PaperclipPublicationError("routine_response_invalid");
     }
   }
 }

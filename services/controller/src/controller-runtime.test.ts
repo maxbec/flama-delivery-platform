@@ -1,4 +1,5 @@
 import { mkdir, mkdtemp, readFile, rm, stat, symlink } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -16,7 +17,10 @@ import {
   runControllerRuntime,
   writeManagedReconciliationEvidence,
   type ManagedReconciliationExecutor,
+  type ManagedTransitionExecutor,
 } from "./controller-runtime.js";
+import { minimizedEventDigest } from "../../bridge/src/paperclip-publisher.js";
+import type { PaperclipTransitionMessage } from "../../bridge/src/processor.js";
 
 const agentId = "10000000-0000-4000-8000-000000000001";
 const companyId = "20000000-0000-4000-8000-000000000002";
@@ -41,6 +45,24 @@ const routineContract = JSON.parse(
   await readFile(new URL("../../../routines/nightly-reconciliation.json", import.meta.url), "utf8"),
 ) as PaperclipRoutineContract;
 const resolvedRoutine = resolvePaperclipRoutineContract("Private", routineContract);
+const githubTransitionContract = JSON.parse(
+  await readFile(new URL("../../../routines/github-transition.json", import.meta.url), "utf8"),
+) as Readonly<Record<string, unknown>>;
+
+function stableValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (typeof value === "object" && value !== null) {
+    return Object.fromEntries(Object.entries(value).sort(([left], [right]) => left.localeCompare(right)).map(
+      ([key, nested]) => [key, stableValue(nested)],
+    ));
+  }
+  return value;
+}
+
+const githubTransitionDescription =
+  `Managed by flama-delivery-platform; key=flama-github-transition-v1; contract=sha256:${
+    createHash("sha256").update(JSON.stringify(stableValue(githubTransitionContract))).digest("hex")
+  }\n\n${String(githubTransitionContract["description"])}`;
 
 function identity() {
   return {
@@ -125,6 +147,71 @@ function routineRun(overrides: Readonly<Record<string, unknown>> = {}) {
     completedAt: null,
     ...overrides,
   };
+}
+
+function githubTransitionMessage(): PaperclipTransitionMessage {
+  return {
+    idempotencyKey: "github:delivery-1:pull_request.opened",
+    deliveryId: "delivery-1",
+    company: "Private",
+    transitionKind: "pull_request.opened",
+    payload: {
+      schemaVersion: 1,
+      eventName: "pull_request",
+      action: "opened",
+      repository: "maxbec/api",
+      repositoryId: 101,
+      pullRequest: {
+        number: 7,
+        state: "open",
+        merged: false,
+        headSha: "a".repeat(40),
+        headRef: "feature/verified-change",
+        baseRef: "main",
+        mergeSha: null,
+        url: "https://github.com/maxbec/api/pull/7",
+      },
+    },
+  };
+}
+
+function githubAssignment(overrides: Readonly<Record<string, unknown>> = {}) {
+  return assignment({
+    title: "Flama GitHub Evidence Transition",
+    description: githubTransitionDescription,
+    priority: "high",
+    ...overrides,
+  });
+}
+
+function githubRoutine(overrides: Readonly<Record<string, unknown>> = {}) {
+  return routine({
+    title: "Flama GitHub Evidence Transition",
+    description: githubTransitionDescription,
+    priority: "high",
+    concurrencyPolicy: "always_enqueue",
+    triggers: [{
+      id: triggerId,
+      kind: "webhook",
+      label: "flama-github-transition-v1",
+      enabled: true,
+      cronExpression: null,
+      timezone: null,
+      signingMode: "hmac_sha256",
+      replayWindowSec: 300,
+    }],
+    ...overrides,
+  });
+}
+
+function githubRoutineRun(overrides: Readonly<Record<string, unknown>> = {}) {
+  const message = githubTransitionMessage();
+  return routineRun({
+    source: "webhook",
+    idempotencyKey: message.idempotencyKey,
+    triggerPayload: { schemaVersion: 1, message },
+    ...overrides,
+  });
 }
 
 function jsonResponse(value: unknown, status = 200): Response {
@@ -291,6 +378,43 @@ describe("deterministic delivery controller runtime", () => {
     expect(JSON.stringify(result)).not.toContain(companyId);
     expect(JSON.stringify(result)).not.toContain(issueId);
     expect(JSON.stringify(result)).not.toContain(token);
+  });
+
+  it("lets the native controller perform a webhook-routine transition without a bridge account", async () => {
+    const observed: ObservedRequest[] = [];
+    const reconcile = executor("compliant");
+    const transition: ManagedTransitionExecutor = vi.fn(async () => undefined);
+    const message = githubTransitionMessage();
+
+    const result = await runControllerRuntime(
+      environment,
+      process.cwd(),
+      fetchFor([githubAssignment()], observed, githubRoutine(), [githubRoutineRun()]),
+      reconcile,
+      () => new Date("2026-07-30T10:00:00.000Z"),
+      transition,
+    );
+
+    expect(reconcile).not.toHaveBeenCalled();
+    expect(transition).toHaveBeenCalledOnce();
+    expect(transition).toHaveBeenCalledWith(
+      message,
+      environment,
+      expect.objectContaining({ companyId }),
+      expect.any(Function),
+    );
+    const eventDigest = minimizedEventDigest(message.payload);
+    expect(observed.at(-1)?.body).toEqual({
+      status: "done",
+      comment: `Verified GitHub evidence transitioned. Evidence digest: ${eventDigest}.`,
+    });
+    expect(result).toEqual({
+      schemaVersion: 1,
+      status: "transitioned",
+      contractDigest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/u),
+      evidenceDigest: eventDigest,
+    });
+    expect(JSON.stringify(result)).not.toContain("maxbec/api");
   });
 
   it("routes non-compliant evidence to review without exposing audit details", async () => {

@@ -4,9 +4,8 @@ import { Pool } from "pg";
 import { buildBridgeApp } from "./app.js";
 import { parseBridgeConfig } from "./config.js";
 import {
-  AuthorizedPaperclipPublisher,
-  PaperclipPublicationError,
-  PaperclipRestTransitionApi,
+  AuthorizedRoutineWebhookPublisher,
+  PaperclipSignedRoutineWebhookApi,
   PostgresTransitionAuthorizationStore,
 } from "./paperclip-publisher.js";
 import { PostgresInbox } from "./postgres-inbox.js";
@@ -23,31 +22,20 @@ const companyByOwner = {
   edilio: "Edilio",
 } as const satisfies Readonly<Record<string, CompanyName>>;
 
-function publisherCompanyId(environment: Environment): string {
-  const value = environment["PAPERCLIP_COMPANY_ID"];
-  if (
-    value === undefined ||
-    !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu.test(value)
-  ) throw new PaperclipPublicationError("paperclip_identity_unavailable");
-  return value;
-}
-
 export async function runBridgeRuntime(
   environment: Environment,
   signal: AbortSignal,
 ): Promise<"stopped" | "paused"> {
   const config = parseBridgeConfig(environment);
-  const companyId = publisherCompanyId(environment);
-  const api = new PaperclipRestTransitionApi(environment);
+  const webhook = new PaperclipSignedRoutineWebhookApi(environment);
   const pool = new Pool({ connectionString: config.databaseUrl.reveal(), max: 8 });
   const inbox = new PostgresInbox(pool);
   const repositoryScope = new PostgresRepositoryScope(pool);
   const authorizations = new PostgresTransitionAuthorizationStore(pool);
-  const publisher = new AuthorizedPaperclipPublisher(
+  const publisher = new AuthorizedRoutineWebhookPublisher(
     companyByOwner[config.allowedOwner],
-    companyId,
     authorizations,
-    api,
+    webhook,
   );
   const app = buildBridgeApp({
     webhookSecret: config.webhookSecret.reveal(),

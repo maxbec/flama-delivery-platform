@@ -9,7 +9,7 @@
     "schemaVersion": { "const": 1 },
     "status": { "enum": ["planned", "applied"] },
     "controller": { "enum": ["maxbec-delivery-controller", "navigaite-delivery-controller", "edilio-delivery-controller"] },
-    "disposition": { "enum": ["planned", "created", "reused"] },
+    "disposition": { "enum": ["planned", "created", "migrated", "reused"] },
     "initialStatus": { "const": "paused" },
     "budgetMonthlyCents": { "const": 0 },
     "contractDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
@@ -21,7 +21,7 @@
     },
     {
       "if": { "type": "object", "properties": { "status": { "const": "applied" } }, "required": ["status"] },
-      "then": { "type": "object", "properties": { "disposition": { "enum": ["created", "reused"] } } }
+      "then": { "type": "object", "properties": { "disposition": { "enum": ["created", "migrated", "reused"] } } }
     }
   ]
 }

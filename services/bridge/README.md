@@ -1,7 +1,9 @@
 # flama-delivery-bridge
 
 The bridge converts authenticated GitHub webhook deliveries into durable,
-deduplicated work and then into controller-authorized Paperclip transitions.
+deduplicated work and then fires one controller-authorized, HMAC-protected
+Paperclip routine. The native Delivery Controller performs the transition
+inside Paperclip under its current run identity.
 Its HTTP service, database queues, authorization boundary, publisher, recovery
 workers, and deterministic Node.js 26 bundle are implemented here. It is not
 deployed or connected to credentials yet.
@@ -29,9 +31,12 @@ Trust and durability invariants:
 - Require a live controller authorization for the exact minimized-event digest,
   repository binding digest, company, case, pipeline, and permitted lifecycle
   edge. A webhook or repository binding alone cannot select a case.
-- Call only the released Paperclip case GET, case-events GET, and transition
-  POST interfaces. Validate company, pipeline, stage, terminal state, and
-  optimistic version before and after transition.
+- Call only the released public routine-trigger endpoint, bound to one exact
+  trigger URL, with a timestamped HMAC and idempotency key. The bridge has no
+  Paperclip account, board token, agent API key, or case API access.
+- Let the native company Delivery Controller revalidate company, pipeline,
+  stage, terminal state, optimistic version, event digest, repository binding,
+  and exact transition authorization before and after the case transition.
 - Put only a digest of the idempotency key in Paperclip's transition reason.
   After a crash, scan paginated case events for that exact reason and edge
   before considering the transition already applied.
@@ -53,10 +58,12 @@ nightly audit without modifying queue data.
 
 Runtime configuration is environment-only after Infisical/OIDC injection. The
 runtime requires `DATABASE_URL`, `GITHUB_WEBHOOK_SECRET`,
-`FLAMA_GITHUB_OWNER`, `FLAMA_WORKER_ID`, `PAPERCLIP_API_URL`,
-`PAPERCLIP_API_KEY`, and `PAPERCLIP_COMPANY_ID`; numeric recovery and polling
-controls are bounded. Credential-bearing values use a redacting wrapper and
-configuration failures emit stable codes without reflecting rejected input.
+`FLAMA_GITHUB_OWNER`, `FLAMA_WORKER_ID`, `PAPERCLIP_ROUTINE_WEBHOOK_URL`, and
+`PAPERCLIP_ROUTINE_WEBHOOK_SECRET`; numeric recovery and polling controls are
+bounded. The routine URL must target exactly
+`/api/routine-triggers/public/<id>/fire`. Credential-bearing values use a
+redacting wrapper and configuration failures emit stable codes without
+reflecting rejected input.
 Run `bin/bridge/index.js` from the signed platform artifact under a supervisor;
 the process emits only stable status/reason codes and stops after two
 consecutive infrastructure failures.
@@ -68,9 +75,11 @@ refreshing a private database binding. It does not create or rewrite Paperclip
 projects/workspaces and never emits their IDs or repository names.
 
 The publisher is wired in the packaged runtime but remains fail-closed until a
-company controller writes an exact, expiring authorization and a separately
-scoped Paperclip machine identity is injected. Repository/project/workspace
-binding alone is deliberately insufficient to guess which case an external
-event may advance. The controller authorization writer and bridge runtime roles
-must remain distinct: runtime may consume/mark an authorization but must not
-mint one.
+company controller writes an exact, expiring authorization and the matching
+Paperclip routine-trigger secret is injected from Infisical. The outbox is
+marked delivered only after Paperclip durably accepts the idempotent routine
+run; the authorization is marked published only after the native controller
+proves the exact case transition. Repository/project/workspace binding alone is
+deliberately insufficient to guess which case an external event may advance.
+The controller authorization writer and bridge runtime roles remain distinct:
+the runtime may validate an authorization but cannot mint or complete one.
