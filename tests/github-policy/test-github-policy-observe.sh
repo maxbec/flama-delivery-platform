@@ -104,4 +104,32 @@ jq -e '
   exit 1
 }
 
+# Repository rulesets are unavailable on some plans. That is a platform fact,
+# not a disabled control, and the audit treats unavailable-and-off as compliant.
+PATH="$FIXTURE_DIR/bin:$PATH" FLAMA_GH_RULESETS_FORBIDDEN=1 "$OBSERVER" \
+  --repository maxbec/example --profile fast \
+  --posture "$FIXTURE_DIR/posture.json" --output "$TMP_DIR/no-rulesets.json" >/dev/null
+
+jq -e '.supplyChain.protectedVersionTags == {
+  available: false, enabled: false, pattern: "v*", forceUpdate: false, deletion: false
+}' "$TMP_DIR/no-rulesets.json" >/dev/null || {
+  echo "unavailable rulesets were not reported as unavailable" >&2
+  jq '.supplyChain' "$TMP_DIR/no-rulesets.json" >&2
+  exit 1
+}
+
+# Any other ruleset read failure is not evidence of anything and must stop.
+if PATH="$FIXTURE_DIR/bin:$PATH" FLAMA_GH_RULESETS_BROKEN=1 "$OBSERVER" \
+  --repository maxbec/example --profile fast \
+  --posture "$FIXTURE_DIR/posture.json" --output "$TMP_DIR/nope4.json" \
+  >/dev/null 2>"$TMP_DIR/rulesets.err"; then
+  echo "observer accepted an unexplained ruleset read failure" >&2
+  exit 1
+fi
+grep -q "failed to read repository rulesets" "$TMP_DIR/rulesets.err" || {
+  echo "ruleset read failure was not refused for being unreadable" >&2
+  cat "$TMP_DIR/rulesets.err" >&2
+  exit 1
+}
+
 echo "github policy observer tests passed"

@@ -182,7 +182,18 @@ fi
 # deletion are still possible.
 RULESETS_JSON="$TASK_TMP_DIR/rulesets.json"
 printf '[]\n' > "$RULESETS_JSON"
-gh_get "repos/$REPOSITORY/rulesets" > "$RULESETS_JSON" 2>/dev/null || printf '[]\n' > "$RULESETS_JSON"
+# Rulesets are unavailable on some plans. That is a platform fact the audit
+# scores differently from a control that exists and is switched off, so the two
+# are distinguished here; any other read failure is not evidence of anything.
+tag_available=true
+if ! gh_get "repos/$REPOSITORY/rulesets" > "$RULESETS_JSON" 2>"$TASK_TMP_DIR/rulesets.err"; then
+  if grep -q "Upgrade to GitHub" "$TASK_TMP_DIR/rulesets.err"; then
+    tag_available=false
+    printf '[]\n' > "$RULESETS_JSON"
+  else
+    die "failed to read repository rulesets"
+  fi
+fi
 tag_enabled=false
 tag_force_update=true
 tag_deletion=true
@@ -222,6 +233,7 @@ jq -n \
   --argjson pullRequestTarget "$pull_request_target" \
   --argjson vulnerabilityAlerts "$vulnerability_alerts" \
   --argjson securityUpdates "$security_updates" \
+  --argjson tagAvailable "$tag_available" \
   --argjson tagEnabled "$tag_enabled" \
   --argjson tagForceUpdate "$tag_force_update" \
   --argjson tagDeletion "$tag_deletion" \
@@ -277,7 +289,7 @@ jq -n \
     },
     supplyChain: {
       protectedVersionTags: {
-        available: true,
+        available: $tagAvailable,
         enabled: $tagEnabled,
         pattern: "v*",
         forceUpdate: (if $tagEnabled then $tagForceUpdate else false end),

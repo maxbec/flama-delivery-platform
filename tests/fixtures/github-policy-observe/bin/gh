@@ -78,6 +78,14 @@ case "$endpoint" in
     emit '{"enabled": true, "paused": false}'
     ;;
   repos/maxbec/example/rulesets)
+    if [[ -n "${FLAMA_GH_RULESETS_FORBIDDEN:-}" ]]; then
+      echo '{"message": "Upgrade to GitHub Pro or make this repository public to enable this feature.","status":"403"}' >&2
+      exit 1
+    fi
+    if [[ -n "${FLAMA_GH_RULESETS_BROKEN:-}" ]]; then
+      echo '{"message": "Server Error","status":"500"}' >&2
+      exit 1
+    fi
     emit '[{"id": 55, "target": "tag", "enforcement": "active"}]'
     ;;
   repos/maxbec/example/rulesets/55)
