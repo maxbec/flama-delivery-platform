@@ -31,6 +31,7 @@ const schemaFiles = {
   "github-policy-repair-input": "github-policy-repair-input.schema.json",
   "github-policy-repair-plan": "github-policy-repair-plan.schema.json",
   "github-policy-audit-result": "github-policy-audit-result.schema.json",
+  "github-policy-posture": "github-policy-posture.schema.json",
   "preflight-evidence": "preflight-evidence.schema.json",
   "preflight-run-input": "preflight-run-input.schema.json",
   "preflight-run-result": "preflight-run-result.schema.json",

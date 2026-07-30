@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "approvedAt": "2026-07-30T10:00:00Z",
+  "approvalRef": "fixture-approval",
+  "owners": {
+    "maxbec": {
+      "githubApp": {
+        "ownerScoped": true,
+        "repositorySelection": "selected",
+        "installationTokens": "short_lived",
+        "leastPrivilegePermissions": true,
+        "webhookEventsExact": true,
+        "administration": false,
+        "secretAdministration": false
+      }
+    }
+  },
+  "runners": {
+    "paperclipPreflight": "ephemeral",
+    "githubVerification": "github_hosted_or_disposable",
+    "deployment": "hardened_separate",
+    "deploymentSeparated": true,
+    "publicPullRequestProductionNetwork": false
+  }
+}

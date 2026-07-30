@@ -119,6 +119,15 @@ Implemented commands:
   selection, direct-destination exceptions, rotation dates, and secret-free
   repository variables/generated configuration/Paperclip prompts. Inputs carry
   names and metadata only—never values—and output uses redacted finding codes.
+- `scripts/github-policy-observe.sh --repository <owner/name> --profile
+  <fast|major> --posture <approved> --output <observation>` builds that
+  normalized observation from read-only GitHub metadata. Owner-scoped App
+  installation and runner-class separation are not observable from repository
+  metadata, so they are read from an approved posture file and copied through
+  verbatim; the command refuses to run without one and refuses an owner the
+  posture does not cover. A default branch outside `main`/`dev` stops the run,
+  while an unprotected default branch is reported with every control off,
+  because that is drift the audit exists to surface.
 - `github-policy-audit --input <normalized-observation>` compares read-only,
   identifier-free repository metadata with the exact Fast/Major branch profile,
   required checks, merge settings, Actions trust boundary, security features,

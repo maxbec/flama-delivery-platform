@@ -13,6 +13,7 @@ required_schemas=(
   governance-input.schema.json
   governance-result.schema.json
   github-policy-audit-input.schema.json
+  github-policy-posture.schema.json
   github-policy-audit-result.schema.json
   delivery-contract.schema.json
   preflight-evidence.schema.json

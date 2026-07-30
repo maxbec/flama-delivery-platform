@@ -195,6 +195,7 @@ function isSchemaName(value: string | undefined): value is SchemaName {
     "paperclip-controller",
     "paperclip-binding-input",
     "paperclip-binding-result",
+    "github-policy-posture",
     "paperclip-controllers-input",
     "paperclip-controllers-result",
     "paperclip-foundation-input",

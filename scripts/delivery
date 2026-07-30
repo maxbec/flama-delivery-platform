@@ -19,6 +19,7 @@ case "$1" in
     pnpm test:unit
     bash tests/contracts/test-contracts.sh
     bash tests/inventory/test-phase0-inventory.sh
+    bash tests/github-policy/test-github-policy-observe.sh
     bash tests/paperclip/test-paperclip-foundation.sh
     bash tests/security/test-public-repository-audit.sh
     bash tests/workflows/test-platform-ci.sh

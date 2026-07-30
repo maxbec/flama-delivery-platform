@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/github-policy-posture.schema.json",
+  "title": "Declared GitHub App and runner-class posture",
+  "$comment": "Owner-scoped App installation and runner-class facts cannot be observed from repository metadata. They are declared once from an approved record, and the observer refuses to emit an observation for any owner missing here rather than guessing a safe-looking default.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "approvedAt", "approvalRef", "owners", "runners"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "approvedAt": { "type": "string", "format": "date-time" },
+    "approvalRef": { "type": "string", "minLength": 1, "maxLength": 200 },
+    "owners": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "maxbec": { "$ref": "#/$defs/ownerPosture" },
+        "navigaite": { "$ref": "#/$defs/ownerPosture" },
+        "edilio": { "$ref": "#/$defs/ownerPosture" }
+      }
+    },
+    "runners": { "$ref": "#/$defs/runners" }
+  },
+  "$defs": {
+    "ownerPosture": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["githubApp"],
+      "properties": { "githubApp": { "$ref": "#/$defs/githubApp" } }
+    },
+    "githubApp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ownerScoped",
+        "repositorySelection",
+        "installationTokens",
+        "leastPrivilegePermissions",
+        "webhookEventsExact",
+        "administration",
+        "secretAdministration"
+      ],
+      "properties": {
+        "ownerScoped": { "type": "boolean" },
+        "repositorySelection": { "enum": ["selected", "all"] },
+        "installationTokens": { "enum": ["short_lived", "long_lived"] },
+        "leastPrivilegePermissions": { "type": "boolean" },
+        "webhookEventsExact": { "type": "boolean" },
+        "administration": { "type": "boolean" },
+        "secretAdministration": { "type": "boolean" }
+      }
+    },
+    "runners": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "paperclipPreflight",
+        "githubVerification",
+        "deployment",
+        "deploymentSeparated",
+        "publicPullRequestProductionNetwork"
+      ],
+      "properties": {
+        "paperclipPreflight": { "enum": ["ephemeral", "persistent"] },
+        "githubVerification": { "enum": ["github_hosted_or_disposable", "private_persistent"] },
+        "deployment": { "enum": ["hardened_separate", "shared"] },
+        "deploymentSeparated": { "type": "boolean" },
+        "publicPullRequestProductionNetwork": { "type": "boolean" }
+      }
+    }
+  }
+}
