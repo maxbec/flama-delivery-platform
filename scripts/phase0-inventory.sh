@@ -360,7 +360,6 @@ jq -n \
       mutationAllowed: $activeOwned,
       mutationDeniedReason: denial_reason($policy; $repo),
       paperclipCompany: (if ($policy.owners | has($owner)) then $policy.owners[$owner].paperclipCompany else null end),
-      profile: (if ($inScope | not) then null elif .defaultBranch == "dev" then "major" else "fast" end),
       branchNormalizationRequired: ($inScope and (.defaultBranch != "main" and .defaultBranch != "dev")),
       stack: stack,
       providerIndicators: providers,

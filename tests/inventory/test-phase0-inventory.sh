@@ -31,9 +31,10 @@ jq -e '
   ([.repositories[] | select(.disposition == "in_scope")] | length) == 2 and
   ([.repositories[] | select(.mutationAllowed == true)] | length) == 3 and
   ([.repositories[] | select(.isFork or .isArchived) | select(.mutationAllowed == true)] | length) == 0 and
-  ([.repositories[] | select(.nameWithOwner == "alpha/fast-app")][0] | .profile == "fast" and .stack == ["node"] and .providerIndicators == ["docker"] and .paperclipCompany == "Alpha Paperclip") and
-  ([.repositories[] | select(.nameWithOwner == "alpha/major-app")][0] | .profile == "major" and .stack == ["python"] and .providerIndicators == ["vercel"]) and
-  ([.repositories[] | select(.nameWithOwner == "alpha/platform")][0] | .disposition == "platform" and .mutationAllowed == true and .profile == null) and
+  ([.repositories[] | has("profile")] | any | not) and
+  ([.repositories[] | select(.nameWithOwner == "alpha/fast-app")][0] | .stack == ["node"] and .providerIndicators == ["docker"] and .paperclipCompany == "Alpha Paperclip") and
+  ([.repositories[] | select(.nameWithOwner == "alpha/major-app")][0] | .stack == ["python"] and .providerIndicators == ["vercel"]) and
+  ([.repositories[] | select(.nameWithOwner == "alpha/platform")][0] | .disposition == "platform" and .mutationAllowed == true) and
   ([.repositories[] | select(.nameWithOwner == "alpha/upstream-fork")][0] | .disposition == "excluded_fork" and .mutationDeniedReason == "fork") and
   ([.repositories[] | select(.nameWithOwner == "alpha/retired")][0] | .disposition == "excluded_archived" and .mutationDeniedReason == "archived")
 ' "$OUTPUT" >/dev/null

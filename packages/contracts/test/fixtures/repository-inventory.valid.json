@@ -25,7 +25,6 @@
       "mutationAllowed": true,
       "mutationDeniedReason": null,
       "paperclipCompany": "Private",
-      "profile": "fast",
       "branchNormalizationRequired": false,
       "stack": ["node"],
       "providerIndicators": [],

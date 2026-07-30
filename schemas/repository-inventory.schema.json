@@ -65,7 +65,7 @@
     "repository": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["nameWithOwner", "owner", "isFork", "isArchived", "isPrivate", "defaultBranch", "defaultBranchHeadSha", "pushedAt", "primaryLanguage", "disposition", "mutationAllowed", "mutationDeniedReason", "paperclipCompany", "profile", "branchNormalizationRequired", "stack", "providerIndicators", "workflowFiles", "deliveryEntrypoints", "defaultBranchStatus", "latestWorkflow", "health"],
+      "required": ["nameWithOwner", "owner", "isFork", "isArchived", "isPrivate", "defaultBranch", "defaultBranchHeadSha", "pushedAt", "primaryLanguage", "disposition", "mutationAllowed", "mutationDeniedReason", "paperclipCompany", "branchNormalizationRequired", "stack", "providerIndicators", "workflowFiles", "deliveryEntrypoints", "defaultBranchStatus", "latestWorkflow", "health"],
       "properties": {
         "nameWithOwner": { "type": "string", "pattern": "^[^/]+/[^/]+$" },
         "owner": { "type": "string", "minLength": 1 },
@@ -80,7 +80,6 @@
         "mutationAllowed": { "type": "boolean" },
         "mutationDeniedReason": { "type": ["string", "null"], "enum": ["fork", "archived", "unknown_owner", null] },
         "paperclipCompany": { "type": ["string", "null"] },
-        "profile": { "type": ["string", "null"], "enum": ["fast", "major", null] },
         "branchNormalizationRequired": { "type": "boolean" },
         "stack": { "type": "array", "uniqueItems": true, "items": { "enum": ["node", "node-monorepo", "python", "php", "flutter", "go", "jvm", "rust", "wordpress"] } },
         "providerIndicators": { "type": "array", "uniqueItems": true, "items": { "enum": ["docker", "vercel", "render", "digitalocean-app", "coolify"] } },
