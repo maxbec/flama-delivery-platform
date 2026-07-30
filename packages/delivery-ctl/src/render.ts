@@ -72,6 +72,7 @@ interface DependabotPolicy {
   };
   readonly requiredEcosystems: readonly ["github-actions"];
   readonly openPullRequestsLimit: number;
+  readonly cooldownDays: number;
   readonly groups: {
     readonly "routine-updates": { readonly updateTypes: readonly ["minor", "patch"] };
   };
@@ -163,7 +164,8 @@ function dependabotEntries(input: RenderInput, policy: DependabotPolicy): readon
 
 function renderDependabot(input: RenderInput, policy: DependabotPolicy): string {
   const targetBranch = input.profile === "major" ? "dev" : "main";
-  return stringifyYaml(
+  // Consumer repositories run yamllint, which requires an explicit start marker.
+  return `---\n${stringifyYaml(
     {
       version: 2,
       updates: dependabotEntries(input, policy).map((entry) => ({
@@ -177,6 +179,9 @@ function renderDependabot(input: RenderInput, policy: DependabotPolicy): string 
         },
         "target-branch": targetBranch,
         "open-pull-requests-limit": policy.openPullRequestsLimit,
+        // A newly published version can be malicious or unstable, so every
+        // ecosystem waits before an update is proposed.
+        cooldown: { "default-days": policy.cooldownDays },
         groups: {
           "routine-updates": {
             "update-types": [...policy.groups["routine-updates"].updateTypes],
@@ -185,7 +190,7 @@ function renderDependabot(input: RenderInput, policy: DependabotPolicy): string 
       })),
     },
     { lineWidth: 0 },
-  );
+  )}`;
 }
 
 async function buildTargets(repositoryRoot: string, input: RenderInput): Promise<readonly TargetFile[]> {

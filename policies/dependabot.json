@@ -6,13 +6,19 @@
     "timezone": "Europe/Berlin",
     "weekdayStrategy": "repository_sha256_modulo_weekdays"
   },
-  "requiredEcosystems": ["github-actions"],
+  "requiredEcosystems": [
+    "github-actions"
+  ],
   "openPullRequestsLimit": 1,
   "groups": {
     "routine-updates": {
-      "updateTypes": ["minor", "patch"]
+      "updateTypes": [
+        "minor",
+        "patch"
+      ]
     }
   },
   "securityUpdates": "enabled",
-  "majorUpdates": "paperclip"
+  "majorUpdates": "paperclip",
+  "cooldownDays": 7
 }

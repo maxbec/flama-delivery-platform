@@ -52,6 +52,13 @@ describe("template renderer", () => {
     const dependabot = parseYaml(
       await readFile(join(outputRoot, ".github/dependabot.yml"), "utf8"),
     ) as { updates: Array<Record<string, unknown>> };
+    // A newly published package can be malicious; every ecosystem waits.
+    for (const entry of dependabot.updates) {
+      expect(entry["cooldown"]).toEqual({ "default-days": 7 });
+    }
+    // yamllint requires an explicit document start, and consumer repositories
+    // run it against generated files.
+    expect(await readFile(join(outputRoot, ".github/dependabot.yml"), "utf8")).toMatch(/^---\n/u);
     expect(dependabot.updates.map((entry) => entry["package-ecosystem"])).toEqual([
       "github-actions",
       "npm",
