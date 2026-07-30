@@ -41,7 +41,7 @@
                   ".release-please-manifest.json"
                 ]
               },
-              "status": { "enum": ["planned", "created", "unchanged"] }
+              "status": { "enum": ["planned", "created", "unchanged", "replaced"] }
             }
           }
         }

@@ -76,6 +76,8 @@ export interface DeliveryContract {
 }
 
 export interface BootstrapInput {
+  /** Exact generated paths a legacy delivery system owns that may be replaced. */
+  readonly replaceExisting?: readonly string[];
   readonly schemaVersion: 1;
   readonly repository: {
     readonly nameWithOwner: string;
@@ -426,6 +428,9 @@ export async function bootstrapRepository(options: BootstrapOptions): Promise<Bo
     outputRoot: root,
     input: options.input.render,
     dryRun: true,
+    ...(options.input.replaceExisting === undefined
+      ? {}
+      : { replaceExisting: options.input.replaceExisting }),
   });
   const owned = await planOwnedTargets(root, await ownedTargets(options.repositoryRoot, options.input));
 
@@ -436,6 +441,9 @@ export async function bootstrapRepository(options: BootstrapOptions): Promise<Bo
         outputRoot: root,
         input: options.input.render,
         dryRun: false,
+        ...(options.input.replaceExisting === undefined
+          ? {}
+          : { replaceExisting: options.input.replaceExisting }),
       });
   if (!options.dryRun) await applyOwnedTargets(root, owned);
 
