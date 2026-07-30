@@ -132,6 +132,17 @@ Implemented commands:
   repository, which the delivery App deliberately does not hold; observation is
   therefore run with an owner-level read credential, not an App installation
   token.
+- `scripts/github-policy-apply.sh --repository <owner/name> --profile
+  <fast|major> --plan <repair-plan> --posture <approved> [--confirm]` applies
+  only the repairs a planning run classified as `auto_repair`; a remediation
+  case, or a code the command does not implement, stops the run. Nothing is
+  written without `--confirm`. Required checks and branch protection are
+  withheld until the repository carries its delivery contract, because
+  enforcing checks that no workflow produces would block every merge, and the
+  Actions allow-list is withheld for the same reason. Afterwards the repository
+  is observed and audited again and the command reports which findings actually
+  cleared: GitHub answers some requests with 200 while ignoring them, so an
+  issued request is never treated as a result.
 - `github-policy-audit --input <normalized-observation>` compares read-only,
   identifier-free repository metadata with the exact Fast/Major branch profile,
   required checks, merge settings, Actions trust boundary, security features,
