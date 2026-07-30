@@ -12,7 +12,7 @@ values, and raw API responses remain outside this public repository.
 | Phase | Status | Current evidence |
 | --- | --- | --- |
 | 0 — Authoritative inventory | Complete | Fresh inventory proves 64 owned, non-fork, non-archived consumers; 28 forks and 3 archived repositories are mutation-denied. |
-| 1 — Platform foundation | Substantially implemented; three gaps open | Node.js 26 platform, deterministic CLI, reusable workflows, schemas, policies, bridge, controller, governance job, release builder, and test harness are implemented and green. Open gaps, listed under known platform gaps: two of eight deployment adapters, the GitHub repair apply path, and the three runner classes. Operator-initiated rollback is now a first-class deterministic command alongside automatic in-deployment rollback. Pooled-budget caching is enforced with the untrusted-lane write ban, and the pooled cache-hit rate is now read from run metadata. Publishing an immutable release remains gated on the scoped release identity. |
+| 1 — Platform foundation | Implemented for the current deployment surface; two gaps open, both outside code | Node.js 26 platform, deterministic CLI, reusable workflows, schemas, policies, bridge, controller, governance job, release builder, and test harness are implemented and green. Open gaps, listed under known platform gaps: the GitHub repair apply path, which needs the Phase 3 owner-scoped App, and the three runner classes, which are infrastructure. Deployment adapter coverage is complete for the providers actually in use. Operator-initiated rollback is now a first-class deterministic command alongside automatic in-deployment rollback. Pooled-budget caching is enforced with the untrusted-lane write ban, and the pooled cache-hit rate is now read from run metadata. Publishing an immutable release remains gated on the scoped release identity. |
 | 2 — Paperclip foundation | In progress | Shared skill and enforced lifecycles are installed and were re-read through the documented CLI. The HMAC routine installer and secret-safe Infisical receipt path are implemented locally. Two company controllers are paused and zero-budget; one remains behind native board approval. Immutable controller migration, authoritative project/workspace bindings, and live routines/bridge deployment are pending. |
 | 3 — GitHub and Infisical policy | Tooling implemented; live configuration pending | Metadata-only policy auditors exist. Scoped GitHub Apps, exact Infisical mappings, OIDC/Sync verification, runner separation, settings changes, and any exception approval are not yet applied. |
 | 4 — Canaries | Planning and audit gates implemented; live run pending | Deterministic coverage and evidence gates exist, but no real canary repository has been selected or changed. |
@@ -100,8 +100,8 @@ The temporary read-only re-audit is complete:
 - every managed lifecycle pipeline in the approved company scope exactly
   matches its versioned stages, enforced edges, and cancellation sentinel;
 - the company controller records remain zero-budget with agent/skill/assignment
-  creation denied; two are paused and the remaining hire request is still
-  behind Paperclip's human board-approval boundary;
+  creation denied. Two are paused, and the third hire was approved by the board on
+  2026-07-30. Its entrypoint migration and pause are still to be applied live;
 - all controller records still point to the exact legacy source entrypoint.
   Their existing executables are present, but migration to the immutable
   release entrypoint has not been performed or silently inferred. The
@@ -171,14 +171,14 @@ evidence.
   local Docker endpoint, `digitalocean-droplet` and `hostinger-vps` on an SSH-only
   remote endpoint, `vercel-prebuilt` uploading prebuilt output with REST
   read-back verification, and `digitalocean-app` pinning the app spec to an exact
-  digest with published-phase verification. `coolify` and `render` remain unimplemented and fail closed with
-  `adapter_not_implemented` rather than substituting another mechanism. Neither
-  publishes a declared set of terminal deployment states: Render's deploy `status`
-  enumeration is absent from its reference, and Coolify's specification types
-  `status` as a bare `string` (its implementation enum ends at `finished`, which the
-  API contract does not guarantee). Without declared terminal states a `health()`
-  cannot distinguish "still deploying" from "failed", and one that cannot detect
-  failure would carry a broken deployment through its soak window.
+  digest with published-phase verification. `coolify` and `render` are confirmed out of scope: the owner does not deploy
+  to either today, and plan section 14 introduces its provider list with "supported
+  adapters begin with", so an unused provider is not a required adapter. Builtin
+  coverage is complete for the current deployment surface. Both keep refusing with
+  `adapter_not_implemented` so an accidental manifest naming one cannot deploy
+  through an unverified path. Neither publishes a declared set of terminal
+  deployment states, which is the blocker to resolve first if either becomes a
+  target.
   `custom` stays repository-supplied by definition. See
   [deployment provider adapters](operations/deployment-providers.md).
 - Plan section 17's repair classification is now implemented as

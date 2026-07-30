@@ -14,8 +14,8 @@ leaves only provider parameters to the consumer repository.
 | `hostinger-vps` | Implemented, remote Docker endpoint over SSH. |
 | `vercel-prebuilt` | Implemented, prebuilt upload with REST read-back verification. |
 | `digitalocean-app` | Implemented, digest-pinned app spec with phase verification. |
-| `coolify` | Not implemented. Fails closed. |
-| `render` | Not implemented. Fails closed. |
+| `coolify` | Not in use. Not implemented; fails closed. |
+| `render` | Not in use. Not implemented; fails closed. |
 | `custom` | By definition repository-supplied; never a builtin. |
 
 A Droplet and a Hostinger VPS are both a server running Docker, so they are the
@@ -49,7 +49,18 @@ than an explicit refusal.
   is the successful terminal value — but that is an internal detail the API contract
   does not guarantee.
 
-### Why Coolify and Render are still not implemented
+### Coolify and Render are out of scope until used
+
+Confirmed by the owner on 2026-07-30: neither Coolify nor Render is a deployment
+target today. Plan section 14 introduces the provider list with "supported adapters
+begin with", so an unused provider is not a required adapter. Builtin coverage is
+therefore complete for the current deployment surface, and both providers keep
+refusing with `adapter_not_implemented` so an accidental manifest naming one cannot
+deploy through an unverified path.
+
+If either becomes a target, the blocker below must be resolved first.
+
+### Why they cannot simply be added on demand
 
 Neither publishes the one thing a `health()` implementation cannot do without: a
 declared set of terminal deployment states.
