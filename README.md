@@ -15,6 +15,10 @@ Paperclip project → ready task → isolated implementation → signed prefligh
 
 ## Current implementation status
 
+The consolidated, dated checkpoint is maintained in
+[Implementation progress](docs/implementation-progress.md). The summary below
+retains the major safety and phase boundaries.
+
 - Phase 0 live inventory is complete and reproducible with
   `scripts/phase0-inventory.sh`.
 - 64 consumer repositories are in scope.
@@ -58,9 +62,9 @@ Paperclip project → ready task → isolated implementation → signed prefligh
 - Production deployment has a separate exact-SHA trust gate, strict manifest
   validation, provider-neutral health/version/smoke soak, and one-attempt
   rollback state machine. No concrete provider is configured or invoked here.
-- Platform release packaging produces a reproducible self-contained CLI,
-  bridge, and governance archive, SPDX 2.3 SBOM, third-party licenses, per-file
-  manifest, and SHA-256 checksum.
+- Platform release packaging produces reproducible self-contained CLI,
+  bridge, company-controller, and governance executables, SPDX 2.3 SBOM,
+  third-party licenses, per-file manifest, and SHA-256 checksum.
   Publication remains disabled until the scoped release App is available through
   the approved Infisical/OIDC path.
 - Phase 3 now has a metadata-only Infisical policy audit covering exact OIDC
