@@ -1,6 +1,6 @@
 type JsonRecord = Readonly<Record<string, unknown>>;
 
-const supportedOwners = ["maxbec", "navigaite", "edilio"] as const;
+const supportedOwners = ["maxbec", "navigaite", "edilio-app"] as const;
 export type GitHubOwner = (typeof supportedOwners)[number];
 
 type SafeGitHubEvent = JsonRecord & {
@@ -87,7 +87,7 @@ function repositoryEvidence(payload: JsonRecord):
   if (repository === undefined) return undefined;
   const fullName = stringValue(
     repository["full_name"],
-    /^(?:maxbec|navigaite|edilio)\/[A-Za-z0-9._-]+$/u,
+    /^(?:maxbec|navigaite|edilio-app)\/[A-Za-z0-9._-]+$/u,
     256,
   );
   const repositoryId = integerValue(repository["id"]);

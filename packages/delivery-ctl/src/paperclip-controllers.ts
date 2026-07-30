@@ -206,6 +206,20 @@ function matches(agent: PaperclipAgent, companyId: string, expected: ControllerS
     permissions["canAssignTasks"] === false && sameJson(agent.metadata ?? {}, expected.metadata);
 }
 
+function matchesRevisedContract(
+  agent: PaperclipAgent,
+  companyId: string,
+  expected: ControllerSpec,
+): boolean {
+  const observed = agent.metadata ?? {};
+  const revised = {
+    ...expected,
+    metadata: { ...expected.metadata, contractDigest: Reflect.get(observed, "contractDigest") },
+  } as unknown as ControllerSpec;
+  return typeof Reflect.get(observed, "contractDigest") === "string" &&
+    matches(agent, companyId, revised);
+}
+
 function matchesLegacySourceEntrypoint(
   agent: PaperclipAgent,
   companyId: string,
@@ -281,9 +295,12 @@ export async function applyPaperclipControllers(
     disposition = "reused";
   }
 
+  const revisedContractOnly = !matches(agent, input.company.id, expected) &&
+    matchesRevisedContract(agent, input.company.id, expected);
   if (
     !matches(agent, input.company.id, expected) &&
-    matchesLegacySourceEntrypoint(agent, input.company.id, expected, input.legacySourceRoot)
+    (revisedContractOnly ||
+      matchesLegacySourceEntrypoint(agent, input.company.id, expected, input.legacySourceRoot))
   ) {
     if (agent.status === "idle") agent = await client.pauseAgent(agent.id);
     if (agent.status !== "paused") throw new PaperclipControllersError("paperclip_agent_drift");

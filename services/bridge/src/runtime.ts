@@ -19,7 +19,7 @@ type CompanyName = "Private" | "// Navigaite" | "Edilio";
 const companyByOwner = {
   maxbec: "Private",
   navigaite: "// Navigaite",
-  edilio: "Edilio",
+  "edilio-app": "Edilio",
 } as const satisfies Readonly<Record<string, CompanyName>>;
 
 export async function runBridgeRuntime(

@@ -12,6 +12,9 @@ const identities = {
   edilio: { company: "Edilio", controller: "edilio-delivery-controller", runId: "33333333-3333-4333-8333-333333333333" },
 } as const;
 
+// The scope key and the GitHub owner are different identifiers.
+const githubOwners = { maxbec: "maxbec", navigaite: "navigaite", edilio: "edilio-app" } as const;
+
 function environment(attestationDirectory?: string): Record<string, string> {
   return {
     ...Object.fromEntries(keys.flatMap((key) => {
@@ -33,7 +36,7 @@ function privateInput(): unknown {
     scopes: keys.map((key) => ({
       key,
       company: identities[key].company,
-      githubOwner: key,
+      githubOwner: githubOwners[key],
       controller: identities[key].controller,
       paperclipAttestation: createPaperclipGovernanceAttestation({
         source: "paperclip-company-controller",

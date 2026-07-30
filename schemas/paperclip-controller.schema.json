@@ -15,7 +15,7 @@
       "required": ["companies", "githubOwners"],
       "properties": {
         "companies": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["Private", "// Navigaite", "Edilio"] } },
-        "githubOwners": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["maxbec", "navigaite", "edilio"] } }
+        "githubOwners": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["maxbec", "navigaite", "edilio-app"] } }
       }
     },
     "authority": {
@@ -61,14 +61,14 @@
     },
     {
       "if": { "properties": { "name": { "const": "edilio-delivery-controller" } }, "required": ["name"] },
-      "then": { "properties": { "mode": { "const": "company-delivery" }, "scope": { "type": "object", "properties": { "companies": { "const": ["Edilio"] }, "githubOwners": { "const": ["edilio"] } } } } }
+      "then": { "properties": { "mode": { "const": "company-delivery" }, "scope": { "type": "object", "properties": { "companies": { "const": ["Edilio"] }, "githubOwners": { "const": ["edilio-app"] } } } } }
     },
     {
       "if": { "properties": { "name": { "const": "flama-governance-controller" } }, "required": ["name"] },
       "then": {
         "properties": {
           "mode": { "const": "global-governance" },
-          "scope": { "type": "object", "properties": { "companies": { "const": ["Private", "// Navigaite", "Edilio"] }, "githubOwners": { "const": ["maxbec", "navigaite", "edilio"] } } },
+          "scope": { "type": "object", "properties": { "companies": { "const": ["Private", "// Navigaite", "Edilio"] }, "githubOwners": { "const": ["maxbec", "navigaite", "edilio-app"] } } },
           "authority": { "type": "object", "properties": { "write": { "type": "array", "maxItems": 0 } } },
           "runtime": { "type": "object", "properties": { "maxImplementationConcurrency": { "const": 0 }, "credentialSource": { "const": "paperclip-run+infisical-oidc" } } }
         }

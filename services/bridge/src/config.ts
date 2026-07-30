@@ -102,7 +102,7 @@ function parseWebhookSecret(value: string | undefined): SecretValue {
 
 export function parseBridgeConfig(environment: Environment): BridgeConfig {
   const owner = environment["FLAMA_GITHUB_OWNER"];
-  if (owner !== "maxbec" && owner !== "navigaite" && owner !== "edilio") {
+  if (owner !== "maxbec" && owner !== "navigaite" && owner !== "edilio-app") {
     throw new BridgeConfigError("invalid_owner");
   }
   const host = environment["FLAMA_BRIDGE_HOST"] ?? "127.0.0.1";

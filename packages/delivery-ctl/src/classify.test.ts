@@ -22,7 +22,7 @@ describe("classify inventory", () => {
           providerIndicators: ["docker"],
         },
         {
-          nameWithOwner: "edilio/upstream-fork",
+          nameWithOwner: "edilio-app/upstream-fork",
           disposition: "excluded_fork",
           mutationAllowed: false,
           defaultBranch: "main",

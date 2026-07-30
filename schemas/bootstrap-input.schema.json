@@ -12,7 +12,7 @@
       "additionalProperties": false,
       "required": ["nameWithOwner", "disposition", "mutationAllowed", "isFork", "isArchived"],
       "properties": {
-        "nameWithOwner": { "type": "string", "pattern": "^(maxbec|navigaite|edilio)/[^/]+$" },
+        "nameWithOwner": { "type": "string", "pattern": "^(maxbec|navigaite|edilio-app)/[^/]+$" },
         "disposition": { "const": "in_scope" },
         "mutationAllowed": { "const": true },
         "isFork": { "const": false },

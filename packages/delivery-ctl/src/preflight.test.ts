@@ -68,7 +68,7 @@ describe("deterministic preflight", () => {
     const { root, headSha } = await repositoryWithDeliveryScript(true);
     const result = await runPreflight({
       schemaVersion: 1,
-      repository: "edilio/example",
+      repository: "edilio-app/example",
       headSha,
       baseSha: headSha,
       releaseImpact: "none",

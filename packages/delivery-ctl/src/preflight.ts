@@ -127,7 +127,7 @@ async function runDeliveryCommand(
 function validateInput(input: PreflightRunInput): void {
   if (
     input.schemaVersion !== 1 ||
-    !/^(?:maxbec|navigaite|edilio)\/[A-Za-z0-9._-]+$/u.test(input.repository) ||
+    !/^(?:maxbec|navigaite|edilio-app)\/[A-Za-z0-9._-]+$/u.test(input.repository) ||
     !/^[0-9a-f]{40}$/u.test(input.headSha) || !/^[0-9a-f]{40}$/u.test(input.baseSha) ||
     !(["none", "patch", "minor", "major"] as const).includes(input.releaseImpact)
   ) throw new PreflightError("input_invalid");

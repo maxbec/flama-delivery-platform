@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-type Owner = "maxbec" | "navigaite" | "edilio";
+type Owner = "maxbec" | "navigaite" | "edilio-app";
 type Profile = "fast" | "major";
 type ProofName = keyof CanaryProofs;
 type ProofStatus = "passed" | "failed" | "not_applicable";
@@ -127,7 +127,7 @@ function coverage(input: CanaryInput): CanaryCoverage {
     public: input.candidates.some(({ repository }) => repository.visibility === "public"),
     maxbec: input.candidates.some(({ repository }) => repository.owner === "maxbec"),
     navigaite: input.candidates.some(({ repository }) => repository.owner === "navigaite"),
-    edilio: input.candidates.some(({ repository }) => repository.owner === "edilio"),
+    edilio: input.candidates.some(({ repository }) => repository.owner === "edilio-app"),
     legacyStack: input.candidates.some(({ coverage: value }) => value.legacyStack),
     libraryRelease: input.candidates.some(({ coverage: value }) => value.libraryRelease),
     dockerDeployment: input.candidates.some(({ coverage: value }) => value.dockerDeployment),

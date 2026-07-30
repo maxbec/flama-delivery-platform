@@ -202,7 +202,7 @@ function assertPublishable(input: PublishCheckInput): string {
   const controller = expectedController(input.repository.nameWithOwner);
   if (
     input.schemaVersion !== 1 ||
-    !/^(?:maxbec|navigaite|edilio)\/[A-Za-z0-9._-]+$/u.test(input.repository.nameWithOwner) ||
+    !/^(?:maxbec|navigaite|edilio-app)\/[A-Za-z0-9._-]+$/u.test(input.repository.nameWithOwner) ||
     input.publisher.tokenScope !== "single-repository-checks-write" ||
     input.publisher.apiVersion !== githubApiVersion ||
     !/^[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?$/u.test(input.publisher.appSlug) ||

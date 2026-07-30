@@ -21,7 +21,7 @@ retains the major safety and phase boundaries.
 
 - Phase 0 live inventory is complete and reproducible with
   `scripts/phase0-inventory.sh`.
-- 64 consumer repositories are in scope.
+- 28 consumer repositories are in scope: 15 `maxbec`, 11 `navigaite`, 2 `edilio-app`.
 - 28 forks and 3 archived repositories are inventory-only and denied mutation.
 - This repository is tracked separately as the platform, not as consumer 65.
 - Consumer repositories have not been changed.

@@ -59,7 +59,7 @@ const input: GovernanceInput = {
     {
       key: "edilio",
       company: "Edilio",
-      githubOwner: "edilio",
+      githubOwner: "edilio-app",
       controller: "edilio-delivery-controller",
       paperclipAttestation: attestation(
         "Edilio", "edilio-delivery-controller", "33333333-3333-4333-8333-333333333333", "drift",

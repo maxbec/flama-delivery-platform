@@ -22,7 +22,7 @@
       "additionalProperties": false,
       "required": ["nameWithOwner", "githubRepositoryId", "profile", "defaultBranch", "isFork", "isArchived", "inventoryDigest", "inventoryVerifiedAt"],
       "properties": {
-        "nameWithOwner": { "type": "string", "pattern": "^(maxbec|navigaite|edilio)/[A-Za-z0-9._-]+$" },
+        "nameWithOwner": { "type": "string", "pattern": "^(maxbec|navigaite|edilio-app)/[A-Za-z0-9._-]+$" },
         "githubRepositoryId": { "type": "integer", "minimum": 1 },
         "profile": { "enum": ["fast", "major"] },
         "defaultBranch": { "type": "string", "minLength": 1, "maxLength": 255 },
@@ -57,7 +57,7 @@
     },
     {
       "if": { "type": "object", "properties": { "company": { "type": "object", "properties": { "name": { "const": "Edilio" } }, "required": ["name"] } }, "required": ["company"] },
-      "then": { "type": "object", "properties": { "controller": { "const": "edilio-delivery-controller" }, "repository": { "type": "object", "properties": { "nameWithOwner": { "type": "string", "pattern": "^edilio/" } } } } }
+      "then": { "type": "object", "properties": { "controller": { "const": "edilio-delivery-controller" }, "repository": { "type": "object", "properties": { "nameWithOwner": { "type": "string", "pattern": "^edilio-app/" } } } } }
     }
   ]
 }

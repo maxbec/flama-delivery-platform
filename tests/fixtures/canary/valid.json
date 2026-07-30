@@ -86,8 +86,8 @@
     {
       "key": "canary-fast-public",
       "repository": {
-        "nameWithOwner": "edilio/example-public-canary",
-        "owner": "edilio",
+        "nameWithOwner": "edilio-app/example-public-canary",
+        "owner": "edilio-app",
         "visibility": "public",
         "isFork": false,
         "isArchived": false

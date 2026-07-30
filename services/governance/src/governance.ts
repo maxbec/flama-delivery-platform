@@ -4,6 +4,7 @@ import {
 } from "../../../packages/contracts/src/paperclip-governance-attestation.js";
 
 type ScopeKey = "maxbec" | "navigaite" | "edilio";
+type GithubOwner = "maxbec" | "navigaite" | "edilio-app";
 type CompanyName = "Private" | "// Navigaite" | "Edilio";
 type ControllerName =
   | "maxbec-delivery-controller"
@@ -18,7 +19,7 @@ const digestPattern = /^sha256:[0-9a-f]{64}$/u;
 const repositoryPattern = /^[A-Za-z0-9._-]{1,100}$/u;
 const scopeContract: Readonly<Record<ScopeKey, {
   readonly company: CompanyName;
-  readonly githubOwner: ScopeKey;
+  readonly githubOwner: GithubOwner;
   readonly controller: ControllerName;
 }>> = {
   maxbec: {
@@ -33,7 +34,7 @@ const scopeContract: Readonly<Record<ScopeKey, {
   },
   edilio: {
     company: "Edilio",
-    githubOwner: "edilio",
+    githubOwner: "edilio-app",
     controller: "edilio-delivery-controller",
   },
 };
@@ -44,7 +45,7 @@ export interface GovernanceInput {
   readonly scopes: readonly {
     readonly key: ScopeKey;
     readonly company: CompanyName;
-    readonly githubOwner: ScopeKey;
+    readonly githubOwner: GithubOwner;
     readonly controller: ControllerName;
     readonly paperclipAttestation: PaperclipGovernanceAttestation;
     readonly repositories: readonly {
@@ -87,8 +88,8 @@ export interface GitHubWorkflowJob {
 }
 
 export interface GitHubGovernanceReader {
-  listRuns(owner: ScopeKey, repository: string, from: string, to: string): Promise<readonly GitHubWorkflowRun[]>;
-  listJobs(owner: ScopeKey, repository: string, runId: number, attempt: number): Promise<readonly GitHubWorkflowJob[]>;
+  listRuns(owner: GithubOwner, repository: string, from: string, to: string): Promise<readonly GitHubWorkflowRun[]>;
+  listJobs(owner: GithubOwner, repository: string, runId: number, attempt: number): Promise<readonly GitHubWorkflowJob[]>;
 }
 
 export interface GovernanceReaders {

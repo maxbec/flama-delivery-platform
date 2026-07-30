@@ -11,9 +11,11 @@ if grep -R -En 'TODO|\[TODO' "$ROOT_DIR/skills/flama-paperclip-delivery" >/dev/n
   exit 1
 fi
 
-for owner in maxbec navigaite edilio; do
-  controller="$ROOT_DIR/lifecycles/controllers/${owner}-delivery-controller.json"
-  jq -e --arg owner "$owner" '
+# The controller is named after its company; its GitHub owner is a separate
+# identifier and the two are not interchangeable.
+for pair in maxbec:maxbec navigaite:navigaite edilio:edilio-app; do
+  controller="$ROOT_DIR/lifecycles/controllers/${pair%%:*}-delivery-controller.json"
+  jq -e --arg owner "${pair##*:}" '
     .mode == "company-delivery" and
     .scope.githubOwners == [$owner] and
     (.authority.deny | contains(["git_push", "git_merge", "production_approval", "production_deploy", "secret_values"]))

@@ -12,7 +12,7 @@ const companies = {
   },
   Edilio: {
     controller: "edilio-delivery-controller",
-    owner: "edilio",
+    owner: "edilio-app",
   },
 } as const;
 

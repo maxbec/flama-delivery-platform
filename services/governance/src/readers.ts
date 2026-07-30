@@ -8,6 +8,8 @@ import {
 } from "./governance.js";
 
 type ScopeKey = "maxbec" | "navigaite" | "edilio";
+// The credential is keyed by scope, but the path segment is the GitHub owner.
+type GithubOwner = "maxbec" | "navigaite" | "edilio-app";
 type Environment = Readonly<Record<string, string | undefined>>;
 type FetchImplementation = (input: string | URL, init?: RequestInit) => Promise<Response>;
 interface SecretCredential { reveal(): string }
@@ -130,7 +132,7 @@ export class GitHubReadOnlyReader implements GitHubGovernanceReader {
     this.#client = new ReadOnlyJsonClient(apiBase, credential, fetchImplementation, true);
   }
 
-  async listRuns(owner: ScopeKey, repository: string, from: string, to: string): Promise<readonly GitHubWorkflowRun[]> {
+  async listRuns(owner: GithubOwner, repository: string, from: string, to: string): Promise<readonly GitHubWorkflowRun[]> {
     const runs: GitHubWorkflowRun[] = [];
     for (let page = 1; page <= 10; page += 1) {
       const query = new URLSearchParams({
@@ -177,7 +179,7 @@ export class GitHubReadOnlyReader implements GitHubGovernanceReader {
     throw new GovernanceError("governance_metadata_invalid");
   }
 
-  async listJobs(owner: ScopeKey, repository: string, runId: number, attempt: number): Promise<readonly GitHubWorkflowJob[]> {
+  async listJobs(owner: GithubOwner, repository: string, runId: number, attempt: number): Promise<readonly GitHubWorkflowJob[]> {
     const jobs: GitHubWorkflowJob[] = [];
     for (let page = 1; page <= 10; page += 1) {
       const query = new URLSearchParams({ per_page: "100", page: String(page) });

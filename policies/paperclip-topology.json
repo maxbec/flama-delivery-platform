@@ -27,7 +27,7 @@
     {
       "name": "edilio-delivery-controller",
       "company": "Edilio",
-      "githubOwner": "edilio",
+      "githubOwner": "edilio-app",
       "placement": "paperclip-company-agent",
       "adapterType": "process",
       "initialStatus": "paused",

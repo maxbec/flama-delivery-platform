@@ -28,7 +28,7 @@
         "properties": {
           "name": { "enum": ["maxbec-delivery-controller", "navigaite-delivery-controller", "edilio-delivery-controller"] },
           "company": { "enum": ["Private", "// Navigaite", "Edilio"] },
-          "githubOwner": { "enum": ["maxbec", "navigaite", "edilio"] },
+          "githubOwner": { "enum": ["maxbec", "navigaite", "edilio-app"] },
           "placement": { "const": "paperclip-company-agent" },
           "adapterType": { "const": "process" },
           "initialStatus": { "const": "paused" },
@@ -68,7 +68,7 @@
             "properties": {
               "name": { "const": "edilio-delivery-controller" },
               "company": { "const": "Edilio" },
-              "githubOwner": { "const": "edilio" }
+              "githubOwner": { "const": "edilio-app" }
             },
             "required": ["name", "company", "githubOwner"]
           },

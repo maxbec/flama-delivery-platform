@@ -80,7 +80,7 @@ describe("GitHub webhook minimization", () => {
   it("retains safe legacy base branches during phased migration", () => {
     const result = sanitizeGitHubWebhook("pull_request", {
       action: "opened",
-      repository: { id: 104, full_name: "edilio/legacy-plugin" },
+      repository: { id: 104, full_name: "edilio-app/legacy-plugin" },
       pull_request: {
         number: 3,
         state: "open",
@@ -88,7 +88,7 @@ describe("GitHub webhook minimization", () => {
         head: { sha, ref: "feature/legacy-fix" },
         base: { ref: "develop" },
         merge_commit_sha: null,
-        html_url: "https://github.com/edilio/legacy-plugin/pull/3",
+        html_url: "https://github.com/edilio-app/legacy-plugin/pull/3",
       },
     });
 
@@ -112,7 +112,7 @@ describe("GitHub webhook minimization", () => {
     expect(
       sanitizeGitHubWebhook("release", {
         action: "published",
-        repository: { id: 103, full_name: "edilio/plugin" },
+        repository: { id: 103, full_name: "edilio-app/plugin" },
         release: { id: 4, tag_name: "v1.0.0", target_commitish: "main" },
       }),
     ).toEqual({ status: "invalid" });
@@ -141,8 +141,8 @@ describe("GitHub webhook minimization", () => {
       "release",
       {
         action: "published",
-        repository: { id: 203, full_name: "edilio/plugin" },
-        release: { id: 3, tag_name: "v1.0.0", target_commitish: "main", draft: false, prerelease: false, html_url: "https://github.com/edilio/plugin/releases/tag/v1.0.0" },
+        repository: { id: 203, full_name: "edilio-app/plugin" },
+        release: { id: 3, tag_name: "v1.0.0", target_commitish: "main", draft: false, prerelease: false, html_url: "https://github.com/edilio-app/plugin/releases/tag/v1.0.0" },
       },
       "release",
     ],

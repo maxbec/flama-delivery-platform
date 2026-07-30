@@ -22,13 +22,13 @@
         "archived": 3
       }
     },
-    "edilio": {
+    "edilio-app": {
       "paperclipCompany": "Edilio",
       "expected": {
-        "inScope": 38,
-        "private": 0,
-        "public": 38,
-        "forks": 15,
+        "inScope": 2,
+        "private": 1,
+        "public": 1,
+        "forks": 0,
         "archived": 0
       }
     }

@@ -4,7 +4,7 @@ import { Pool } from "pg";
 const companyControllers = {
   Private: { owner: "maxbec", controller: "maxbec-delivery-controller" },
   "// Navigaite": { owner: "navigaite", controller: "navigaite-delivery-controller" },
-  Edilio: { owner: "edilio", controller: "edilio-delivery-controller" },
+  Edilio: { owner: "edilio-app", controller: "edilio-delivery-controller" },
 } as const;
 
 type CompanyName = keyof typeof companyControllers;

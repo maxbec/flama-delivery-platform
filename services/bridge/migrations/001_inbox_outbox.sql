@@ -5,7 +5,7 @@ CREATE SCHEMA IF NOT EXISTS flama_delivery;
 CREATE TABLE IF NOT EXISTS flama_delivery.webhook_inbox (
   delivery_id text PRIMARY KEY,
   event_name text NOT NULL,
-  owner_name text NOT NULL CHECK (owner_name IN ('maxbec', 'navigaite', 'edilio')),
+  owner_name text NOT NULL CHECK (owner_name IN ('maxbec', 'navigaite', 'edilio-app')),
   repository_name text NOT NULL,
   payload jsonb NOT NULL,
   status text NOT NULL DEFAULT 'pending'

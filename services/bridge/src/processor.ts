@@ -35,7 +35,7 @@ export interface PaperclipPublisher {
 const companies = {
   maxbec: "Private",
   navigaite: "// Navigaite",
-  edilio: "Edilio",
+  "edilio-app": "Edilio",
 } as const;
 
 function deliveryIdIsSafe(value: string): boolean {

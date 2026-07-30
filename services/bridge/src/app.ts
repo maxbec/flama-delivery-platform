@@ -10,7 +10,7 @@ export interface BridgeReadiness {
 
 interface BridgeAppOptions {
   readonly webhookSecret: string;
-  readonly allowedOwner: "maxbec" | "navigaite" | "edilio";
+  readonly allowedOwner: "maxbec" | "navigaite" | "edilio-app";
   readonly inbox: EnqueueWebhook;
   readonly readiness: BridgeReadiness;
   readonly repositoryScope: RepositoryScope;

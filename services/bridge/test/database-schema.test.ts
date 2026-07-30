@@ -28,7 +28,7 @@ describe("bridge database schema", () => {
     expect(sql).toContain("split_part(repository_name, '/', 1) = owner_name");
     expect(sql).toContain("owner_name = 'maxbec' and company = 'private'");
     expect(sql).toContain("owner_name = 'navigaite' and company = '// navigaite'");
-    expect(sql).toContain("owner_name = 'edilio' and company = 'edilio'");
+    expect(sql).toContain("owner_name = 'edilio-app' and company = 'edilio'");
     expect(sql).not.toMatch(/insert into flama_delivery\.repository_binding/);
   });
 

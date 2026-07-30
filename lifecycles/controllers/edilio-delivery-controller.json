@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "name": "edilio-delivery-controller",
   "mode": "company-delivery",
-  "scope": { "companies": ["Edilio"], "githubOwners": ["edilio"] },
+  "scope": { "companies": ["Edilio"], "githubOwners": ["edilio-app"] },
   "authority": {
     "read": ["paperclip_company", "github_metadata", "delivery_evidence", "ci_usage"],
     "write": ["paperclip_company_transitions", "github_preflight_checks", "github_pull_requests"],

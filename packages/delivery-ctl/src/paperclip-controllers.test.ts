@@ -261,6 +261,72 @@ describe("Paperclip delivery-controller provisioning", () => {
     }
   });
 
+  it("migrates a controller whose contract was revised in place", async () => {
+    const client = new MemoryControllersClient();
+    const controllerContract = await contract();
+    await applyPaperclipControllers(input(), controllerContract, client);
+    if (client.agent === undefined) throw new Error("test setup failed");
+    client.agent = {
+      ...client.agent,
+      metadata: { ...client.agent.metadata, contractDigest: `sha256:${"0".repeat(64)}` },
+    };
+
+    const migrated = await applyPaperclipControllers(input(), controllerContract, client);
+
+    expect(migrated).toMatchObject({ disposition: "migrated" });
+    expect(client.agent).toMatchObject({
+      adapterConfig: { args: ["bin/controller/index.js"] },
+      metadata: { topologyVersion: 2, contractDigest: migrated.contractDigest },
+    });
+  });
+
+  it("refuses an agent that differs by more than its contract digest", async () => {
+    const client = new MemoryControllersClient();
+    const controllerContract = await contract();
+    await applyPaperclipControllers(input(), controllerContract, client);
+    if (client.agent === undefined) throw new Error("test setup failed");
+    client.agent = {
+      ...client.agent,
+      budgetMonthlyCents: 500,
+      metadata: { ...client.agent.metadata, contractDigest: `sha256:${"0".repeat(64)}` },
+    };
+
+    await expect(applyPaperclipControllers(input(), controllerContract, client)).rejects.toEqual(
+      expect.objectContaining<Partial<PaperclipControllersError>>({ code: "paperclip_agent_drift" }),
+    );
+  });
+
+  it("refuses an agent whose metadata drifted in any way other than the digest", async () => {
+    const client = new MemoryControllersClient();
+    const controllerContract = await contract();
+    await applyPaperclipControllers(input(), controllerContract, client);
+    if (client.agent === undefined) throw new Error("test setup failed");
+    // Topology v1 without the legacy entrypoint is not a contract revision.
+    client.agent = {
+      ...client.agent,
+      metadata: { ...client.agent.metadata, topologyVersion: 1 },
+    };
+
+    await expect(applyPaperclipControllers(input(), controllerContract, client)).rejects.toEqual(
+      expect.objectContaining<Partial<PaperclipControllersError>>({ code: "paperclip_agent_drift" }),
+    );
+    expect(client.updateCalls).toBe(0);
+  });
+
+  it("refuses an agent carrying no contract digest at all", async () => {
+    const client = new MemoryControllersClient();
+    const controllerContract = await contract();
+    await applyPaperclipControllers(input(), controllerContract, client);
+    if (client.agent === undefined) throw new Error("test setup failed");
+    const { contractDigest: _removed, ...withoutDigest } = client.agent.metadata as Record<string, unknown>;
+    client.agent = { ...client.agent, metadata: withoutDigest };
+
+    await expect(applyPaperclipControllers(input(), controllerContract, client)).rejects.toEqual(
+      expect.objectContaining<Partial<PaperclipControllersError>>({ code: "paperclip_agent_drift" }),
+    );
+    expect(client.updateCalls).toBe(0);
+  });
+
   it("suppresses credentials and rejected upstream bodies", async () => {
     const credential = `paperclip_${"sensitive".repeat(4)}`;
     const rejectedBody = `private upstream response ${credential}`;

@@ -156,13 +156,13 @@ describe("bridge workers", () => {
     const queue = new MemoryWebhookQueue({
       deliveryId: "delivery-scope-denied",
       eventName: "push",
-      owner: "edilio",
-      repository: "edilio/plugin",
+      owner: "edilio-app",
+      repository: "edilio-app/plugin",
       payload: {
         schemaVersion: 1,
         eventName: "push",
         action: "updated",
-        repository: "edilio/plugin",
+        repository: "edilio-app/plugin",
         repositoryId: 205,
         push: { ref: "refs/heads/main", before: sha, after: "c".repeat(40), created: false, deleted: false, forced: false },
       },
@@ -186,7 +186,7 @@ describe("bridge workers", () => {
       deliveryId: "delivery-12",
       company: "Edilio",
       transitionKind: "release.published",
-      payload: { schemaVersion: 1, repository: "edilio/plugin" },
+      payload: { schemaVersion: 1, repository: "edilio-app/plugin" },
       attempts: 1,
     };
     const queue = new MemoryTransitionQueue(transition);

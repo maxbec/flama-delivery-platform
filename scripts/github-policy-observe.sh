@@ -67,7 +67,7 @@ require_command jq
 require_command gh
 require_command base64
 
-[[ "$REPOSITORY" =~ ^(maxbec|navigaite|edilio)/[A-Za-z0-9._-]+$ ]] || \
+[[ "$REPOSITORY" =~ ^(maxbec|navigaite|edilio-app)/[A-Za-z0-9._-]+$ ]] || \
   die "--repository must be OWNER/NAME for an approved owner"
 [[ "$PROFILE" == "fast" || "$PROFILE" == "major" ]] || die "--profile must be fast or major"
 [[ -n "$POSTURE_PATH" ]] || die "--posture is required: App and runner posture is not observable"

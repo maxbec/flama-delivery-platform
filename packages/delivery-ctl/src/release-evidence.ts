@@ -6,7 +6,7 @@ import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path
 
 const githubApiVersion = "2026-03-10" as const;
 const digestPattern = /^sha256:[0-9a-f]{64}$/u;
-const repositoryPattern = /^(?:maxbec|navigaite|edilio)\/[A-Za-z0-9._-]+$/u;
+const repositoryPattern = /^(?:maxbec|navigaite|edilio-app)\/[A-Za-z0-9._-]+$/u;
 const tagPattern = /^v(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)$/u;
 
 export interface ReleaseEvidenceInput {

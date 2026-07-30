@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "name": "flama-governance-controller",
   "mode": "global-governance",
-  "scope": { "companies": ["Private", "// Navigaite", "Edilio"], "githubOwners": ["maxbec", "navigaite", "edilio"] },
+  "scope": { "companies": ["Private", "// Navigaite", "Edilio"], "githubOwners": ["maxbec", "navigaite", "edilio-app"] },
   "authority": {
     "read": ["paperclip_attestation", "github_metadata", "delivery_evidence", "ci_usage"],
     "write": [],

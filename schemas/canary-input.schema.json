@@ -30,8 +30,8 @@
           "additionalProperties": false,
           "required": ["nameWithOwner", "owner", "visibility", "isFork", "isArchived"],
           "properties": {
-            "nameWithOwner": { "type": "string", "pattern": "^(maxbec|navigaite|edilio)/[A-Za-z0-9_.-]+$", "maxLength": 200 },
-            "owner": { "enum": ["maxbec", "navigaite", "edilio"] },
+            "nameWithOwner": { "type": "string", "pattern": "^(maxbec|navigaite|edilio-app)/[A-Za-z0-9_.-]+$", "maxLength": 200 },
+            "owner": { "enum": ["maxbec", "navigaite", "edilio-app"] },
             "visibility": { "enum": ["private", "public"] },
             "isFork": { "const": false },
             "isArchived": { "const": false }

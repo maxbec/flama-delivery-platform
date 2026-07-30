@@ -27,7 +27,7 @@
         "properties": {
           "key": { "enum": ["maxbec", "navigaite", "edilio"] },
           "company": { "enum": ["Private", "// Navigaite", "Edilio"] },
-          "githubOwner": { "enum": ["maxbec", "navigaite", "edilio"] },
+          "githubOwner": { "enum": ["maxbec", "navigaite", "edilio-app"] },
           "controller": {
             "enum": [
               "maxbec-delivery-controller",
@@ -131,7 +131,7 @@
             "properties": {
               "key": { "const": "edilio" },
               "company": { "const": "Edilio" },
-              "githubOwner": { "const": "edilio" },
+              "githubOwner": { "const": "edilio-app" },
               "controller": { "const": "edilio-delivery-controller" },
               "paperclipAttestation": {
                 "type": "object",

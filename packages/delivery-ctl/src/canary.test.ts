@@ -82,7 +82,7 @@ describe("representative canary gates", () => {
   it("rejects incomplete coverage and evidence attached to a plan", () => {
     const incomplete: CanaryInput = {
       ...planned,
-      candidates: planned.candidates.filter(({ repository }) => repository.owner !== "edilio"),
+      candidates: planned.candidates.filter(({ repository }) => repository.owner !== "edilio-app"),
     };
     expect(planCanaries(incomplete)).toMatchObject({
       status: "failed",

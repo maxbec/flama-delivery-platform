@@ -174,7 +174,7 @@ function assertInput(input: PromotionInput): void {
   if (
     input.schemaVersion !== 1 ||
     input.profile !== "major" ||
-    !/^(?:maxbec|navigaite|edilio)\/[A-Za-z0-9._-]+$/u.test(input.repository.nameWithOwner) ||
+    !/^(?:maxbec|navigaite|edilio-app)\/[A-Za-z0-9._-]+$/u.test(input.repository.nameWithOwner) ||
     controller === undefined ||
     input.publisher.controller !== controller ||
     !/^[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?$/u.test(input.publisher.appSlug) ||

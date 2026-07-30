@@ -1,8 +1,8 @@
 BEGIN;
 
 CREATE TABLE IF NOT EXISTS flama_delivery.repository_binding (
-  repository_name text PRIMARY KEY CHECK (repository_name ~ '^(maxbec|navigaite|edilio)/[A-Za-z0-9._-]+$'),
-  owner_name text NOT NULL CHECK (owner_name IN ('maxbec', 'navigaite', 'edilio')),
+  repository_name text PRIMARY KEY CHECK (repository_name ~ '^(maxbec|navigaite|edilio-app)/[A-Za-z0-9._-]+$'),
+  owner_name text NOT NULL CHECK (owner_name IN ('maxbec', 'navigaite', 'edilio-app')),
   company text NOT NULL CHECK (company IN ('Private', '// Navigaite', 'Edilio')),
   project_id text NOT NULL CHECK (length(project_id) > 0),
   workspace_id text NOT NULL CHECK (length(workspace_id) > 0),
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS flama_delivery.repository_binding (
   CHECK (
     (owner_name = 'maxbec' AND company = 'Private') OR
     (owner_name = 'navigaite' AND company = '// Navigaite') OR
-    (owner_name = 'edilio' AND company = 'Edilio')
+    (owner_name = 'edilio-app' AND company = 'Edilio')
   ),
   CHECK (NOT active OR (NOT is_fork AND NOT is_archived)),
   CHECK (split_part(repository_name, '/', 1) = owner_name)

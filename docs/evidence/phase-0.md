@@ -11,19 +11,19 @@ kept in protected local evidence storage and intentionally not published.
 | --- | ---: | ---: | ---: | ---: | ---: |
 | `maxbec` | 15 | 11 | 4 | 13 | 0 |
 | `navigaite` | 11 | 9 | 2 | 0 | 3 |
-| `edilio` | 38 | 0 | 38 | 15 | 0 |
-| **Total** | **64** | **20** | **44** | **28** | **3** |
+| `edilio-app` | 2 | 1 | 1 | 0 | 0 |
+| **Total** | **28** | **21** | **7** | **13** | **3** |
 
 The newly created `maxbec/flama-delivery-platform` is recorded separately with
 the `platform` disposition. It is mutable as the platform source of truth but is
-not consumer 65 and does not change the approved 64-consumer completion target.
+not consumer 29 and does not change the corrected 28-consumer completion target.
 
 Safety proof:
 
 - the live inventory was revalidated at `2026-07-30T08:31:24Z`; its protected
   snapshot digest is
   `sha256:c8d83a95c3798195ae3aaba41007aaf20fc86c0904f707ba0677f68f5d76eed1`;
-- 96 owned records observed: 64 consumers, 31 inventory-only exclusions, and one
+- Owned records observed: 28 consumers, the inventory-only exclusions, and one
   central platform repository;
 - zero fork or archived records allow mutation;
 - all observed owner counts equal `policies/repository-scope.json`;

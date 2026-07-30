@@ -39,6 +39,7 @@ describe("PostgreSQL durable inbox and outbox", () => {
       "003_binding_identity.sql",
       "004_external_transition_authorizations.sql",
       "005_reconciliation_indexes.sql",
+      "006_github_owner_rename.sql",
     ]) {
       const migrationPath = fileURLToPath(new URL(`../migrations/${migration}`, import.meta.url));
       await pool.query(await readFile(migrationPath, "utf8"));
@@ -129,8 +130,8 @@ describe("PostgreSQL durable inbox and outbox", () => {
     await inbox.enqueue({
       deliveryId: "delivery-postgres-2",
       eventName: "pull_request",
-      owner: "edilio",
-      repository: "edilio/site",
+      owner: "edilio-app",
+      repository: "edilio-app/site",
       payload: { action: "closed" },
       receivedAt: new Date("2026-07-28T08:01:00.000Z"),
     });

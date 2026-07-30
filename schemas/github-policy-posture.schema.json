@@ -17,7 +17,7 @@
       "properties": {
         "maxbec": { "$ref": "#/$defs/ownerPosture" },
         "navigaite": { "$ref": "#/$defs/ownerPosture" },
-        "edilio": { "$ref": "#/$defs/ownerPosture" }
+        "edilio-app": { "$ref": "#/$defs/ownerPosture" }
       }
     },
     "runners": { "$ref": "#/$defs/runners" }
