@@ -29,7 +29,11 @@ canaries pass.
 - Working branch: `agent/platform-foundation`
 - Draft pull request: [#1](https://github.com/maxbec/flama-delivery-platform/pull/1)
 - Foundation implementation baseline: signed commit `50e7c8fa12e0930402d1a652a5d407d65dcb802e`
-- Hosted Foundation Gate: [run 30530049431](https://github.com/maxbec/flama-delivery-platform/actions/runs/30530049431), passed for that exact baseline
+- Secret-safe HMAC routine installer checkpoint: signed commit
+  `5972f4f661bac8906305aa19d5478ca107459c63`
+- Hosted Foundation Gate:
+  [run 30533863593](https://github.com/maxbec/flama-delivery-platform/actions/runs/30533863593),
+  passed for that exact installer checkpoint
 - Runtime: Node.js `26.3.0`
 - Released Paperclip dependency used as-is: `2026.722.0`
 - Current local full gate: passed with 205 unit tests and 12 PostgreSQL 18
