@@ -140,13 +140,29 @@ Implemented and verified:
   root. A repeat run reports `reused`, so the installer is idempotent. Evidence
   is written create-only at mode 0600 and carries no object identifiers.
 
+- Bindings were blocked by two missing producers, not only by the mapping: the
+  binding input requires `githubRepositoryId` and `inventoryDigest`, and nothing
+  in the repository emitted either. The inventory now carries the GitHub numeric
+  repository id and a recomputable digest over its own canonical form.
+- One Paperclip project and one `git_repo` workspace now exist per in-scope
+  repository, created through the documented CLI. Reuse is keyed on the
+  repository URL, not the project name, because Paperclip silently renames a
+  colliding name and name matching would have produced duplicates. Two existing
+  objects were reused rather than duplicated, and one pre-existing workspace
+  that carried no default ref had it set; a workspace whose default ref
+  disagreed with the repository would have stopped the run instead.
+- All 64 in-scope repositories are now bound. Each binding was proved by
+  dry-run first, then applied through the same fail-closed command against a
+  dedicated delivery database that is separate from the Paperclip control-plane
+  database. An independent read of the store confirms 64 active bindings with
+  the expected per-company split, profiles matching `classify`, and no fork or
+  archived repository. A repeat run reports `reused`.
+
 Still pending:
 
 - One company still requires Paperclip's native board approval before any new
   agent is created. This did not block the migration, because that company's
   controller already existed and no agent was created.
-- Selecting each repository's project/workspace mapping and applying private
-  bindings remains pending; the command intentionally does not guess mappings.
 - Live bridge deployment, routine-trigger secret injection, and controller
   authorization writes remain pending explicit deployment authority, Infisical
   mapping, and the private repository/case mappings. The runtime does not infer
