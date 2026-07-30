@@ -193,6 +193,10 @@ describe("repository bootstrap", () => {
     const ignore = await readFile(join(repository.root, ".prettierignore"), "utf8");
     expect(ignore).toContain(".flama/");
     expect(ignore).toContain(".github/workflows/flama-");
+    // Every generated and scaffolded path, not just the .flama directory.
+    for (const path of [".paperclip/", ".github/CODEOWNERS", "scripts/delivery"]) {
+      expect(ignore).toContain(path);
+    }
     const agents = await readFile(join(repository.root, "AGENTS.md"), "utf8");
     expect(agents).toContain("Keep this text.");
     expect(agents.match(/<!-- flama-delivery:start -->/gu)).toHaveLength(1);

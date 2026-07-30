@@ -314,10 +314,13 @@ async function ownedTargets(repositoryRoot: string, input: BootstrapInput): Prom
       content: [
         "# Flama delivery platform: generated and drift-protected.",
         ".flama/",
+        ".paperclip/",
         ".github/workflows/flama-*.yml",
         ".github/dependabot.yml",
+        ".github/CODEOWNERS",
         ".release-please-config.json",
         ".release-please-manifest.json",
+        "scripts/delivery",
         "",
       ].join("\n"),
       mode: 0o644,
