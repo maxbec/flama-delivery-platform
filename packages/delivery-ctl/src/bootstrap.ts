@@ -306,6 +306,23 @@ async function ownedTargets(repositoryRoot: string, input: BootstrapInput): Prom
       mode: 0o644,
     },
     {
+      // Generated files are platform-owned and drift-protected. A consumer
+      // formatter that rewrote them would fight the platform on every run.
+      // Created once: a repository that already has this file keeps its own,
+      // and the exclusions are then the repository owner's to add.
+      path: ".prettierignore",
+      content: [
+        "# Flama delivery platform: generated and drift-protected.",
+        ".flama/",
+        ".github/workflows/flama-*.yml",
+        ".github/dependabot.yml",
+        ".release-please-config.json",
+        ".release-please-manifest.json",
+        "",
+      ].join("\n"),
+      mode: 0o644,
+    },
+    {
       path: "AGENTS.md",
       content: agentsBlock(input),
       mode: 0o644,

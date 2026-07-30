@@ -155,6 +155,14 @@ describe("repository bootstrap", () => {
     expect(prepared.generated.files.every(({ status }) => status === "created")).toBe(true);
     expect(prepared.repositoryOwned).toContainEqual({ path: "scripts/delivery", status: "created" });
     expect(prepared.repositoryOwned).toContainEqual({ path: "AGENTS.md", status: "appended" });
+
+    // Generated files are platform-owned and drift-protected. A consumer
+    // formatter that rewrites them would fight the platform on every run, so
+    // the repository is told to leave them alone.
+    expect(prepared.repositoryOwned.map(({ path }) => path)).toContain(".prettierignore");
+    const ignore = await readFile(join(repository.root, ".prettierignore"), "utf8");
+    expect(ignore).toContain(".flama/");
+    expect(ignore).toContain(".github/workflows/flama-");
     const agents = await readFile(join(repository.root, "AGENTS.md"), "utf8");
     expect(agents).toContain("Keep this text.");
     expect(agents.match(/<!-- flama-delivery:start -->/gu)).toHaveLength(1);
