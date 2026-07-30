@@ -127,7 +127,11 @@ Implemented commands:
   verbatim; the command refuses to run without one and refuses an owner the
   posture does not cover. A default branch outside `main`/`dev` stops the run,
   while an unprotected default branch is reported with every control off,
-  because that is drift the audit exists to surface.
+  because that is drift the audit exists to surface. Reading the Actions policy
+  needs admin or the fine-grained `Actions policies: read` permission on the
+  repository, which the delivery App deliberately does not hold; observation is
+  therefore run with an owner-level read credential, not an App installation
+  token.
 - `github-policy-audit --input <normalized-observation>` compares read-only,
   identifier-free repository metadata with the exact Fast/Major branch profile,
   required checks, merge settings, Actions trust boundary, security features,
