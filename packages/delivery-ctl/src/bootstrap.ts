@@ -143,7 +143,7 @@ function ownerCompany(owner: string): PaperclipCompany | undefined {
       return "Private";
     case "navigaite":
       return "// Navigaite";
-    case "edilio":
+    case "edilio-app":
       return "Edilio";
     default:
       return undefined;

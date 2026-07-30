@@ -177,7 +177,7 @@ function expectedController(repository: string): DeliveryController | undefined 
       return "maxbec-delivery-controller";
     case "navigaite":
       return "navigaite-delivery-controller";
-    case "edilio":
+    case "edilio-app":
       return "edilio-delivery-controller";
     default:
       return undefined;

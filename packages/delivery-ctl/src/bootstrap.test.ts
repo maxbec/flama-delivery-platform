@@ -129,6 +129,36 @@ function bootstrapInput(baseSha: string): BootstrapInput {
 }
 
 describe("repository bootstrap", () => {
+  it("accepts the Edilio company's actual GitHub owner", async () => {
+    // The Edilio company's owner is the organization edilio-app. The
+    // identically named personal account belongs to someone else.
+    const repository = await initializeRepository();
+    await git(repository.root, "remote", "set-url", "origin",
+      "https://github.com/edilio-app/edilio.git");
+    const base = bootstrapInput(repository.sha);
+    const edilio = {
+      ...base,
+      repository: { ...base.repository, nameWithOwner: "edilio-app/edilio" },
+      contract: {
+        ...base.contract,
+        repository: { ...base.contract.repository, owner: "edilio-app", name: "edilio" },
+        paperclip: { ...base.contract.paperclip, company: "Edilio" as const },
+      },
+      render: {
+        ...base.render,
+        repository: "edilio-app/edilio",
+        paperclip: { ...base.render.paperclip, company: "Edilio" as const },
+      },
+    } as unknown as BootstrapInput;
+
+    await expect(bootstrapRepository({
+      repositoryRoot: platformRoot,
+      outputRoot: repository.root,
+      input: edilio,
+      dryRun: true,
+    })).resolves.toMatchObject({ status: "planned" });
+  });
+
   it("dry-runs, prepares from the exact remote source, and reruns idempotently", async () => {
     const repository = await initializeRepository();
     const input = bootstrapInput(repository.sha);
