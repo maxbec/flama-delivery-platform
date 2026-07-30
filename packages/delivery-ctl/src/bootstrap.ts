@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { appendFile, lstat, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { stringify as stringifyYaml } from "yaml";
+import { parse as parseYaml, stringify as stringifyYaml } from "yaml";
 import {
   assertSafeOutputRoot,
   assertSafeParents,
@@ -120,6 +120,12 @@ interface OwnedTarget {
   readonly appendToExisting?: true;
   /** Marker pair proving this block is already present, for appendable files. */
   readonly markers?: readonly [string, string];
+  /**
+   * Merge the generated paths into a Trunk lint-ignore block instead of writing
+   * a file. Trunk resolves its own ignores from this configuration and never
+   * consults a formatter ignore file, so nothing else reaches its checks.
+   */
+  readonly mergeTrunkIgnore?: readonly string[];
 }
 
 interface OwnedState {
@@ -291,6 +297,48 @@ async function prettierIgnorePath(outputRoot: string): Promise<string> {
   return ".prettierignore";
 }
 
+const generatedExclusions = [
+  ".flama/**",
+  ".paperclip/**",
+  ".github/workflows/flama-*.yml",
+  ".github/dependabot.yml",
+  ".github/CODEOWNERS",
+  ".release-please-config.json",
+  ".release-please-manifest.json",
+  "scripts/delivery",
+];
+
+// Generated files are platform-owned and drift-protected: a consumer formatter
+// that rewrote them would fight the platform on every run. Where the repository
+// uses Trunk the exclusion has to live in its lint configuration, because Trunk
+// resolves its own ignores and never reads a formatter ignore file.
+async function formatterExclusionTarget(outputRoot: string): Promise<OwnedTarget> {
+  try {
+    await lstat(join(outputRoot, ".trunk/trunk.yaml"));
+    return {
+      path: ".trunk/trunk.yaml",
+      content: "",
+      mode: 0o644,
+      mergeTrunkIgnore: generatedExclusions,
+    };
+  } catch {
+    return {
+      path: await prettierIgnorePath(outputRoot),
+      appendToExisting: true as const,
+      markers: ["# flama-delivery:start", "# flama-delivery:end"] as const,
+      content: [
+        "",
+        "# flama-delivery:start",
+        "# Flama delivery platform: generated and drift-protected.",
+        ...generatedExclusions.map((path) => path.replace("/**", "/")),
+        "# flama-delivery:end",
+        "",
+      ].join("\n"),
+      mode: 0o644,
+    };
+  }
+}
+
 async function ownedTargets(
   repositoryRoot: string,
   input: BootstrapInput,
@@ -328,30 +376,7 @@ async function ownedTargets(
       ),
       mode: 0o644,
     },
-    {
-      // Generated files are platform-owned and drift-protected. A consumer
-      // formatter that rewrote them would fight the platform on every run.
-      // Created once: a repository that already has this file keeps its own,
-      // and the exclusions are then the repository owner's to add.
-      path: await prettierIgnorePath(outputRoot),
-      appendToExisting: true as const,
-      markers: ["# flama-delivery:start", "# flama-delivery:end"] as const,
-      content: [
-        "# flama-delivery:start",
-        "# Flama delivery platform: generated and drift-protected.",
-        ".flama/",
-        ".paperclip/",
-        ".github/workflows/flama-*.yml",
-        ".github/dependabot.yml",
-        ".github/CODEOWNERS",
-        ".release-please-config.json",
-        ".release-please-manifest.json",
-        "scripts/delivery",
-        "# flama-delivery:end",
-        "",
-      ].join("\n"),
-      mode: 0o644,
-    },
+    await formatterExclusionTarget(outputRoot),
     {
       path: "AGENTS.md",
       content: agentsBlock(input),
@@ -418,9 +443,29 @@ function appendPrefix(originalContent: string): string {
   return originalContent.endsWith("\n") ? "\n" : "\n\n";
 }
 
+const trunkIgnoreLinters = ["prettier", "yamlfmt", "yamllint", "markdownlint", "shellcheck", "shfmt"];
+
+async function mergeTrunkIgnore(destination: string, paths: readonly string[]): Promise<void> {
+  const original = await readFile(destination, "utf8");
+  const document = parseYaml(original) as Record<string, unknown>;
+  const lint = (document["lint"] ?? {}) as Record<string, unknown>;
+  const ignore = Array.isArray(lint["ignore"]) ? [...(lint["ignore"] as unknown[])] : [];
+  const already = ignore.some((entry) =>
+    typeof entry === "object" && entry !== null &&
+    JSON.stringify((entry as Record<string, unknown>)["paths"]) === JSON.stringify([...paths]));
+  if (already) return;
+  ignore.push({ linters: trunkIgnoreLinters, paths: [...paths] });
+  document["lint"] = { ...lint, ignore };
+  await writeFile(destination, stringifyYaml(document, { lineWidth: 0 }), "utf8");
+}
+
 async function applyOwnedTargets(root: string, states: readonly OwnedState[]): Promise<void> {
   for (const state of states) {
     const destination = join(root, state.target.path);
+    if (state.target.mergeTrunkIgnore !== undefined) {
+      await mergeTrunkIgnore(destination, state.target.mergeTrunkIgnore);
+      continue;
+    }
     if (state.append) {
       const currentContent = await readFile(destination, "utf8");
       if (currentContent !== state.originalContent) {

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { describe, expect, it } from "vitest";
+import { parse as parseYaml } from "yaml";
 import {
   bootstrapRepository,
   BootstrapError,
@@ -290,5 +291,30 @@ describe("repository bootstrap", () => {
     const ignore = await readFile(join(repository.root, "configs/.prettierignore"), "utf8");
     expect(ignore).toContain("dist");
     expect(ignore).toContain(".flama/");
+  });
+
+  it("expresses the exclusion in Trunk's own lint configuration", async () => {
+    const repository = await initializeRepository();
+    await mkdir(join(repository.root, ".trunk"), { recursive: true });
+    await writeFile(join(repository.root, ".trunk/trunk.yaml"),
+      "version: 0.1\nlint:\n  ignore:\n    - linters: [prettier]\n      paths: [CHANGELOG.md]\n", "utf8");
+    await git(repository.root, "add", ".trunk/trunk.yaml");
+    await git(repository.root, "commit", "-m", "add trunk config");
+    const sha = await git(repository.root, "rev-parse", "HEAD");
+    await git(repository.root, "update-ref", "refs/remotes/origin/main", sha);
+
+    const prepared = await bootstrapRepository({
+      repositoryRoot: platformRoot,
+      outputRoot: repository.root,
+      input: bootstrapInput(sha),
+      dryRun: false,
+    });
+
+    expect(prepared.repositoryOwned.map(({ path }) => path)).toContain(".trunk/trunk.yaml");
+    const trunk = parseYaml(await readFile(join(repository.root, ".trunk/trunk.yaml"), "utf8"));
+    // The repository keeps its own ignores and gains ours.
+    expect(trunk.lint.ignore).toHaveLength(2);
+    expect(JSON.stringify(trunk.lint.ignore)).toContain("CHANGELOG.md");
+    expect(JSON.stringify(trunk.lint.ignore)).toContain(".flama/**");
   });
 });
