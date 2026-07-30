@@ -33,12 +33,20 @@ Required environment names are:
 FLAMA_GOVERNANCE_MAXBEC_GITHUB_TOKEN
 FLAMA_GOVERNANCE_NAVIGAITE_GITHUB_TOKEN
 FLAMA_GOVERNANCE_EDILIO_GITHUB_TOKEN
+FLAMA_RECONCILIATION_EVIDENCE_DIR
 ```
 
 GitHub identities need only repository metadata and Actions read access for
 their matching owner. The runtime accepts the installation-token form only, not
 personal access tokens. Its network layer has no POST, PUT, PATCH, or DELETE
 request primitive and no Paperclip endpoint at all.
+
+`FLAMA_RECONCILIATION_EVIDENCE_DIR` is the same protected absolute directory
+used by the native company controllers. For every attestation embedded in a
+governance input, the job requires an exact matching create-only mode-0600
+`paperclip-governance-<run-id>.json` file in that directory. Missing, permissive,
+symlinked, substituted, or mismatched evidence fails closed before any GitHub
+request.
 
 ## Run contract
 

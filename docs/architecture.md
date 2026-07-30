@@ -67,7 +67,7 @@ The governance runtime additionally enforces that boundary in code: its only
 network reader is a GET-only GitHub client, it derives each allowed
 company/owner pair from a fixed contract, rejects GitHub credentials reused
 across owners, requires fresh digest-bound attestations from all three native
-company-controller runs, bounds pagination, response size, latency, and
+company-controller runs and exact matching protected evidence files, bounds pagination, response size, latency, and
 collection windows, and suppresses all response bodies on failure. Detailed
 results are create-only mode-0600 evidence outside the public checkout;
 ordinary logs receive only a status and evidence digest. GitHub run and

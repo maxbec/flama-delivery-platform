@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -12,13 +12,18 @@ const identities = {
   edilio: { company: "Edilio", controller: "edilio-delivery-controller", runId: "33333333-3333-4333-8333-333333333333" },
 } as const;
 
-function environment(): Record<string, string> {
-  return Object.fromEntries(keys.flatMap((key) => {
+function environment(attestationDirectory?: string): Record<string, string> {
+  return {
+    ...Object.fromEntries(keys.flatMap((key) => {
     const prefix = `FLAMA_GOVERNANCE_${key.toUpperCase()}`;
     return [
       [`${prefix}_GITHUB_TOKEN`, `test-only-${key}-github-credential`],
     ];
-  }));
+    })),
+    ...(attestationDirectory === undefined
+      ? {}
+      : { FLAMA_RECONCILIATION_EVIDENCE_DIR: attestationDirectory }),
+  };
 }
 
 function privateInput(): unknown {
@@ -50,14 +55,26 @@ function privateInput(): unknown {
 describe("governance runtime", () => {
   it("writes private evidence and exposes only its digest", async () => {
     const directory = await mkdtemp(join(tmpdir(), "flama-governance-test-"));
+    const attestationDirectory = join(directory, "attestations");
+    await mkdir(attestationDirectory);
     const inputPath = join(directory, "input.json");
     const outputPath = join(directory, "result.json");
-    await writeFile(inputPath, JSON.stringify(privateInput()), { mode: 0o600 });
+    const input = privateInput() as {
+      scopes: Array<{ paperclipAttestation: { runId: string } }>;
+    };
+    await writeFile(inputPath, JSON.stringify(input), { mode: 0o600 });
+    for (const scope of input.scopes) {
+      await writeFile(
+        join(attestationDirectory, `paperclip-governance-${scope.paperclipAttestation.runId}.json`),
+        JSON.stringify(scope.paperclipAttestation),
+        { mode: 0o600 },
+      );
+    }
     let stdout = "";
     let stderr = "";
     const exitCode = await runGovernanceRuntime(
       ["--input", inputPath, "--output", outputPath],
-      environment(),
+      environment(attestationDirectory),
       { writeStdout: (value) => { stdout += value; }, writeStderr: (value) => { stderr += value; } },
       async () => { throw new Error("no GitHub request expected without repository selectors"); },
     );
@@ -82,5 +99,41 @@ describe("governance runtime", () => {
     expect(stderr).toBe('{"status":"failed","reason":"governance_runtime_failure"}\n');
     expect(stderr).not.toContain(secretPath);
     expect(stderr).not.toContain("test-only");
+  });
+
+  it("rejects governance input that does not match native controller evidence", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "flama-governance-mismatch-"));
+    const attestationDirectory = join(directory, "attestations");
+    await mkdir(attestationDirectory);
+    const inputPath = join(directory, "input.json");
+    const outputPath = join(directory, "result.json");
+    const input = privateInput() as {
+      scopes: Array<{ paperclipAttestation: ReturnType<typeof createPaperclipGovernanceAttestation> }>;
+    };
+    await writeFile(inputPath, JSON.stringify(input), { mode: 0o600 });
+    for (const [index, scope] of input.scopes.entries()) {
+      let attestation = scope.paperclipAttestation;
+      if (index === 0) {
+        const { evidenceDigest: _evidenceDigest, ...payload } = scope.paperclipAttestation;
+        attestation = createPaperclipGovernanceAttestation({
+          ...payload,
+          checks: { ...payload.checks, lifecycles: "drift" },
+        });
+      }
+      await writeFile(
+        join(attestationDirectory, `paperclip-governance-${scope.paperclipAttestation.runId}.json`),
+        JSON.stringify(attestation),
+        { mode: 0o600 },
+      );
+    }
+    let stderr = "";
+    const exitCode = await runGovernanceRuntime(
+      ["--input", inputPath, "--output", outputPath],
+      environment(attestationDirectory),
+      { writeStdout() {}, writeStderr: (value) => { stderr += value; } },
+    );
+    expect(exitCode).toBe(1);
+    expect(stderr).toBe('{"status":"failed","reason":"governance_runtime_failure"}\n');
+    expect(stderr).not.toContain(input.scopes[0]!.paperclipAttestation.runId);
   });
 });
