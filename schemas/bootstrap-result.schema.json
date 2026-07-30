@@ -49,8 +49,8 @@
     },
     "repositoryOwned": {
       "type": "array",
-      "minItems": 6,
-      "maxItems": 6,
+      "minItems": 7,
+      "maxItems": 7,
       "items": {
         "type": "object",
         "additionalProperties": false,
@@ -58,7 +58,8 @@
         "properties": {
           "path": {
             "enum": [
-              ".flama/commands.json",
+              ".prettierignore",
+            ".flama/commands.json",
               ".flama/delivery-contract.json",
               ".flama/run-command.mjs",
               ".paperclip/project.yaml",

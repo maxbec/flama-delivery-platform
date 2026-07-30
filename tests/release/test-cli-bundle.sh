@@ -58,7 +58,7 @@ jq -e '
   .command == "bootstrap" and
   .result.status == "planned" and
   (.result.generated.files | length) == 10 and
-  (.result.repositoryOwned | length) == 6
+  (.result.repositoryOwned | length) == 7
 ' "$FIRST/bootstrap-plan.json" >/dev/null
 if grep -Eq 'maxbec/example|project-1|workspace-1' "$FIRST/bootstrap-plan.json"; then
   echo 'bundled bootstrap command exposed repository binding identifiers' >&2
