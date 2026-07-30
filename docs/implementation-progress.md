@@ -12,7 +12,7 @@ values, and raw API responses remain outside this public repository.
 | Phase | Status | Current evidence |
 | --- | --- | --- |
 | 0 — Authoritative inventory | Complete | Fresh inventory proves 64 owned, non-fork, non-archived consumers; 28 forks and 3 archived repositories are mutation-denied. |
-| 1 — Platform foundation | Foundation implementation complete | Node.js 26 platform, deterministic CLI, reusable workflows, schemas, policies, bridge, controller, governance job, release builder, and test harness are implemented and green. Publishing an immutable release remains gated on the scoped release identity. |
+| 1 — Platform foundation | Substantially implemented; three gaps open | Node.js 26 platform, deterministic CLI, reusable workflows, schemas, policies, bridge, controller, governance job, release builder, and test harness are implemented and green. Open gaps, listed under known platform gaps: two of eight deployment adapters, the GitHub repair apply path, and the three runner classes. Operator-initiated rollback is now a first-class deterministic command alongside automatic in-deployment rollback. Pooled-budget caching is enforced with the untrusted-lane write ban, and the pooled cache-hit rate is now read from run metadata. Publishing an immutable release remains gated on the scoped release identity. |
 | 2 — Paperclip foundation | In progress | Shared skill and enforced lifecycles are installed and were re-read through the documented CLI. The HMAC routine installer and secret-safe Infisical receipt path are implemented locally. Two company controllers are paused and zero-budget; one remains behind native board approval. Immutable controller migration, authoritative project/workspace bindings, and live routines/bridge deployment are pending. |
 | 3 — GitHub and Infisical policy | Tooling implemented; live configuration pending | Metadata-only policy auditors exist. Scoped GitHub Apps, exact Infisical mappings, OIDC/Sync verification, runner separation, settings changes, and any exception approval are not yet applied. |
 | 4 — Canaries | Planning and audit gates implemented; live run pending | Deterministic coverage and evidence gates exist, but no real canary repository has been selected or changed. |
@@ -36,7 +36,7 @@ canaries pass.
   passed for that exact installer checkpoint
 - Runtime: Node.js `26.3.0`
 - Released Paperclip dependency used as-is: `2026.722.0`
-- Current local full gate: passed with 205 unit tests and 12 PostgreSQL 18
+- Current local full gate: passed with 381 unit tests and 12 PostgreSQL 18
   Testcontainers integration tests
 - Deterministic CLI, bridge, company-controller, governance, and complete platform-release bundles: reproducible
 - Public-repository audit: passed
@@ -102,7 +102,9 @@ The temporary read-only re-audit is complete:
   behind Paperclip's human board-approval boundary;
 - all controller records still point to the exact legacy source entrypoint.
   Their existing executables are present, but migration to the immutable
-  release entrypoint has not been performed or silently inferred;
+  release entrypoint has not been performed or silently inferred. The
+  fail-closed migration path itself is implemented and tested; only its live
+  application is outstanding;
 - no managed routine has been applied, and the available project/workspace
   configuration is insufficient to infer authoritative repository bindings;
   and
@@ -146,6 +148,73 @@ project selection; the HMAC routine additionally requires the exact Infisical
 mapping and current Paperclip verifier-copy exception. Activation remains a
 separate, explicit production decision after bridge deployment and canary
 evidence.
+
+## Known platform gaps outside the live gates
+
+- Plan section 8 caching is now implemented for the platform's own CI with the
+  section 16 lane split enforced: restore in every lane, save only from a
+  protected default-branch push, split cache actions pinned to one SHA, and a
+  key carrying the trust boundary, OS, runtime, and lockfile inputs. The
+  Governance Controller now derives the pooled cache-hit rate from a marker step
+  read through the jobs API instead of returning a hardcoded value. Consumer
+  repositories install through the repository-owned `./scripts/delivery`
+  entrypoint, so their caches and marker steps arrive with the generated callers
+  in the migration waves; until then consumer coverage is reported as
+  `not_emitted`, which is accurate rather than a placeholder. Turbo/Next.js and
+  Docker layer caches remain unimplemented and belong with the consumer stacks
+  they serve. See [pooled compute budget caching](operations/pooled-cache.md).
+- Plan section 14 names eight deployment providers. Five are now implemented as
+  platform builtins and selected automatically from repository-owned
+  `provider.parameters` when no `--adapter` path is supplied: `docker-compose` on a
+  local Docker endpoint, `digitalocean-droplet` and `hostinger-vps` on an SSH-only
+  remote endpoint, `vercel-prebuilt` uploading prebuilt output with REST
+  read-back verification, and `digitalocean-app` pinning the app spec to an exact
+  digest with published-phase verification. `coolify` and `render` remain unimplemented and fail closed with
+  `adapter_not_implemented` rather than substituting another mechanism. Neither
+  publishes a declared set of terminal deployment states: Render's deploy `status`
+  enumeration is absent from its reference, and Coolify's specification types
+  `status` as a bare `string` (its implementation enum ends at `finished`, which the
+  API contract does not guarantee). Without declared terminal states a `health()`
+  cannot distinguish "still deploying" from "failed", and one that cannot detect
+  failure would carry a broken deployment through its soak window.
+  `custom` stays repository-supplied by definition. See
+  [deployment provider adapters](operations/deployment-providers.md).
+- Plan section 17's repair classification is now implemented as
+  `flama-delivery-ctl github-policy-repair`. It splits audit findings into safe
+  reversible repairs and Paperclip remediation cases: only settings that tighten a
+  reversible repository value are auto-repairable, while a default-branch or
+  protected-branch-set change (breaks existing clones and open pull requests), a
+  GitHub App scope change (external identity), runner separation (infrastructure),
+  and the deployment review boundary (repository-owned CODEOWNERS content) always
+  become remediation cases. A fork, an archived repository, or an invalid contract
+  denies the whole plan, and an unrecognized finding is treated as destructive
+  rather than assumed safe. Applying a plan still refuses with
+  `repair_apply_unavailable`: it needs the Phase 3 owner-scoped GitHub App, and each
+  setting's exact endpoint must be confirmed before it is written.
+- Plan section 20 is now implemented as one deterministic decision point,
+  `flama-delivery-ctl failure-policy`: at most one jittered retry and only for a
+  recognized transient cause or a flake, no retry for a deterministic failure or a
+  deployment health failure, always-recorded stabilization tasks, deduplicated
+  incidents that pause the release path, fail-closed secret-exposure handling with
+  credential rotation, and owner notification restricted to the conditions the plan
+  lists. See [failure and recovery policy](operations/failure-policy.md).
+- Plan section 16 requires three runner classes, including a separate hardened
+  deployment runner. Every job currently runs on `ubuntu-latest`, including the
+  reusable deploy workflow.
+- Plan section 9's `compliance` and `usage` verbs now exist as projections of the
+  governance controller's validated result, so no threshold or rule is computed
+  twice. Compliance status is derived from the Paperclip dimensions alone, because a
+  slow pipeline is a budget matter rather than a compliance breach. Usage compares
+  pooled percentiles against `policies/ci-budget.json` and reports a profile with no
+  samples as unmeasured rather than compliant.
+- Plan section 21 phase 6 drill scripts now exist: `scripts/drill-rollback.sh` and
+  `scripts/drill-event-replay.mjs`. Both exercise real recovery rather than fakes,
+  so both refuse every unauthorized or under-specified invocation, and the rollback
+  drill refuses an input that is not marked as a drill. CI proves those refusals and
+  their reasons; it does not run the drills, because they need infrastructure a
+  public runner does not have. **No drill has been performed**: a green gate is not
+  drill evidence, and phase 6 remains not started. See
+  [recovery drills](operations/recovery-drills.md).
 
 ## Secret and public-repository safety
 
@@ -195,6 +264,11 @@ restart.
 - [Phase 3 policy evidence](evidence/phase-3-policy.md)
 - [Phase 4 canary evidence](evidence/phase-4-canaries.md)
 - [Architecture](architecture.md)
+- [Operator-initiated rollback](operations/rollback.md)
+- [Pooled compute budget caching](operations/pooled-cache.md)
+- [Deployment provider adapters](operations/deployment-providers.md)
+- [Failure and recovery policy](operations/failure-policy.md)
+- [Recovery drills](operations/recovery-drills.md)
 
 This checkpoint is implementation evidence only. It authorizes no production
 deployment, billing change, new external identity, secret publication, or
