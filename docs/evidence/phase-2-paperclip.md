@@ -123,12 +123,28 @@ Implemented and verified:
   permissions, zero budgets, and existing executables remain intact, but the
   immutable-entrypoint migration has not been applied. The temporary operator
   token was revoked and removed after this read-only audit.
+- That audit exposed a real defect: the migration guard compared the legacy
+  shape against the new runtime root, so a controller whose working directory
+  was still the source checkout could never match and always failed closed.
+  Provisioning input now carries the exact previous working directory as
+  `legacySourceRoot`. Only that declared, absolute, normalized value distinct
+  from the runtime root is accepted; undeclared or drifted working directories
+  still fail closed, and each guard was mutation-checked.
+- The immutable release archive was rebuilt from a signed commit, verified
+  against its recorded digest, extracted to a versioned read-only runtime root,
+  and its controller executable was confirmed to fail closed without identity.
+- All three company controllers were then migrated through the documented CLI
+  from the legacy source entrypoint to that immutable release entrypoint. Each
+  run reported `migrated`, and an independent control-plane read confirmed all
+  three are paused, zero-budget, topology-v2, and bound to the read-only runtime
+  root. A repeat run reports `reused`, so the installer is idempotent. Evidence
+  is written create-only at mode 0600 and carries no object identifiers.
 
 Still pending:
 
-- One company controller remains behind Paperclip's native board approval.
-- The approved controllers still require the installer's fail-closed migration
-  from the exact legacy source entrypoint to the immutable release entrypoint.
+- One company still requires Paperclip's native board approval before any new
+  agent is created. This did not block the migration, because that company's
+  controller already existed and no agent was created.
 - Selecting each repository's project/workspace mapping and applying private
   bindings remains pending; the command intentionally does not guess mappings.
 - Live bridge deployment, routine-trigger secret injection, and controller
