@@ -20,6 +20,12 @@
       "enum": ["maxbec-delivery-controller", "navigaite-delivery-controller", "edilio-delivery-controller"]
     },
     "runtimeRoot": { "type": "string", "minLength": 2, "pattern": "^/[^\\u0000\\r\\n]*$" },
+    "legacySourceRoot": {
+      "$comment": "Declared, exact working directory of the topology-v1 source-checkout controller being migrated onto the immutable release root.",
+      "type": "string",
+      "minLength": 2,
+      "pattern": "^/[^\\u0000\\r\\n]*$"
+    },
     "mutationAllowed": { "const": true }
   },
   "allOf": [

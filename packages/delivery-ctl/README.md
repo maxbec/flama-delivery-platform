@@ -38,6 +38,10 @@ Implemented commands:
   reuses one exact company-local process agent using Paperclip's documented API.
   The agent is zero-budget and immediately paused, cannot create agents, skills,
   or assignments, and refuses configuration drift or board-approval bypasses.
+  A topology-v1 controller that still runs from a source checkout is migrated
+  onto the immutable release root only when the plan declares that exact
+  previous working directory as `legacySourceRoot`; an undeclared, relative,
+  denormalized, or self-referential value fails closed.
   The governance job is orchestrated by Paperclip and consumes native
   company-controller attestations; it never polls Paperclip with a board token.
 - `paperclip-bindings --input <binding-plan> --output <evidence>` verifies one

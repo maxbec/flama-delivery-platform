@@ -22,6 +22,7 @@ export interface PaperclipControllersInput {
   readonly company: { readonly id: string; readonly name: CompanyName };
   readonly controller: ControllerName;
   readonly runtimeRoot: string;
+  readonly legacySourceRoot?: string;
   readonly mutationAllowed: true;
 }
 
@@ -155,6 +156,11 @@ function validateInput(input: PaperclipControllersInput, contract: ControllerCon
     input.schemaVersion !== 1 || input.mutationAllowed !== true ||
     expectedControllers[input.company.name] !== input.controller || !uuidPattern.test(input.company.id) ||
     !isAbsolute(input.runtimeRoot) || normalize(input.runtimeRoot) !== input.runtimeRoot ||
+    (input.legacySourceRoot !== undefined && (
+      !isAbsolute(input.legacySourceRoot) ||
+      normalize(input.legacySourceRoot) !== input.legacySourceRoot ||
+      input.legacySourceRoot === input.runtimeRoot
+    )) ||
     contract.schemaVersion !== 1 || contract.name !== input.controller || contract.mode !== "company-delivery" ||
     contract.scope.companies.length !== 1 || contract.scope.companies[0] !== input.company.name ||
     contract.runtime.deterministic !== true
@@ -204,10 +210,15 @@ function matchesLegacySourceEntrypoint(
   agent: PaperclipAgent,
   companyId: string,
   expected: ControllerSpec,
+  legacySourceRoot: string | undefined,
 ): boolean {
   const legacy = {
     ...expected,
-    adapterConfig: { ...expected.adapterConfig, args: [legacyControllerEntry] },
+    adapterConfig: {
+      ...expected.adapterConfig,
+      ...(legacySourceRoot === undefined ? {} : { cwd: legacySourceRoot }),
+      args: [legacyControllerEntry],
+    },
     metadata: { ...expected.metadata, topologyVersion: 1 },
   } as unknown as ControllerSpec;
   return matches(agent, companyId, legacy);
@@ -270,7 +281,10 @@ export async function applyPaperclipControllers(
     disposition = "reused";
   }
 
-  if (!matches(agent, input.company.id, expected) && matchesLegacySourceEntrypoint(agent, input.company.id, expected)) {
+  if (
+    !matches(agent, input.company.id, expected) &&
+    matchesLegacySourceEntrypoint(agent, input.company.id, expected, input.legacySourceRoot)
+  ) {
     if (agent.status === "idle") agent = await client.pauseAgent(agent.id);
     if (agent.status !== "paused") throw new PaperclipControllersError("paperclip_agent_drift");
     agent = await client.updateAgent(agent.id, {

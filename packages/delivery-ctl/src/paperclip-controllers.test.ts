@@ -183,6 +183,84 @@ describe("Paperclip delivery-controller provisioning", () => {
     });
   });
 
+  it("migrates the declared legacy source checkout onto the immutable runtime root", async () => {
+    const client = new MemoryControllersClient();
+    const controllerContract = await contract();
+    const legacySourceRoot = "/home/delivery/source-checkout";
+    await applyPaperclipControllers({ ...input(), runtimeRoot: legacySourceRoot }, controllerContract, client);
+    if (client.agent === undefined) throw new Error("test setup failed");
+    client.agent = {
+      ...client.agent,
+      adapterConfig: {
+        ...client.agent.adapterConfig,
+        args: ["dist/services/controller/src/main.js"],
+      },
+      metadata: { ...client.agent.metadata, topologyVersion: 1 },
+    };
+
+    const migrated = await applyPaperclipControllers(
+      { ...input(), runtimeRoot: "/home/delivery/release/v0.1.0", legacySourceRoot },
+      controllerContract,
+      client,
+    );
+
+    expect(migrated).toMatchObject({ disposition: "migrated" });
+    expect(client.updateCalls).toBe(1);
+    expect(client.agent).toMatchObject({
+      adapterConfig: { args: ["bin/controller/index.js"], cwd: "/home/delivery/release/v0.1.0" },
+      metadata: { topologyVersion: 2 },
+    });
+  });
+
+  it("refuses a legacy working directory that was not declared", async () => {
+    const client = new MemoryControllersClient();
+    const controllerContract = await contract();
+    await applyPaperclipControllers(
+      { ...input(), runtimeRoot: "/home/delivery/unexpected-checkout" },
+      controllerContract,
+      client,
+    );
+    if (client.agent === undefined) throw new Error("test setup failed");
+    client.agent = {
+      ...client.agent,
+      adapterConfig: {
+        ...client.agent.adapterConfig,
+        args: ["dist/services/controller/src/main.js"],
+      },
+      metadata: { ...client.agent.metadata, topologyVersion: 1 },
+    };
+
+    await expect(applyPaperclipControllers(
+      {
+        ...input(),
+        runtimeRoot: "/home/delivery/release/v0.1.0",
+        legacySourceRoot: "/home/delivery/source-checkout",
+      },
+      controllerContract,
+      client,
+    )).rejects.toEqual(
+      expect.objectContaining<Partial<PaperclipControllersError>>({ code: "paperclip_agent_drift" }),
+    );
+    expect(client.updateCalls).toBe(0);
+  });
+
+  it("rejects a legacy source root that is absent, relative, denormalized, or the runtime root", async () => {
+    const controllerContract = await contract();
+    for (const legacySourceRoot of [
+      repositoryRoot,
+      "relative/source-checkout",
+      "/home/delivery/../delivery/source-checkout",
+      "",
+    ]) {
+      expect(() => planPaperclipControllers(
+        { ...input(), legacySourceRoot },
+        controllerContract,
+      )).toThrow(expect.objectContaining<Partial<PaperclipControllersError>>({
+        code: "paperclip_scope_invalid",
+      }));
+    }
+  });
+
   it("suppresses credentials and rejected upstream bodies", async () => {
     const credential = `paperclip_${"sensitive".repeat(4)}`;
     const rejectedBody = `private upstream response ${credential}`;
