@@ -15,6 +15,7 @@ fi
 if [[ "${2:-}" == "graphql" ]]; then
   jq '[.[] | {
     nameWithOwner,
+    databaseId,
     isFork,
     isArchived,
     isPrivate,

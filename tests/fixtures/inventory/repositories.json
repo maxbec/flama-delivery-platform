@@ -8,8 +8,11 @@
     "defaultBranchHeadSha": "0000000000000000000000000000000000000000",
     "primaryLanguage": "Shell",
     "pushedAt": "2026-07-28T09:00:00Z",
-    "paths": ["scripts/phase0-inventory.sh"],
-    "latestWorkflow": null
+    "paths": [
+      "scripts/phase0-inventory.sh"
+    ],
+    "latestWorkflow": null,
+    "databaseId": 4101
   },
   {
     "nameWithOwner": "alpha/fast-app",
@@ -20,14 +23,19 @@
     "defaultBranchHeadSha": "1111111111111111111111111111111111111111",
     "primaryLanguage": "TypeScript",
     "pushedAt": "2026-07-28T10:00:00Z",
-    "paths": ["package.json", "Dockerfile", ".github/workflows/ci.yml"],
+    "paths": [
+      "package.json",
+      "Dockerfile",
+      ".github/workflows/ci.yml"
+    ],
     "latestWorkflow": {
       "name": "CI",
       "status": "completed",
       "conclusion": "success",
       "headSha": "1111111111111111111111111111111111111111",
       "updatedAt": "2026-07-28T10:02:00Z"
-    }
+    },
+    "databaseId": 4102
   },
   {
     "nameWithOwner": "alpha/major-app",
@@ -38,8 +46,12 @@
     "defaultBranchHeadSha": "2222222222222222222222222222222222222222",
     "primaryLanguage": "Python",
     "pushedAt": "2026-07-28T11:00:00Z",
-    "paths": ["pyproject.toml", "vercel.json"],
-    "latestWorkflow": null
+    "paths": [
+      "pyproject.toml",
+      "vercel.json"
+    ],
+    "latestWorkflow": null,
+    "databaseId": 4103
   },
   {
     "nameWithOwner": "alpha/upstream-fork",
@@ -50,8 +62,11 @@
     "defaultBranchHeadSha": "3333333333333333333333333333333333333333",
     "primaryLanguage": "Go",
     "pushedAt": "2026-07-20T10:00:00Z",
-    "paths": ["go.mod"],
-    "latestWorkflow": null
+    "paths": [
+      "go.mod"
+    ],
+    "latestWorkflow": null,
+    "databaseId": 4104
   },
   {
     "nameWithOwner": "alpha/retired",
@@ -62,7 +77,10 @@
     "defaultBranchHeadSha": "4444444444444444444444444444444444444444",
     "primaryLanguage": "PHP",
     "pushedAt": "2020-01-01T10:00:00Z",
-    "paths": ["composer.json"],
-    "latestWorkflow": null
+    "paths": [
+      "composer.json"
+    ],
+    "latestWorkflow": null,
+    "databaseId": 4105
   }
 ]

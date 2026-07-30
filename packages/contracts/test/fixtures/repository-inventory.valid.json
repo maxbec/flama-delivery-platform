@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "observedAt": "2026-07-28T20:00:00Z",
+  "inventoryDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "source": { "mode": "fixture" },
   "policyVersion": 1,
   "summary": { "total": 1, "inScope": 1, "private": 0, "public": 1, "forks": 0, "archived": 0, "platform": 0, "mutationAllowed": 1, "mutationDenied": 0 },
@@ -13,6 +14,7 @@
   "repositories": [
     {
       "nameWithOwner": "maxbec/example",
+      "githubRepositoryId": 1001,
       "owner": "maxbec",
       "isFork": false,
       "isArchived": false,

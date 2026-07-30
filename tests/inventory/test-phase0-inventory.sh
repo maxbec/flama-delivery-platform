@@ -32,12 +32,38 @@ jq -e '
   ([.repositories[] | select(.mutationAllowed == true)] | length) == 3 and
   ([.repositories[] | select(.isFork or .isArchived) | select(.mutationAllowed == true)] | length) == 0 and
   ([.repositories[] | has("profile")] | any | not) and
+  (.inventoryDigest | test("^sha256:[0-9a-f]{64}$")) and
+  ([.repositories[] | .githubRepositoryId | type == "number"] | all) and
+  ([.repositories[] | select(.nameWithOwner == "alpha/fast-app")][0] | .githubRepositoryId == 4102) and
   ([.repositories[] | select(.nameWithOwner == "alpha/fast-app")][0] | .stack == ["node"] and .providerIndicators == ["docker"] and .paperclipCompany == "Alpha Paperclip") and
   ([.repositories[] | select(.nameWithOwner == "alpha/major-app")][0] | .stack == ["python"] and .providerIndicators == ["vercel"]) and
   ([.repositories[] | select(.nameWithOwner == "alpha/platform")][0] | .disposition == "platform" and .mutationAllowed == true) and
   ([.repositories[] | select(.nameWithOwner == "alpha/upstream-fork")][0] | .disposition == "excluded_fork" and .mutationDeniedReason == "fork") and
   ([.repositories[] | select(.nameWithOwner == "alpha/retired")][0] | .disposition == "excluded_archived" and .mutationDeniedReason == "archived")
 ' "$OUTPUT" >/dev/null
+
+# The digest must be independently recomputable from the published document, so
+# a later reader can prove which inventory run authorized a binding.
+RECOMPUTED="sha256:$(jq -S -c 'del(.inventoryDigest)' "$OUTPUT" | sha256sum | cut -d' ' -f1)"
+PUBLISHED=$(jq -r '.inventoryDigest' "$OUTPUT")
+if [[ "$RECOMPUTED" != "$PUBLISHED" ]]; then
+  echo "inventory digest is not reproducible from its own document" >&2
+  exit 1
+fi
+
+# A changed record must change the digest, otherwise it proves nothing.
+jq '.repositories[0].defaultBranchHeadSha = "abcdef00000000000000000000000000000000ff"' \
+  "$OUTPUT" > "$TMP_DIR/tampered.json"
+jq -e '.repositories[0].defaultBranchHeadSha != (input | .repositories[0].defaultBranchHeadSha)' \
+  "$TMP_DIR/tampered.json" "$OUTPUT" >/dev/null || {
+  echo "tamper fixture did not actually change the record" >&2
+  exit 1
+}
+TAMPERED="sha256:$(jq -S -c 'del(.inventoryDigest)' "$TMP_DIR/tampered.json" | sha256sum | cut -d' ' -f1)"
+if [[ "$TAMPERED" == "$PUBLISHED" ]]; then
+  echo "inventory digest did not change for a modified repository record" >&2
+  exit 1
+fi
 
 jq '.owners.alpha.expected.inScope = 3' "$FIXTURE_DIR/policy.json" > "$TMP_DIR/bad-policy.json"
 if "$ROOT_DIR/scripts/phase0-inventory.sh" \

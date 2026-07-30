@@ -137,6 +137,7 @@ normalize_fixture() {
     if type != "array" then error("fixture must be an array") else . end |
     map({
       nameWithOwner,
+      databaseId,
       isFork,
       isArchived,
       isPrivate,
@@ -182,6 +183,7 @@ collect_live_repo() {
 
   jq -nc \
     --arg nameWithOwner "$repo" \
+    --argjson databaseId "$(jq '.databaseId' <<<"$repo_json")" \
     --argjson isFork "$(jq '.isFork' <<<"$repo_json")" \
     --argjson isArchived "$(jq '.isArchived' <<<"$repo_json")" \
     --argjson isPrivate "$(jq '.isPrivate' <<<"$repo_json")" \
@@ -194,6 +196,7 @@ collect_live_repo() {
     --argjson latestWorkflow "$workflow_json" \
     '{
       nameWithOwner: $nameWithOwner,
+      databaseId: $databaseId,
       isFork: $isFork,
       isArchived: $isArchived,
       isPrivate: $isPrivate,
@@ -225,7 +228,7 @@ collect_live() {
 
   while IFS= read -r owner; do
     output_file="$TASK_TMP_DIR/owner-$owner_index.json"
-    query='query($owner:String!){repositoryOwner(login:$owner){repositories(first:100,ownerAffiliations:OWNER,orderBy:{field:NAME,direction:ASC}){nodes{nameWithOwner isFork isArchived isPrivate pushedAt primaryLanguage{name} defaultBranchRef{name target{... on Commit{oid statusCheckRollup{state}}}}}}}}'
+    query='query($owner:String!){repositoryOwner(login:$owner){repositories(first:100,ownerAffiliations:OWNER,orderBy:{field:NAME,direction:ASC}){nodes{nameWithOwner databaseId isFork isArchived isPrivate pushedAt primaryLanguage{name} defaultBranchRef{name target{... on Commit{oid statusCheckRollup{state}}}}}}}}'
     gh_read api graphql -f query="$query" -F owner="$owner" \
       --jq '.data.repositoryOwner.repositories.nodes' > "$output_file" || \
       die "failed to list repositories for owner $owner"
@@ -348,6 +351,7 @@ jq -n \
     (is_active_owned($policy; $repo)) as $activeOwned |
     {
       nameWithOwner,
+      githubRepositoryId: .databaseId,
       owner: $owner,
       isFork,
       isArchived,
@@ -410,6 +414,14 @@ jq -n \
     repositories: $classified
   }
 ' > "$RESULT_PATH"
+
+# Bind the document to a digest a later reader can recompute, so a binding can
+# prove which inventory run authorized it. Canonical form is sorted-key compact
+# JSON of the document without the digest field itself.
+INVENTORY_DIGEST="sha256:$(jq -S -c 'del(.inventoryDigest)' "$RESULT_PATH" | sha256sum | cut -d' ' -f1)"
+jq --arg digest "$INVENTORY_DIGEST" '.inventoryDigest = $digest' "$RESULT_PATH" \
+  > "$TASK_TMP_DIR/digested.json"
+mv "$TASK_TMP_DIR/digested.json" "$RESULT_PATH"
 
 if ! jq -e '
   all(.owners[]; .expected == .observed) and

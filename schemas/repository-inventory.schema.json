@@ -4,10 +4,11 @@
   "title": "Flama repository inventory evidence",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "observedAt", "source", "policyVersion", "summary", "owners", "repositories"],
+  "required": ["schemaVersion", "observedAt", "inventoryDigest", "source", "policyVersion", "summary", "owners", "repositories"],
   "properties": {
     "schemaVersion": { "const": 1 },
     "observedAt": { "type": "string", "format": "date-time" },
+    "inventoryDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
     "source": {
       "type": "object",
       "additionalProperties": false,
@@ -65,9 +66,10 @@
     "repository": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["nameWithOwner", "owner", "isFork", "isArchived", "isPrivate", "defaultBranch", "defaultBranchHeadSha", "pushedAt", "primaryLanguage", "disposition", "mutationAllowed", "mutationDeniedReason", "paperclipCompany", "branchNormalizationRequired", "stack", "providerIndicators", "workflowFiles", "deliveryEntrypoints", "defaultBranchStatus", "latestWorkflow", "health"],
+      "required": ["nameWithOwner", "githubRepositoryId", "owner", "isFork", "isArchived", "isPrivate", "defaultBranch", "defaultBranchHeadSha", "pushedAt", "primaryLanguage", "disposition", "mutationAllowed", "mutationDeniedReason", "paperclipCompany", "branchNormalizationRequired", "stack", "providerIndicators", "workflowFiles", "deliveryEntrypoints", "defaultBranchStatus", "latestWorkflow", "health"],
       "properties": {
         "nameWithOwner": { "type": "string", "pattern": "^[^/]+/[^/]+$" },
+        "githubRepositoryId": { "type": "integer", "minimum": 1 },
         "owner": { "type": "string", "minLength": 1 },
         "isFork": { "type": "boolean" },
         "isArchived": { "type": "boolean" },
