@@ -36,7 +36,38 @@ grep -Fq 'bash tests/release/test-controller-bundle.sh' "$WORKFLOW"
 grep -Fq 'bash tests/release/test-governance-bundle.sh' "$WORKFLOW"
 grep -Fq 'bash tests/release/test-platform-release.sh' "$WORKFLOW"
 grep -Fq 'bash tests/scripts/test-delivery-script.sh' "$WORKFLOW"
+grep -Fq 'bash tests/drills/test-drills.sh' "$WORKFLOW"
 grep -Fq 'find lifecycles policies routines schemas tests/fixtures' "$WORKFLOW"
+
+# Pooled budget caching (plan section 8) must never become a trusted-lane write
+# from an untrusted pull request (plan section 16).
+grep -Fq 'actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9' "$WORKFLOW"
+grep -Fq 'actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9' "$WORKFLOW"
+if grep -Eq 'uses:[[:space:]]+actions/cache@' "$WORKFLOW"; then
+  echo 'platform CI must split cache restore and save so an untrusted run cannot write' >&2
+  exit 1
+fi
+save_step=$(awk '
+  /^      - name: Save pnpm store$/ { inblock = 1; print; next }
+  inblock && /^      - name: / { exit }
+  inblock { print }
+' "$WORKFLOW")
+[[ "$save_step" == *"uses: actions/cache/save@"* ]] || {
+  echo 'platform CI cache save step is missing or renamed' >&2
+  exit 1
+}
+[[ "$save_step" == *"github.event_name == 'push'"* ]] || {
+  echo 'platform CI cache save is not restricted to trusted default-branch pushes' >&2
+  exit 1
+}
+for key_input in "runner.os" "runner.arch" "hashFiles('pnpm-lock.yaml')" "hashFiles('.nvmrc')" "flama-pnpm-trusted"; do
+  grep -Fq "$key_input" "$WORKFLOW" || {
+    echo "platform CI cache key omits a required input: $key_input" >&2
+    exit 1
+  }
+done
+grep -Fqx '      - name: Record dependency cache hit' "$WORKFLOW"
+grep -Fq "steps.dependency-cache.outputs.cache-hit == 'true'" "$WORKFLOW"
 
 if grep -Eq 'pull_request_target|id-token:|secrets:|continue-on-error:|@[A-Za-z][A-Za-z0-9._-]*([[:space:]]|$)' "$WORKFLOW"; then
   echo "platform CI contains a forbidden trust or mutability pattern" >&2

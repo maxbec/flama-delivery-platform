@@ -27,10 +27,39 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - name: Install locked dependencies
+      - name: Resolve pnpm store location
+        id: store
         run: |
           corepack enable
-          pnpm install --frozen-lockfile
+          printf 'path=%s\n' "$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      # The pooled budget improves only when the dependency store survives runs.
+      # Restore happens in every lane; saving is a trusted-lane write and is
+      # therefore restricted to protected default-branch pushes, so an untrusted
+      # pull request can never publish a store the trusted lane later restores.
+      - name: Restore pnpm store
+        id: dependency-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.store.outputs.path }}
+          key: flama-pnpm-trusted-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.nvmrc') }}-${{ hashFiles('pnpm-lock.yaml') }}
+
+      # Governance reads this step's conclusion through the jobs API: present on
+      # a hit, skipped on a miss. It reports the cache-hit rate without emitting
+      # a repository identifier or an artifact.
+      - name: Record dependency cache hit
+        if: ${{ steps.dependency-cache.outputs.cache-hit == 'true' }}
+        run: echo 'dependency store restored from cache'
+
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Save pnpm store
+        if: ${{ github.event_name == 'push' && steps.dependency-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ steps.store.outputs.path }}
+          key: flama-pnpm-trusted-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.nvmrc') }}-${{ hashFiles('pnpm-lock.yaml') }}
 
       - name: Validate shell syntax
         run: |
@@ -57,6 +86,9 @@ jobs:
           bash -n scripts/public-repository-audit.sh
           bash -n scripts/delivery
           bash -n tests/scripts/test-delivery-script.sh
+          bash -n tests/drills/test-drills.sh
+          bash -n scripts/drill-rollback.sh
+          node --check scripts/drill-event-replay.mjs
           node --check scripts/build-platform-release.mjs
           node --check scripts/consumer-policy-gate.mjs
           bash -n tests/fixtures/inventory/bin/gh
@@ -86,6 +118,11 @@ jobs:
 
       - name: Test platform delivery entrypoint
         run: bash tests/scripts/test-delivery-script.sh
+
+      # The drills themselves need real infrastructure; CI proves they refuse
+      # every unauthorized invocation instead of appearing to pass.
+      - name: Test recovery drill refusal policy
+        run: bash tests/drills/test-drills.sh
 
       - name: Validate JSON syntax
         run: |

@@ -187,4 +187,23 @@ if (cd "$ROOT_DIR" && node "$FIRST/index.js" deploy \
 fi
 jq -e '.status == "failed" and .reasonCode == "adapter_validation_failed"' "$evidence" >/dev/null
 
+rollback_output="$FIRST/rollback-plan.json"
+(cd "$ROOT_DIR" && node "$FIRST/index.js" rollback \
+  --dry-run \
+  --input tests/fixtures/rollback/valid.json > "$rollback_output")
+jq -e '
+  .command == "rollback" and
+  .dryRun == true and
+  .ok == true and
+  .result.status == "planned" and
+  .result.drill == true and
+  .result.attempts == 0 and
+  (.result | has("startedAt") | not) and
+  (.result | has("providerEvidence") | not)
+' "$rollback_output" >/dev/null
+if grep -qE 'ghcr\.io|PRI-' "$rollback_output"; then
+  echo 'bundled rollback command exposed an artifact reference or incident identifier' >&2
+  exit 1
+fi
+
 echo "deterministic CLI bundle tests passed"

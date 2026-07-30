@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "profile": "fast",
+  "contractDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "findings": [
+    { "code": "merge_method_drift", "location": "merge" },
+    { "code": "default_branch_drift", "location": "repository" }
+  ]
+}

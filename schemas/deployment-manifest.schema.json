@@ -26,7 +26,19 @@
       "properties": {
         "name": { "enum": ["docker-compose", "vercel-prebuilt", "digitalocean-app", "digitalocean-droplet", "hostinger-vps", "coolify", "render", "custom"] },
         "configurationRefs": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
-        "infisicalPath": { "type": "string", "pattern": "^/" }
+        "infisicalPath": { "type": "string", "pattern": "^/" },
+        "parameters": {
+          "$comment": "Repository-owned provider parameters (plan section 19). Never secret values: those stay Infisical-authoritative under infisicalPath.",
+          "type": "object",
+          "maxProperties": 20,
+          "propertyNames": { "pattern": "^[a-zA-Z][a-zA-Z0-9]{0,63}$" },
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 512,
+            "not": { "pattern": "^(?:gh[pousr]_|github_pat_|sk-|xox[abpsr]-|-----BEGIN)" }
+          }
+        }
       }
     },
     "migration": {

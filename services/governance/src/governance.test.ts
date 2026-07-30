@@ -212,3 +212,75 @@ describe("governance collection", () => {
     await expect(collectGovernance(input, invalid)).rejects.toMatchObject({ code: "governance_metadata_invalid" });
   });
 });
+
+describe("pooled cache-hit reporting", () => {
+  function readersWithCacheMarkers(
+    markers: Readonly<Record<string, string | undefined>>,
+  ): GovernanceReaders {
+    const base = readers();
+    return {
+      github(key) {
+        const inner = base.github(key);
+        return {
+          listRuns: inner.listRuns.bind(inner),
+          async listJobs(owner, repository, runId, attempt) {
+            const jobs = await inner.listJobs(owner, repository, runId, attempt);
+            const marker = markers[repository];
+            return jobs.map((job) => ({
+              ...job,
+              steps: [
+                { name: "Install locked dependencies", conclusion: "success" },
+                ...(marker === undefined
+                  ? []
+                  : [{ name: "Record dependency cache hit", conclusion: marker }]),
+              ],
+            }));
+          },
+        };
+      },
+    };
+  }
+
+  it("reports the pooled cache-hit rate from marker step conclusions", async () => {
+    const result = await collectGovernance(
+      input,
+      readersWithCacheMarkers({ alpha: "success", bravo: "skipped" }),
+    );
+
+    expect(result.pooled.cacheHitRate).toEqual({ value: 0.5, coverage: "reported" });
+  });
+
+  it("reports full coverage when every sampled run restored its cache", async () => {
+    const result = await collectGovernance(
+      input,
+      readersWithCacheMarkers({ alpha: "success", bravo: "success" }),
+    );
+
+    expect(result.pooled.cacheHitRate).toEqual({ value: 1, coverage: "reported" });
+  });
+
+  it("keeps the rate unreported while no sampled run emits the marker", async () => {
+    const result = await collectGovernance(input, readersWithCacheMarkers({}));
+
+    expect(result.pooled.cacheHitRate).toEqual({ value: null, coverage: "not_emitted" });
+  });
+
+  it("fails closed on a marker conclusion that is neither a hit nor a miss", async () => {
+    await expect(
+      collectGovernance(input, readersWithCacheMarkers({ alpha: "failure", bravo: "skipped" })),
+    ).rejects.toMatchObject({ code: "governance_metadata_invalid" });
+  });
+
+  it("still satisfies the published result schema when the rate is reported", async () => {
+    const validator = await createSchemaValidator(repositoryRoot);
+    const result = await collectGovernance(
+      input,
+      readersWithCacheMarkers({ alpha: "success", bravo: "skipped" }),
+    );
+
+    expect(validator.validate("governance-result", result)).toEqual({
+      ok: true,
+      schema: "governance-result",
+    });
+  });
+});

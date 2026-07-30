@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "stage": "final",
+  "classification": "transient_infrastructure",
+  "signature": "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+  "attempt": 1,
+  "recentSameSignatureFailures": 0
+}

@@ -83,3 +83,52 @@ describe("read-only governance readers", () => {
     expect(observed).toMatchObject({ code: "governance_read_failed" });
   });
 });
+
+describe("cache marker step reading", () => {
+  function reader(jobPayload: unknown): GitHubReadOnlyReader {
+    const fetcher = vi.fn(async (input: string | URL) => {
+      if (String(input).includes("/jobs?")) return json({ total_count: 1, jobs: [jobPayload] });
+      return json({ total_count: 0, workflow_runs: [] });
+    });
+    return new GitHubReadOnlyReader(
+      new SecretValue("test-only-github-reader-key"),
+      fetcher,
+      "https://github.example.test",
+    );
+  }
+
+  const completedJob = {
+    status: "completed",
+    conclusion: "success",
+    started_at: "2026-07-02T10:00:00.000Z",
+    completed_at: "2026-07-02T10:01:00.000Z",
+  };
+
+  it("carries step names and conclusions so the cache marker is observable", async () => {
+    const jobs = await reader({
+      ...completedJob,
+      steps: [
+        { name: "Install locked dependencies", status: "completed", conclusion: "success" },
+        { name: "Record dependency cache hit", status: "completed", conclusion: "skipped" },
+      ],
+    }).listJobs("maxbec", "example", 99, 2);
+
+    expect(jobs[0]?.steps).toEqual([
+      { name: "Install locked dependencies", conclusion: "success" },
+      { name: "Record dependency cache hit", conclusion: "skipped" },
+    ]);
+  });
+
+  it("reports no steps when the jobs payload omits them", async () => {
+    const jobs = await reader(completedJob).listJobs("maxbec", "example", 99, 2);
+
+    expect(jobs[0]?.steps).toBeUndefined();
+  });
+
+  it("rejects a malformed step entry rather than guessing a cache outcome", async () => {
+    await expect(
+      reader({ ...completedJob, steps: [{ name: 42, conclusion: "success" }] })
+        .listJobs("maxbec", "example", 99, 2),
+    ).rejects.toBeInstanceOf(GovernanceError);
+  });
+});

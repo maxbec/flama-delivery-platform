@@ -51,6 +51,12 @@ required_schemas=(
   secret-exceptions.schema.json
   secrets-audit-input.schema.json
   render-input.schema.json
+  github-policy-repair-input.schema.json
+  github-policy-repair-plan.schema.json
+  failure-observation.schema.json
+  failure-decision.schema.json
+  rollback-input.schema.json
+  rollback-result.schema.json
 )
 
 for schema in "${required_schemas[@]}"; do

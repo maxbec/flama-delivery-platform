@@ -1,13 +1,25 @@
+import { randomInt } from "node:crypto";
 import { lstat, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import { parse as parseYaml } from "yaml";
 import { orchestrateDeployment, type DeploymentManifest, type ProviderName } from "../../../providers/src/orchestrator.js";
 import {
+  executeRollback,
+  planRollback,
+  RollbackError,
+  type RollbackInput,
+} from "../../../providers/src/rollback.js";
+import {
   loadDeploymentAdapter,
   RepositoryVerificationRunner,
+  SystemCommandRunner,
   SystemDeploymentClock,
 } from "../../../providers/src/runtime.js";
+import {
+  AdapterUnavailableError,
+  createBuiltinAdapter,
+} from "../../../providers/src/adapters/registry.js";
 import { createSchemaValidator, type SchemaName } from "../../contracts/src/schema-validator.js";
 import { classifyInventory, type ClassificationInput } from "./classify.js";
 import { auditDeploymentPullRequest, type DeploymentPullRequestInput } from "./deployment-pr.js";
@@ -20,6 +32,23 @@ import {
   type GitHubPolicyAuditInput,
 } from "./github-policy-audit.js";
 import { PreflightError, runPreflight, type PreflightRunInput } from "./preflight.js";
+import {
+  complianceView,
+  GovernanceViewError,
+  usageView,
+  type CiBudgetPolicy,
+  type GovernanceResultInput,
+} from "./governance-views.js";
+import {
+  GitHubPolicyRepairError,
+  planGitHubPolicyRepair,
+  type GitHubPolicyRepairInput,
+} from "./github-policy-repair.js";
+import {
+  decideFailureResponse,
+  FailurePolicyError,
+  type FailureObservation,
+} from "./failure-policy.js";
 import { auditInventory, InventoryAuditError, type InventoryAuditInput } from "./inventory.js";
 import {
   bootstrapRepository,
@@ -144,7 +173,11 @@ function isSchemaName(value: string | undefined): value is SchemaName {
     "inventory-audit-result",
     "governance-input",
     "governance-result",
+    "failure-observation",
+    "failure-decision",
     "github-policy-audit-input",
+    "github-policy-repair-input",
+    "github-policy-repair-plan",
     "github-policy-audit-result",
     "preflight-evidence",
     "preflight-run-input",
@@ -199,13 +232,52 @@ interface FullDeploymentManifest {
   readonly version: string;
   readonly artifact: { readonly uri: string; readonly digest: string };
   readonly previousArtifact: { readonly uri: string; readonly digest: string } | null;
-  readonly provider: { readonly name: ProviderName };
+  readonly provider: {
+    readonly name: ProviderName;
+    readonly parameters?: Readonly<Record<string, string>>;
+  };
   readonly verification: { readonly expectedVersion: string; readonly soakSeconds: number };
   readonly rollback: { readonly automatic: boolean; readonly attemptLimit: number };
 }
 
 function deploymentManifest(value: unknown): FullDeploymentManifest {
   return value as FullDeploymentManifest;
+}
+
+/**
+ * A repository-supplied adapter path stays authoritative when given, which is how
+ * the `custom` provider works. Otherwise the platform's builtin adapter for that
+ * provider is used, so consumers never copy shared deployment logic. An
+ * unimplemented provider fails closed instead of falling back.
+ */
+async function selectAdapter(
+  workingDirectory: string,
+  adapterPath: string | undefined,
+  provider: FullDeploymentManifest["provider"],
+  environment: Readonly<Record<string, string | undefined>> = process.env,
+) {
+  if (typeof adapterPath === "string") {
+    return loadDeploymentAdapter(workingDirectory, adapterPath, provider.name);
+  }
+  // A provider credential is injected from the process environment, where
+  // `infisical run` places it. It is never read from the manifest and never
+  // reaches an argument list.
+  const vercelToken = environment["VERCEL_TOKEN"];
+  const digitalOceanToken = environment["DIGITALOCEAN_ACCESS_TOKEN"];
+  return createBuiltinAdapter(
+    provider.name,
+    provider.parameters ?? {},
+    new SystemCommandRunner(workingDirectory),
+    undefined,
+    {
+      ...(vercelToken === undefined || vercelToken.length === 0
+        ? {}
+        : { vercelCredential: { reveal: () => vercelToken } }),
+      ...(digitalOceanToken === undefined || digitalOceanToken.length === 0
+        ? {}
+        : { digitalOceanCredential: { reveal: () => digitalOceanToken } }),
+    },
+  );
 }
 
 async function writeEvidence(path: string, value: unknown): Promise<void> {
@@ -259,6 +331,11 @@ export async function runCli(
     command !== "promote" &&
     command !== "release-evidence" &&
     command !== "reconcile" &&
+    command !== "rollback" &&
+    command !== "failure-policy" &&
+    command !== "github-policy-repair" &&
+    command !== "compliance" &&
+    command !== "usage" &&
     command !== "github-policy-audit" &&
     command !== "secrets-audit" &&
     command !== "render"
@@ -714,7 +791,6 @@ export async function runCli(
     }
 
     if (command === "deploy") {
-      if (typeof options.adapter !== "string") return fail(io, "adapter_required");
       const validation = validator.validate("deployment-manifest", input);
       if (!validation.ok) {
         io.writeStdout(jsonLine({ command, ok: false, errors: validation.errors, toolVersion }));
@@ -748,10 +824,10 @@ export async function runCli(
         verification: fullManifest.verification,
         rollback: fullManifest.rollback,
       };
-      const adapter = await loadDeploymentAdapter(
+      const adapter = await selectAdapter(
         workingDirectory,
         options.adapter,
-        fullManifest.provider.name,
+        fullManifest.provider,
       );
       const result = await orchestrateDeployment({
         manifest,
@@ -763,6 +839,102 @@ export async function runCli(
       await writeEvidence(options.output, result);
       io.writeStdout(jsonLine({ command, ok: result.status === "deployed", toolVersion, result }));
       return result.status === "deployed" ? 0 : 1;
+    }
+
+    if (command === "rollback") {
+      const validation = validator.validate("rollback-input", input);
+      if (!validation.ok) {
+        io.writeStdout(jsonLine({ command, ok: false, errors: validation.errors, toolVersion }));
+        return 1;
+      }
+      const rollbackInput = input as RollbackInput;
+      if (options["dry-run"]) {
+        const result = planRollback(rollbackInput);
+        const resultValidation = validator.validate("rollback-result", result);
+        if (!resultValidation.ok) return fail(io, "result_validation_failed");
+        io.writeStdout(jsonLine({ command, dryRun: true, ok: true, toolVersion, result }));
+        return 0;
+      }
+      if (typeof options.output !== "string") return fail(io, "output_required");
+      const adapter = await selectAdapter(
+        workingDirectory,
+        options.adapter,
+        rollbackInput.provider,
+      );
+      const result = await executeRollback({
+        input: rollbackInput,
+        adapter,
+        verification: new RepositoryVerificationRunner(workingDirectory),
+        clock: new SystemDeploymentClock(),
+        intervalSeconds: 60,
+      });
+      const resultValidation = validator.validate("rollback-result", result);
+      if (!resultValidation.ok) return fail(io, "result_validation_failed");
+      await writeEvidence(options.output, result);
+      io.writeStdout(jsonLine({ command, ok: result.status === "restored", toolVersion, result }));
+      return result.status === "restored" ? 0 : 1;
+    }
+
+    if (command === "compliance" || command === "usage") {
+      const validation = validator.validate("governance-result", input);
+      if (!validation.ok) {
+        io.writeStdout(jsonLine({ command, ok: false, errors: validation.errors, toolVersion }));
+        return 1;
+      }
+      const governanceResult = input as GovernanceResultInput;
+      if (command === "compliance") {
+        const result = complianceView(governanceResult);
+        io.writeStdout(jsonLine({ command, ok: result.status === "compliant", toolVersion, result }));
+        return result.status === "compliant" ? 0 : 1;
+      }
+      const policy = JSON.parse(
+        await readFile(join(repositoryRoot, "policies", "ci-budget.json"), "utf8"),
+      ) as CiBudgetPolicy;
+      const result = usageView(governanceResult, policy);
+      const breached = Object.values(result.profiles).some((profile) => profile.withinTarget === false);
+      io.writeStdout(jsonLine({ command, ok: !breached, toolVersion, result }));
+      return breached ? 1 : 0;
+    }
+
+    if (command === "github-policy-repair") {
+      const validation = validator.validate("github-policy-repair-input", input);
+      if (!validation.ok) {
+        io.writeStdout(jsonLine({ command, ok: false, errors: validation.errors, toolVersion }));
+        return 1;
+      }
+      // Applying a repair requires the Phase 3 owner-scoped GitHub App, and each
+      // setting's exact endpoint must be confirmed before it is written. Until
+      // then the command plans only and refuses to claim it configured anything.
+      if (!options["dry-run"]) return fail(io, "repair_apply_unavailable");
+      const result = planGitHubPolicyRepair(input as GitHubPolicyRepairInput);
+      const resultValidation = validator.validate("github-policy-repair-plan", result);
+      if (!resultValidation.ok) return fail(io, "result_validation_failed");
+      io.writeStdout(jsonLine({ command, dryRun: true, ok: true, toolVersion, result }));
+      return 0;
+    }
+
+    if (command === "failure-policy") {
+      const validation = validator.validate("failure-observation", input);
+      if (!validation.ok) {
+        io.writeStdout(jsonLine({ command, ok: false, errors: validation.errors, toolVersion }));
+        return 1;
+      }
+      // A dry run must be reproducible, so the jittered retry uses the midpoint
+      // of the window instead of a random draw.
+      const jitterSource = options["dry-run"]
+        ? () => 0.5
+        : () => randomInt(0, 1_000_000) / 1_000_000;
+      const result = decideFailureResponse(input as FailureObservation, jitterSource);
+      const resultValidation = validator.validate("failure-decision", result);
+      if (!resultValidation.ok) return fail(io, "result_validation_failed");
+      io.writeStdout(jsonLine({
+        command,
+        dryRun: options["dry-run"] ?? false,
+        ok: true,
+        toolVersion,
+        result,
+      }));
+      return 0;
     }
 
     if (command === "preflight") {
@@ -853,6 +1025,11 @@ export async function runCli(
       return 1;
     }
     if (error instanceof PreflightError) return fail(io, error.code);
+    if (error instanceof RollbackError) return fail(io, error.code);
+    if (error instanceof FailurePolicyError) return fail(io, error.code);
+    if (error instanceof GitHubPolicyRepairError) return fail(io, error.code);
+    if (error instanceof GovernanceViewError) return fail(io, error.code);
+    if (error instanceof AdapterUnavailableError) return fail(io, error.code);
     if (error instanceof InventoryAuditError) return fail(io, error.code);
     if (error instanceof BootstrapError) return fail(io, error.code);
     if (error instanceof PublishCheckError) return fail(io, error.code);

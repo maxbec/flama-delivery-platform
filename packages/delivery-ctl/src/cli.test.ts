@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { parse as parseYaml } from "yaml";
 import { describe, expect, it } from "vitest";
 import { runCli, type CliIo } from "./cli.js";
 
@@ -64,6 +65,21 @@ const githubPolicyInputPath = fileURLToPath(
 );
 const canaryInputPath = fileURLToPath(
   new URL("../../../tests/fixtures/canary/valid.json", import.meta.url),
+);
+const rollbackInputPath = fileURLToPath(
+  new URL("../../../tests/fixtures/rollback/valid.json", import.meta.url),
+);
+const dockerComposeManifestPath = fileURLToPath(
+  new URL("../../../tests/fixtures/provider/deployment-manifest.docker-compose.yaml", import.meta.url),
+);
+const failurePolicyInputPath = fileURLToPath(
+  new URL("../../../tests/fixtures/failure-policy/transient.json", import.meta.url),
+);
+const policyRepairInputPath = fileURLToPath(
+  new URL("../../../tests/fixtures/github-policy-repair/mixed.json", import.meta.url),
+);
+const governanceResultPath = fileURLToPath(
+  new URL("../../../tests/fixtures/governance/result.json", import.meta.url),
 );
 
 describe("delivery CLI", () => {
@@ -146,6 +162,299 @@ describe("delivery CLI", () => {
         rollbackAttemptLimit: 1,
       },
     });
+  });
+
+  it("dry-runs rollback without loading an adapter or contacting the provider", async () => {
+    const io = new MemoryIo();
+    const exitCode = await runCli(
+      ["rollback", "--dry-run", "--input", rollbackInputPath, "--adapter", "missing-provider.mjs"],
+      io,
+      repositoryRoot,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(io.stdout)).toMatchObject({
+      command: "rollback",
+      dryRun: true,
+      ok: true,
+      result: {
+        status: "planned",
+        provider: "docker-compose",
+        drill: true,
+        attempts: 0,
+      },
+    });
+    expect(io.stderr).toBe("");
+  });
+
+  it("refuses a rollback whose migration cannot support it", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "rollback-cli-"));
+    try {
+      const inputPath = join(directory, "input.json");
+      const source = JSON.parse(await readFile(rollbackInputPath, "utf8")) as Record<string, unknown>;
+      await writeFile(
+        inputPath,
+        JSON.stringify({ ...source, migration: { rollbackCompatible: false } }),
+        "utf8",
+      );
+      const io = new MemoryIo();
+
+      const exitCode = await runCli(["rollback", "--dry-run", "--input", inputPath], io, repositoryRoot);
+
+      expect(exitCode).toBe(2);
+      expect(io.stdout).toBe("");
+      expect(JSON.parse(io.stderr)).toMatchObject({
+        ok: false,
+        error: { code: "rollback_migration_incompatible" },
+      });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects a rollback input that omits the incident reference outside a drill", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "rollback-cli-"));
+    try {
+      const inputPath = join(directory, "input.json");
+      const source = JSON.parse(await readFile(rollbackInputPath, "utf8")) as Record<string, unknown>;
+      await writeFile(
+        inputPath,
+        JSON.stringify({ ...source, authorization: { drill: false, incidentRef: null } }),
+        "utf8",
+      );
+      const io = new MemoryIo();
+
+      const exitCode = await runCli(["rollback", "--dry-run", "--input", inputPath], io, repositoryRoot);
+
+      expect(exitCode).toBe(1);
+      const output = JSON.parse(io.stdout) as { command: string; ok: boolean; errors: unknown[] };
+      expect(output.command).toBe("rollback");
+      expect(output.ok).toBe(false);
+      expect(output.errors.length).toBeGreaterThan(0);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("accepts a deployment manifest carrying repository-owned provider parameters", async () => {
+    const io = new MemoryIo();
+    const exitCode = await runCli(
+      ["validate", "--schema", "deployment-manifest", "--format", "yaml", "--input", dockerComposeManifestPath],
+      io,
+      repositoryRoot,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(io.stdout)).toMatchObject({ ok: true, schema: "deployment-manifest" });
+  });
+
+  it("selects the builtin adapter when no repository adapter is supplied", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "builtin-adapter-"));
+    try {
+      const io = new MemoryIo();
+      const exitCode = await runCli(
+        [
+          "deploy",
+          "--format",
+          "yaml",
+          "--input",
+          dockerComposeManifestPath,
+          "--output",
+          join(directory, "result.json"),
+        ],
+        io,
+        repositoryRoot,
+        directory,
+      );
+
+      // The builtin adapter must be reached and fail on its own provider call
+      // rather than the command rejecting a missing --adapter argument.
+      expect(exitCode).not.toBe(0);
+      expect(io.stderr).not.toContain("adapter_required");
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("refuses a provider that has no builtin adapter and no repository adapter", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "builtin-adapter-"));
+    try {
+      const inputPath = join(directory, "manifest.json");
+      const manifest = parseYaml(await readFile(dockerComposeManifestPath, "utf8")) as {
+        provider: { name: string };
+      };
+      manifest.provider.name = "render";
+      await writeFile(inputPath, JSON.stringify(manifest), "utf8");
+      const io = new MemoryIo();
+
+      const exitCode = await runCli(
+        ["deploy", "--input", inputPath, "--output", join(directory, "result.json")],
+        io,
+        repositoryRoot,
+        directory,
+      );
+
+      expect(exitCode).toBe(2);
+      expect(JSON.parse(io.stderr)).toMatchObject({
+        ok: false,
+        error: { code: "adapter_not_implemented" },
+      });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("decides a transient failure response reproducibly in dry-run", async () => {
+    const io = new MemoryIo();
+    const exitCode = await runCli(
+      ["failure-policy", "--dry-run", "--input", failurePolicyInputPath],
+      io,
+      repositoryRoot,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(io.stdout)).toMatchObject({
+      command: "failure-policy",
+      dryRun: true,
+      ok: true,
+      result: {
+        retry: "allowed",
+        retryDelaySeconds: 20,
+        followUp: "none",
+        incident: "none",
+        releasePath: "open",
+        notifyOwner: false,
+      },
+    });
+    expect(io.stderr).toBe("");
+  });
+
+  it("emits no failure message, path, or log content in its decision", async () => {
+    const io = new MemoryIo();
+
+    await runCli(["failure-policy", "--dry-run", "--input", failurePolicyInputPath], io, repositoryRoot);
+
+    const output = JSON.parse(io.stdout) as { result: Record<string, unknown> };
+    expect(Object.keys(output.result).sort()).toEqual([
+      "followUp",
+      "incident",
+      "notifyOwner",
+      "releasePath",
+      "retry",
+      "retryDelaySeconds",
+      "rotateCredential",
+      "schemaVersion",
+    ]);
+  });
+
+  it("rejects a failure observation that is not schema valid", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "failure-policy-"));
+    try {
+      const inputPath = join(directory, "input.json");
+      await writeFile(inputPath, JSON.stringify({ schemaVersion: 1, stage: "final" }), "utf8");
+      const io = new MemoryIo();
+
+      const exitCode = await runCli(["failure-policy", "--dry-run", "--input", inputPath], io, repositoryRoot);
+
+      expect(exitCode).toBe(1);
+      expect(JSON.parse(io.stdout)).toMatchObject({ command: "failure-policy", ok: false });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  });
+
+  it("plans safe repairs and remediation cases separately", async () => {
+    const io = new MemoryIo();
+    const exitCode = await runCli(
+      ["github-policy-repair", "--dry-run", "--input", policyRepairInputPath],
+      io,
+      repositoryRoot,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(io.stdout)).toMatchObject({
+      command: "github-policy-repair",
+      dryRun: true,
+      ok: true,
+      result: {
+        status: "planned",
+        repairs: [{ code: "merge_method_drift", disposition: "auto_repair" }],
+        remediationCases: [{ code: "default_branch_drift", disposition: "remediation_case" }],
+      },
+    });
+  });
+
+  it("refuses to apply a repair while no owner-scoped app authority exists", async () => {
+    const io = new MemoryIo();
+    const exitCode = await runCli(
+      ["github-policy-repair", "--input", policyRepairInputPath],
+      io,
+      repositoryRoot,
+    );
+
+    expect(exitCode).toBe(2);
+    expect(JSON.parse(io.stderr)).toMatchObject({
+      ok: false,
+      error: { code: "repair_apply_unavailable" },
+    });
+  });
+
+  it("projects Paperclip compliance from a governance result", async () => {
+    const io = new MemoryIo();
+    const exitCode = await runCli(["compliance", "--input", governanceResultPath], io, repositoryRoot);
+
+    expect(exitCode).toBe(0);
+    const output = JSON.parse(io.stdout) as {
+      command: string;
+      ok: boolean;
+      result: { status: string; scopes: { key: string; status: string; drift: string[] }[] };
+    };
+    expect(output).toMatchObject({ command: "compliance", ok: true, result: { status: "compliant" } });
+    expect(output.result.scopes.map((scope) => scope.key)).toEqual(["maxbec", "navigaite", "edilio"]);
+    expect(output.result.scopes.every((scope) => scope.drift.length === 0)).toBe(true);
+  });
+
+  it("projects pooled usage against the versioned budget policy", async () => {
+    const io = new MemoryIo();
+    const exitCode = await runCli(["usage", "--input", governanceResultPath], io, repositoryRoot);
+
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(io.stdout)).toMatchObject({
+      command: "usage",
+      ok: true,
+      result: {
+        pool: "flama-ci-budget",
+        cacheHitRate: { value: 0.75, coverage: "reported" },
+        profiles: {
+          fast: { targetWallSecondsP50: 180, targetRunnerSeconds: 480, withinTarget: true },
+          major: { samples: 0, withinTarget: null },
+        },
+      },
+    });
+  });
+
+  it("exits non-zero when pooled usage breaches a budget target", async () => {
+    const directory = await mkdtemp(join(tmpdir(), "usage-"));
+    try {
+      const source = JSON.parse(await readFile(governanceResultPath, "utf8")) as {
+        pooled: { fast: { wallSeconds: { p50: number; p95: number } } };
+      };
+      source.pooled.fast.wallSeconds = { p50: 400, p95: 500 };
+      const inputPath = join(directory, "result.json");
+      await writeFile(inputPath, JSON.stringify(source), "utf8");
+      const io = new MemoryIo();
+
+      const exitCode = await runCli(["usage", "--input", inputPath], io, repositoryRoot);
+
+      expect(exitCode).toBe(1);
+      expect(JSON.parse(io.stdout)).toMatchObject({
+        command: "usage",
+        ok: false,
+        result: { profiles: { fast: { withinTarget: false } } },
+      });
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 
   it("dry-runs the fixed preflight plan without executing consumer commands", async () => {

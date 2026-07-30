@@ -3,6 +3,7 @@ import {
   type GitHubGovernanceReader,
   type GitHubWorkflowJob,
   type GitHubWorkflowRun,
+  type GitHubWorkflowStep,
   type GovernanceReaders,
 } from "./governance.js";
 
@@ -106,6 +107,19 @@ function timestamp(value: unknown, nullable = false): string | null {
   return value;
 }
 
+function steps(value: unknown): readonly GitHubWorkflowStep[] {
+  if (!Array.isArray(value) || value.length > 200) {
+    throw new GovernanceError("governance_metadata_invalid");
+  }
+  return value.map((step) => {
+    if (!isRecord(step) || typeof step["name"] !== "string" || step["name"].length > 256 ||
+      (step["conclusion"] !== null && typeof step["conclusion"] !== "string")) {
+      throw new GovernanceError("governance_metadata_invalid");
+    }
+    return { name: step["name"], conclusion: step["conclusion"] };
+  });
+}
+
 export class GitHubReadOnlyReader implements GitHubGovernanceReader {
   readonly #client: ReadOnlyJsonClient;
 
@@ -185,6 +199,7 @@ export class GitHubReadOnlyReader implements GitHubGovernanceReader {
           conclusion: job["conclusion"],
           startedAt: timestamp(job["started_at"], true),
           completedAt: timestamp(job["completed_at"], true),
+          ...(job["steps"] === undefined ? {} : { steps: steps(job["steps"]) }),
         });
       }
       if (pageJobs.length < 100) return jobs;

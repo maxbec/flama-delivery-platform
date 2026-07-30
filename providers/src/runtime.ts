@@ -8,6 +8,7 @@ import type {
   ProviderName,
   VerificationRunner,
 } from "./orchestrator.js";
+import type { CommandResult, CommandRunner } from "./adapters/docker-compose.js";
 
 const providerNames = new Set<ProviderName>([
   "docker-compose",
@@ -77,6 +78,66 @@ export async function loadDeploymentAdapter(
     throw new Error("adapter does not match deployment provider");
   }
   return adapter;
+}
+
+/**
+ * Deployment values reach the provider through the environment, never through
+ * the argument list, and the child receives only an explicit minimal environment
+ * plus any Docker endpoint selection. That keeps an unrelated parent variable
+ * from silently becoming part of a deployment, and keeps values out of process
+ * listings.
+ */
+export class SystemCommandRunner implements CommandRunner {
+  static readonly #inheritedNames = ["PATH", "HOME", "DOCKER_HOST", "DOCKER_CONTEXT", "DOCKER_CONFIG"];
+  static readonly #maximumOutputBytes = 1024 * 1024;
+
+  constructor(private readonly workingDirectory?: string) {}
+
+  async run(
+    command: string,
+    args: readonly string[],
+    environment?: Readonly<Record<string, string>>,
+  ): Promise<CommandResult> {
+    if (!/^[a-z0-9][a-z0-9._-]*$/iu.test(command)) {
+      throw new Error("command must be a bare executable name");
+    }
+    for (const value of Object.values(environment ?? {})) {
+      if (/[\r\n\0]/u.test(value)) throw new Error("environment value is not a single line");
+    }
+    const inherited: Record<string, string> = {};
+    for (const name of SystemCommandRunner.#inheritedNames) {
+      const value = process.env[name];
+      if (value !== undefined) inherited[name] = value;
+    }
+
+    return new Promise<CommandResult>((resolveRun, rejectRun) => {
+      const child = spawn(command, [...args], {
+        ...(this.workingDirectory === undefined ? {} : { cwd: this.workingDirectory }),
+        env: { ...inherited, ...environment },
+        shell: false,
+        stdio: ["ignore", "pipe", "inherit"],
+      });
+      let stdout = "";
+      let truncated = false;
+      child.stdout.setEncoding("utf8");
+      child.stdout.on("data", (chunk: string) => {
+        if (truncated) return;
+        stdout += chunk;
+        if (Buffer.byteLength(stdout, "utf8") > SystemCommandRunner.#maximumOutputBytes) {
+          truncated = true;
+          child.kill("SIGKILL");
+        }
+      });
+      child.once("error", rejectRun);
+      child.once("close", (code, signal) => {
+        if (truncated) {
+          rejectRun(new Error("command produced more output than the runner accepts"));
+          return;
+        }
+        resolveRun({ code: signal === null && code !== null ? code : 1, stdout });
+      });
+    });
+  }
 }
 
 export class SystemDeploymentClock implements DeploymentClock {

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "provider": { "name": "docker-compose" },
+  "current": {
+    "version": "1.2.0",
+    "artifact": {
+      "uri": "ghcr.io/maxbec/api@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+  },
+  "target": {
+    "version": "1.1.0",
+    "artifact": {
+      "uri": "ghcr.io/maxbec/api@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "digest": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+    }
+  },
+  "verification": { "expectedVersion": "1.1.0", "soakSeconds": 600 },
+  "migration": { "rollbackCompatible": true },
+  "authorization": { "drill": true, "incidentRef": null }
+}

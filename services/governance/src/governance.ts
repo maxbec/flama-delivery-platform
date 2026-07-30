@@ -68,11 +68,22 @@ export interface GitHubWorkflowRun {
   readonly baseRefs: readonly string[];
 }
 
+export interface GitHubWorkflowStep {
+  readonly name: string;
+  readonly conclusion: string | null;
+}
+
 export interface GitHubWorkflowJob {
   readonly status: string;
   readonly conclusion: string | null;
   readonly startedAt: string | null;
   readonly completedAt: string | null;
+  /**
+   * Absent when the sampled run predates the cache marker step or its generated
+   * caller does not emit one. Absence is reported as missing coverage, never as
+   * a miss.
+   */
+  readonly steps?: readonly GitHubWorkflowStep[];
 }
 
 export interface GitHubGovernanceReader {
@@ -255,12 +266,44 @@ export function parseGovernanceInput(value: unknown): GovernanceInput {
   };
 }
 
+type CacheObservation = "hit" | "miss" | "absent";
+
+/**
+ * The dependency cache marker step runs only when the restore reported a hit, so
+ * the jobs API shows it as successful on a hit and skipped on a miss. Reading it
+ * keeps cache reporting metadata-only: no artifact, no log download, and no
+ * repository identifier.
+ */
+const cacheMarkerStepName = "Record dependency cache hit";
+
+function cacheObservation(jobs: readonly GitHubWorkflowJob[]): CacheObservation {
+  let observation: CacheObservation = "absent";
+  for (const job of jobs) {
+    for (const step of job.steps ?? []) {
+      if (step.name !== cacheMarkerStepName) continue;
+      if (step.conclusion === "success") {
+        if (observation === "miss") throw new GovernanceError("governance_metadata_invalid");
+        observation = "hit";
+        continue;
+      }
+      if (step.conclusion === "skipped") {
+        if (observation === "hit") throw new GovernanceError("governance_metadata_invalid");
+        observation = "miss";
+        continue;
+      }
+      throw new GovernanceError("governance_metadata_invalid");
+    }
+  }
+  return observation;
+}
+
 interface MetricSample {
   readonly profile: Profile;
   readonly wallSeconds: number;
   readonly queueSeconds: number;
   readonly runnerSeconds: number;
   readonly retried: boolean;
+  readonly cache: CacheObservation;
 }
 
 function secondsBetween(start: string, end: string): number {
@@ -305,6 +348,7 @@ async function collectSamples(
         queueSeconds: secondsBetween(run.createdAt, run.runStartedAt),
         runnerSeconds,
         retried: run.runAttempt > 1,
+        cache: cacheObservation(jobs),
       });
     }
   }
@@ -344,6 +388,13 @@ function profileSummary(samples: readonly MetricSample[], profile: Profile, conf
   };
 }
 
+function cacheHitRate(samples: readonly MetricSample[]): DeliverySummary["cacheHitRate"] {
+  const observed = samples.filter((sample) => sample.cache !== "absent");
+  if (observed.length === 0) return { value: null, coverage: "not_emitted" };
+  const hits = observed.filter((sample) => sample.cache === "hit").length;
+  return { value: Math.round((hits / observed.length) * 10_000) / 10_000, coverage: "reported" };
+}
+
 function deliverySummary(samples: readonly MetricSample[], configuredProfiles: ReadonlySet<Profile>): DeliverySummary {
   const fast = profileSummary(samples, "fast", configuredProfiles.has("fast"));
   const major = profileSummary(samples, "major", configuredProfiles.has("major"));
@@ -353,7 +404,7 @@ function deliverySummary(samples: readonly MetricSample[], configuredProfiles: R
     : statuses.includes("insufficient_data") || statuses.length === 0
       ? "insufficient_data"
       : "compliant";
-  return { status, fast, major, cacheHitRate: { value: null, coverage: "not_emitted" } };
+  return { status, fast, major, cacheHitRate: cacheHitRate(samples) };
 }
 
 function combinedStatus(values: readonly GovernanceStatus[]): GovernanceStatus {

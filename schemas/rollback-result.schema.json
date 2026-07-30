@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/rollback-result.schema.json",
+  "title": "Operator-initiated immutable rollback result evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "status", "provider", "restoredDigest", "supersededDigest", "drill", "attempts", "checks"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "status": { "enum": ["planned", "restored", "failed"] },
+    "provider": { "enum": ["docker-compose", "vercel-prebuilt", "digitalocean-app", "digitalocean-droplet", "hostinger-vps", "coolify", "render", "custom"] },
+    "restoredDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "supersededDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "drill": { "type": "boolean" },
+    "attempts": { "enum": [0, 1] },
+    "reasonCode": { "type": "string", "pattern": "^[a-z][a-z0-9_]+$" },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "finishedAt": { "type": "string", "format": "date-time" },
+    "providerEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deploymentId", "observedAt"],
+      "properties": {
+        "deploymentId": { "type": "string", "minLength": 1 },
+        "observedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["observedAt", "phase", "health", "version", "smoke"],
+        "properties": {
+          "observedAt": { "type": "string", "format": "date-time" },
+          "phase": { "enum": ["immediate", "soak"] },
+          "health": { "type": "boolean" },
+          "version": { "type": "boolean" },
+          "smoke": { "type": "boolean" }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "$comment": "A plan contacts no provider, so it carries no attempt, timing, or provider evidence.",
+      "if": { "properties": { "status": { "const": "planned" } }, "required": ["status"] },
+      "then": {
+        "type": "object",
+        "properties": {
+          "attempts": { "const": 0 },
+          "checks": { "type": "array", "maxItems": 0 },
+          "startedAt": false,
+          "finishedAt": false,
+          "providerEvidence": false,
+          "reasonCode": false
+        }
+      }
+    },
+    {
+      "$comment": "A restore that reached the provider is one attempt, is verified, and is time bound.",
+      "if": { "properties": { "status": { "const": "restored" } }, "required": ["status"] },
+      "then": {
+        "type": "object",
+        "required": ["startedAt", "finishedAt", "providerEvidence"],
+        "properties": {
+          "attempts": { "const": 1 },
+          "checks": { "type": "array", "minItems": 2 },
+          "reasonCode": false
+        }
+      }
+    },
+    {
+      "$comment": "A failed restore records exactly one attempt and why it failed; it is never retried.",
+      "if": { "properties": { "status": { "const": "failed" } }, "required": ["status"] },
+      "then": {
+        "type": "object",
+        "required": ["reasonCode", "startedAt", "finishedAt"],
+        "properties": { "attempts": { "const": 1 } }
+      }
+    }
+  ]
+}
