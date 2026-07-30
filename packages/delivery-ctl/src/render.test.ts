@@ -52,6 +52,14 @@ describe("template renderer", () => {
     const dependabot = parseYaml(
       await readFile(join(outputRoot, ".github/dependabot.yml"), "utf8"),
     ) as { updates: Array<Record<string, unknown>> };
+    // Dependabot rejects the whole file if the clock time parses as an
+    // integer, which an unquoted 04:00 does under YAML 1.1.
+    expect(await readFile(join(outputRoot, ".github/dependabot.yml"), "utf8"))
+      .toMatch(/time: "04:00"/u);
+    for (const entry of dependabot.updates) {
+      const schedule = entry["schedule"] as Record<string, unknown>;
+      expect(typeof schedule["time"]).toBe("string");
+    }
     // A newly published package can be malicious; every ecosystem waits.
     for (const entry of dependabot.updates) {
       expect(entry["cooldown"]).toEqual({ "default-days": 7 });

@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { lstat, mkdir, readFile, realpath, writeFile } from "node:fs/promises";
 import { dirname, join, relative, resolve, sep } from "node:path";
-import { stringify as stringifyYaml } from "yaml";
+import { Scalar, stringify as stringifyYaml } from "yaml";
 
 export type DependabotEcosystem =
   | "npm"
@@ -162,6 +162,12 @@ function dependabotEntries(input: RenderInput, policy: DependabotPolicy): readon
   );
 }
 
+function quoted(value: string): Scalar<string> {
+  const scalar = new Scalar(value);
+  scalar.type = Scalar.QUOTE_DOUBLE;
+  return scalar;
+}
+
 function renderDependabot(input: RenderInput, policy: DependabotPolicy): string {
   const targetBranch = input.profile === "major" ? "dev" : "main";
   // Consumer repositories run yamllint, which requires an explicit start marker.
@@ -174,7 +180,9 @@ function renderDependabot(input: RenderInput, policy: DependabotPolicy): string 
         schedule: {
           interval: policy.schedule.interval,
           day: dependabotWeekday(input.repository),
-          time: policy.schedule.time,
+          // Unquoted 04:00 is an integer under YAML 1.1 and Dependabot then
+          // rejects the entire configuration file.
+          time: quoted(policy.schedule.time),
           timezone: policy.schedule.timezone,
         },
         "target-branch": targetBranch,
