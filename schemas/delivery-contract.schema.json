@@ -93,10 +93,19 @@
     "secrets": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["source", "projectSlug", "paths", "exceptionsFile"],
+      "required": ["source", "paths", "exceptionsFile"],
+      "anyOf": [
+        { "required": ["projectSlug"], "properties": { "projectSlug": { "type": "string", "minLength": 1 } } },
+        {
+          "$comment": "A project in another organization cannot have its slug read at all; Infisical identifies it by id in its own URLs and in the configuration repositories check in.",
+          "required": ["projectId"],
+          "properties": { "projectId": { "type": "string", "format": "uuid" } }
+        }
+      ],
       "properties": {
         "source": { "const": "infisical" },
         "projectSlug": { "type": "string", "minLength": 1 },
+        "projectId": { "type": "string", "format": "uuid" },
         "organization": {
           "$comment": "Infisical organization holding the project. Needed only where a company's repositories span more than one organization, because a project slug alone is then ambiguous.",
           "type": "string",

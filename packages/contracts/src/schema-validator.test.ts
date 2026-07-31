@@ -90,4 +90,31 @@ describe("schema validator", () => {
 
     expect(validator.validate("delivery-contract", scoped)).toMatchObject({ ok: true });
   });
+
+  it("identifies a secret project by id when its slug is unreachable", async () => {
+    const validator = await createSchemaValidator(repositoryRoot);
+    const contract = JSON.parse(await readFile(
+      fileURLToPath(new URL("../test/fixtures/delivery-contract.valid.json", import.meta.url)),
+      "utf8",
+    )) as Record<string, unknown>;
+    const secrets = contract["secrets"] as Record<string, unknown>;
+    const { projectSlug: _slug, ...withoutSlug } = secrets;
+
+    // Infisical identifies a project by id in its own URLs and in the config
+    // repositories check in, and a slug cannot be read across an organization
+    // boundary at all.
+    const byId = {
+      ...contract,
+      secrets: {
+        ...withoutSlug,
+        projectId: "58fb7746-46fc-4c88-861b-0b2dc159522b",
+        organization: "maimaldrei-gmbh",
+      },
+    };
+    expect(validator.validate("delivery-contract", byId)).toMatchObject({ ok: true });
+
+    // One of the two identifiers is still mandatory.
+    const neither = { ...contract, secrets: withoutSlug };
+    expect(validator.validate("delivery-contract", neither).ok).toBe(false);
+  });
 });
