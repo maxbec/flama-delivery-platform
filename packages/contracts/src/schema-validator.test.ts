@@ -72,4 +72,22 @@ describe("schema validator", () => {
     expect(result.ok).toBe(false);
     expect(JSON.stringify(result)).not.toContain(secretValue);
   });
+
+  it("lets a delivery contract name the organization holding its secret project", async () => {
+    const validator = await createSchemaValidator(repositoryRoot);
+    const contract = JSON.parse(await readFile(
+      fileURLToPath(new URL("../test/fixtures/delivery-contract.valid.json", import.meta.url)),
+      "utf8",
+    )) as Record<string, unknown>;
+    const secrets = contract["secrets"] as Record<string, unknown>;
+
+    // A project slug alone is ambiguous once a company's repositories live in
+    // more than one Infisical organization.
+    const scoped = {
+      ...contract,
+      secrets: { ...secrets, organization: "maimaldrei-gmbh" },
+    };
+
+    expect(validator.validate("delivery-contract", scoped)).toMatchObject({ ok: true });
+  });
 });

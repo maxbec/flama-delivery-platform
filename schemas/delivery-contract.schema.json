@@ -97,6 +97,11 @@
       "properties": {
         "source": { "const": "infisical" },
         "projectSlug": { "type": "string", "minLength": 1 },
+        "organization": {
+          "$comment": "Infisical organization holding the project. Needed only where a company's repositories span more than one organization, because a project slug alone is then ambiguous.",
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,119}$"
+        },
         "paths": { "type": "object", "additionalProperties": { "type": "string", "pattern": "^/" } },
         "exceptionsFile": { "const": ".flama/secret-exceptions.json" }
       }
