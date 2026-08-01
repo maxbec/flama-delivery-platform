@@ -21,10 +21,30 @@ export async function loadCommand(name, configurationUrl = new URL("./commands.j
   return command;
 }
 
-export async function run(name) {
-  const [executable, ...args] = await loadCommand(name);
+/**
+ * Resolve the install command from the repository manifest. A delivery command
+ * that runs against whatever happens to be on the machine is not reproducible:
+ * without an install a missing node_modules silently falls through to an
+ * unrelated global tool, so the result depends on the host rather than the
+ * commit. Installs are lockfile-pinned so they cannot drift either.
+ */
+export async function installCommand(root) {
+  let manifest;
+  try {
+    manifest = JSON.parse(await readFile(new URL("package.json", root), "utf8"));
+  } catch {
+    return undefined;
+  }
+  const declared = typeof manifest.packageManager === "string" ? manifest.packageManager : "";
+  const name = declared.split("@")[0];
+  if (name === "pnpm") return ["pnpm", "install", "--frozen-lockfile"];
+  if (name === "yarn") return ["yarn", "install", "--immutable"];
+  return ["npm", "ci"];
+}
+
+function spawnCommand([executable, ...args], root) {
   const child = spawn(executable, args, {
-    cwd: new URL("../", import.meta.url),
+    cwd: root,
     env: process.env,
     shell: false,
     stdio: "inherit",
@@ -36,6 +56,17 @@ export async function run(name) {
       else resolve(code ?? 1);
     });
   });
+}
+
+export async function run(name) {
+  const root = new URL("../", import.meta.url);
+  const command = await loadCommand(name);
+  const install = await installCommand(root);
+  if (install !== undefined) {
+    const installed = await spawnCommand(install, root);
+    if (installed !== 0) return installed;
+  }
+  return spawnCommand(command, root);
 }
 
 if (process.argv[1] !== undefined && import.meta.url === new URL(process.argv[1], "file:").href) {

@@ -30,4 +30,23 @@ if (cd "$TMP_DIR" && ./scripts/delivery buildable extra >/dev/null 2>&1); then
 fi
 
 grep -Fq 'shell: false' "$ROOT_DIR/templates/common/.flama/run-command.mjs"
+
+# A delivery command that runs against whatever happens to be installed on the
+# host is not reproducible, so the runner installs from the lockfile first.
+node --input-type=module -e '
+import { installCommand } from "./templates/common/.flama/run-command.mjs";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+const dir = await mkdtemp(join(tmpdir(), "flama-install-"));
+const root = new URL(`file://${dir}/`);
+if (await installCommand(root) !== undefined) { console.error("no manifest must mean no install"); process.exit(1); }
+await writeFile(join(dir, "package.json"), JSON.stringify({ packageManager: "pnpm@11.0.8" }));
+const pnpm = await installCommand(root);
+if (pnpm.join(" ") !== "pnpm install --frozen-lockfile") { console.error("pnpm install not lockfile-pinned:", pnpm); process.exit(1); }
+await writeFile(join(dir, "package.json"), JSON.stringify({}));
+const npm = await installCommand(root);
+if (npm.join(" ") !== "npm ci") { console.error("default install not lockfile-pinned:", npm); process.exit(1); }
+'
+
 echo "delivery entrypoint template tests passed"
