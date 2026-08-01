@@ -57,12 +57,12 @@ function assertContract(contract, profile) {
     contract.schemaVersion !== 1 ||
     contract.profile !== profile ||
     !exactKeys(contract.repository, ["owner", "name", "visibility"]) ||
-    !["maxbec", "navigaite", "edilio"].includes(contract.repository.owner) ||
+    !["maxbec", "navigaite", "edilio-app"].includes(contract.repository.owner) ||
     typeof contract.repository.name !== "string" ||
     !["private", "public"].includes(contract.repository.visibility) ||
     !exactKeys(contract.paperclip, ["company", "projectId", "workspaceId"]) ||
     contract.paperclip.company !==
-      ({ maxbec: "Private", navigaite: "// Navigaite", edilio: "Edilio" })[
+      ({ maxbec: "Private", navigaite: "// Navigaite", "edilio-app": "Edilio" })[
         contract.repository.owner
       ] ||
     typeof contract.paperclip.projectId !== "string" ||
