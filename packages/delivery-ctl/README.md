@@ -92,6 +92,11 @@ Implemented commands:
   evidence contains only byte counts, timings, exit codes, and SHA-256 digests.
   The result is unsigned and must be certified by a separate Delivery
   Controller for the same SHA.
+- `certify --input <run> --output <signed-evidence>` attests that a preflight run
+  was observed to pass, producing the certification `publish-check` requires. It
+  refuses a failing run, a signature predating the run, and a controller that
+  does not own the repository's owner. The attestation carries no cryptography,
+  so those refusals and the choice of who may run it are the whole safeguard.
 - `publish-check --input <controller-evidence>` validates the canonical signed
   evidence digest, exact command sequence, owner/controller binding, and
   fork/archive scope before planning or publishing `Paperclip Preflight` for the

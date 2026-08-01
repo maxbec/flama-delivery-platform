@@ -23,6 +23,7 @@ import {
 import { createSchemaValidator, type SchemaName } from "../../contracts/src/schema-validator.js";
 import { classifyInventory, type ClassificationInput } from "./classify.js";
 import { auditDeploymentPullRequest, type DeploymentPullRequestInput } from "./deployment-pr.js";
+import { certifyPreflight, CertifyError, type CertifyInput } from "./certify.js";
 import { RenderConflictError, renderTemplates, type RenderInput } from "./render.js";
 import { auditSecrets, type SecretsAuditInput } from "./secrets-audit.js";
 import { auditCanaries, planCanaries, type CanaryInput } from "./canary.js";
@@ -328,6 +329,7 @@ export async function runCli(
     command !== "deployment-pr" &&
     command !== "deploy" &&
     command !== "preflight" &&
+    command !== "certify" &&
     command !== "publish-check" &&
     command !== "promote" &&
     command !== "release-evidence" &&
@@ -678,6 +680,19 @@ export async function runCli(
       return audit.result.status === "compliant" ? 0 : 1;
     }
 
+    if (command === "certify") {
+      if (typeof options.output !== "string") return fail(io, "output_required");
+      const certifyInput = input as unknown as CertifyInput;
+      const certified = certifyPreflight(certifyInput);
+      const certifiedValidation = validator.validate("preflight-evidence", certified);
+      if (!certifiedValidation.ok) return fail(io, "result_validation_failed");
+      await writeEvidence(options.output, certified);
+      io.writeStdout(jsonLine({ command, dryRun: false, ok: true, toolVersion,
+        result: { schemaVersion: 1, status: "certified",
+          headSha: certified.headSha, controller: certified.signature.subject } }));
+      return 0;
+    }
+
     if (command === "publish-check") {
       const validation = validator.validate("publish-check-input", input);
       if (!validation.ok) {
@@ -1015,6 +1030,9 @@ export async function runCli(
     io.writeStdout(jsonLine({ command, dryRun: options["dry-run"] ?? false, ok: result.status === "passed", toolVersion, result }));
     return result.status === "passed" ? 0 : 1;
   } catch (error) {
+    if (error instanceof CertifyError) {
+      return fail(io, error.code);
+    }
     if (error instanceof RenderConflictError) {
       io.writeStderr(
         jsonLine({
