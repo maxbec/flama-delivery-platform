@@ -128,21 +128,25 @@ The repository now implements the missing GitHub-transition installer. It:
 - emits only planned/applied dispositions, synchronization state, and contract
   and exception digests. It omits IDs, URLs, paths, timestamps, and values.
 
+Applied since: all three company controllers are natively approved and migrated
+onto the immutable release entrypoint, paused and zero-budget; project and
+workspace mappings are selected and every in-scope consumer is bound; both
+routine types are installed paused with their trigger secrets captured; the
+verifier-copy exception is approved; and the bridge runs as three
+owner-scoped services on `ai-vm` (see `operations/bridge-ingress.md`).
+
 Still pending:
 
-- native approval of the remaining company controller;
-- fail-closed migration of the approved controllers from the exact legacy
-  source entrypoint to the immutable release entrypoint;
-- authoritative selection of project/workspace mappings for every consumer;
-- creation of private repository bindings from those mappings;
-- deterministic installation of both paused routine types;
-- approval of the exact Paperclip verifier-copy exception and private
-  Infisical project/environment/path mappings required before HMAC trigger
-  creation;
-- bridge deployment, scoped authorization writes, controlled routine
-  activation, replay verification, and native governance attestations; and
+- public ingress for the bridge and the webhook configuration on each GitHub
+  App, without which no event reaches the platform at all;
+- scoped authorization writes, controlled routine activation, replay
+  verification, and native governance attestations; and
 - the later GitHub App identities needed for authoritative missed-event
   discovery and governance aggregation.
+
+Ingress is on the critical path for everything downstream: the live Phase 4
+audit requires an event-replay proof, and Phase 5 waves are gated on that
+audit.
 
 Both deterministic routine installers are implemented. Neither routine has
 been applied live. The scheduled routine still requires its authoritative
