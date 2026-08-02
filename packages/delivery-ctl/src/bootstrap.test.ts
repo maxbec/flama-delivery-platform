@@ -322,6 +322,56 @@ describe("repository bootstrap", () => {
     expect(JSON.stringify(trunk.lint.ignore)).toContain("CHANGELOG.md");
     expect(JSON.stringify(trunk.lint.ignore)).toContain(".flama/**");
   });
+
+  it("preserves the repository's own comments and document marker", async () => {
+    // The file belongs to the repository. Parsing and re-stringifying it drops
+    // every comment and the --- marker, which is a destructive edit to content
+    // nobody asked us to touch, and yamllint fails the result.
+    const repository = await initializeRepository();
+    const original = [
+      "---",
+      "# This file controls the behavior of Trunk",
+      "version: 0.1",
+      "",
+      "# Trunk provides extensibility via plugins.",
+      "plugins:",
+      "  sources:",
+      "    - id: trunk",
+      "      ref: v1.10.2",
+      "",
+      "lint:",
+      "  ignore:",
+      "    - linters: [prettier]",
+      "      paths: [CHANGELOG.md]",
+      "",
+    ].join("\n");
+    await mkdir(join(repository.root, ".trunk"), { recursive: true });
+    await writeFile(join(repository.root, ".trunk/trunk.yaml"), original, "utf8");
+    await git(repository.root, "add", ".trunk/trunk.yaml");
+    await git(repository.root, "commit", "-m", "add trunk config");
+    const sha = await git(repository.root, "rev-parse", "HEAD");
+    await git(repository.root, "update-ref", "refs/remotes/origin/main", sha);
+
+    await bootstrapRepository({
+      repositoryRoot: platformRoot,
+      outputRoot: repository.root,
+      input: bootstrapInput(sha),
+      dryRun: false,
+    });
+
+    const merged = await readFile(join(repository.root, ".trunk/trunk.yaml"), "utf8");
+    expect(merged.startsWith("---\n")).toBe(true);
+    expect(merged).toContain("# This file controls the behavior of Trunk");
+    expect(merged).toContain("# Trunk provides extensibility via plugins.");
+    const trunk = parseYaml(merged);
+    expect(trunk.lint.ignore).toHaveLength(2);
+    expect(JSON.stringify(trunk.lint.ignore)).toContain(".flama/**");
+    // Generated files must be invisible to every linter, not an enumerated few:
+    // a generated .mjs was being linted by eslint because eslint was not listed.
+    const ours = trunk.lint.ignore.find((entry: { paths: string[] }) =>
+      entry.paths.includes(".flama/**"));
+    expect(ours.linters).toEqual(["ALL"]);
+  });
 });
 
 describe("generated agent instructions", () => {
@@ -354,5 +404,15 @@ describe("generated agent instructions", () => {
     const appended = await readFile(join(existing.root, "AGENTS.md"), "utf8");
     expect(appended).toContain("Keep this text.");
     expect(appended.match(/^# /gmu)).toHaveLength(1);
+
+    // A repository whose prettier reflows prose rewrites the generated block on
+    // every run, so the block fences itself off rather than fighting the
+    // formatter. The rest of the file is still the repository's to format.
+    expect(appended).toContain("<!-- prettier-ignore-start -->");
+    expect(appended).toContain("<!-- prettier-ignore-end -->");
+    expect(appended.indexOf("<!-- prettier-ignore-start -->"))
+      .toBeLessThan(appended.indexOf("<!-- flama-delivery:start -->"));
+    expect(appended.indexOf("<!-- flama-delivery:end -->"))
+      .toBeLessThan(appended.indexOf("<!-- prettier-ignore-end -->"));
   });
 });

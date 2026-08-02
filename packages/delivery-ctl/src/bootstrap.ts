@@ -276,6 +276,7 @@ async function assertRepositoryState(root: string, input: BootstrapInput): Promi
 function agentsBlock(input: BootstrapInput): string {
   const stableBoundary = input.render.profile === "major" ? "dev for feature work and main for promotion" : "main";
   return [
+    "<!-- prettier-ignore-start -->",
     agentsStartMarker,
     "## Flama delivery",
     "",
@@ -285,6 +286,7 @@ function agentsBlock(input: BootstrapInput): string {
     "Production requires Max's approval of the exact deployment PR head SHA.",
     "Do not edit centrally generated `.flama` or Flama workflow files by hand.",
     agentsEndMarker,
+    "<!-- prettier-ignore-end -->",
     "",
   ].join("\n");
 }
@@ -451,20 +453,48 @@ function appendPrefix(originalContent: string): string {
   return originalContent.endsWith("\n") ? "\n" : "\n\n";
 }
 
-const trunkIgnoreLinters = ["prettier", "yamlfmt", "yamllint", "markdownlint", "shellcheck", "shfmt"];
+// Trunk's own wildcard. An enumerated list silently omits whatever linter the
+// repository adds next — a generated `.mjs` was being linted by eslint because
+// eslint was not on the list.
+const trunkIgnoreLinters = ["ALL"];
 
+/**
+ * Add our ignore entry to a Trunk configuration the repository owns.
+ *
+ * The edit is textual. Parsing and re-stringifying the document produces valid
+ * YAML but drops every comment and the leading `---`, which destroys
+ * documentation nobody asked us to touch and leaves a file yamllint then fails.
+ * The document is still parsed, but only to decide whether the entry is already
+ * present and where `lint:` sits.
+ */
 async function mergeTrunkIgnore(destination: string, paths: readonly string[]): Promise<void> {
   const original = await readFile(destination, "utf8");
-  const document = parseYaml(original) as Record<string, unknown>;
+  const document = (parseYaml(original) ?? {}) as Record<string, unknown>;
   const lint = (document["lint"] ?? {}) as Record<string, unknown>;
-  const ignore = Array.isArray(lint["ignore"]) ? [...(lint["ignore"] as unknown[])] : [];
+  const ignore = Array.isArray(lint["ignore"]) ? (lint["ignore"] as unknown[]) : [];
   const already = ignore.some((entry) =>
     typeof entry === "object" && entry !== null &&
     JSON.stringify((entry as Record<string, unknown>)["paths"]) === JSON.stringify([...paths]));
   if (already) return;
-  ignore.push({ linters: trunkIgnoreLinters, paths: [...paths] });
-  document["lint"] = { ...lint, ignore };
-  await writeFile(destination, stringifyYaml(document, { lineWidth: 0 }), "utf8");
+
+  const entry = [
+    `    - linters: [${trunkIgnoreLinters.join(", ")}]`,
+    "      paths:",
+    ...paths.map((path) => `        - ${path}`),
+  ];
+  const lines = original.replace(/\n$/u, "").split("\n");
+  const ignoreIndex = lines.findIndex((line) => /^\s{2}ignore:\s*$/u.test(line));
+  if (ignoreIndex >= 0) {
+    lines.splice(ignoreIndex + 1, 0, ...entry);
+  } else {
+    const lintIndex = lines.findIndex((line) => /^lint:\s*$/u.test(line));
+    if (lintIndex >= 0) {
+      lines.splice(lintIndex + 1, 0, "  ignore:", ...entry);
+    } else {
+      lines.push("lint:", "  ignore:", ...entry);
+    }
+  }
+  await writeFile(destination, `${lines.join("\n")}\n`, "utf8");
 }
 
 async function applyOwnedTargets(root: string, states: readonly OwnedState[]): Promise<void> {
