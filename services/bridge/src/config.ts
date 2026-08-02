@@ -53,7 +53,8 @@ export interface BridgeConfig {
   readonly databaseUrl: SecretValue;
   readonly webhookSecret: SecretValue;
   readonly allowedOwner: GitHubOwner;
-  readonly host: "127.0.0.1" | "0.0.0.0" | "::";
+  /** A loopback address, a wildcard, or a private IPv4 literal. See `parseHost`. */
+  readonly host: string;
   readonly port: number;
   readonly workerId: string;
   readonly pollMilliseconds: number;
@@ -100,15 +101,35 @@ function parseWebhookSecret(value: string | undefined): SecretValue {
   return new SecretValue(value);
 }
 
+/**
+ * A bind address decides who can reach the bridge, so it is validated rather
+ * than passed through to `listen`. Loopback and the two wildcards are named
+ * explicitly; beyond those only a private IPv4 literal is accepted, so a typo
+ * or a routable address cannot quietly publish the bridge to the internet. A
+ * name is refused because what it resolves to is not knowable here, and a
+ * leading zero is refused because resolvers disagree on whether it is octal.
+ */
+function parseHost(value: string | undefined): string {
+  const host = value ?? "127.0.0.1";
+  if (host === "127.0.0.1" || host === "0.0.0.0" || host === "::" || host === "::1") return host;
+  const octets = /^(0|[1-9]\d{0,2})\.(0|[1-9]\d{0,2})\.(0|[1-9]\d{0,2})\.(0|[1-9]\d{0,2})$/u.exec(host);
+  if (octets === null || octets.slice(1).some((octet) => Number(octet) > 255)) {
+    throw new BridgeConfigError("invalid_host");
+  }
+  const first = Number(octets[1]);
+  const second = Number(octets[2]);
+  const isPrivate =
+    first === 10 || (first === 172 && second >= 16 && second <= 31) || (first === 192 && second === 168);
+  if (!isPrivate) throw new BridgeConfigError("invalid_host");
+  return host;
+}
+
 export function parseBridgeConfig(environment: Environment): BridgeConfig {
   const owner = environment["FLAMA_GITHUB_OWNER"];
   if (owner !== "maxbec" && owner !== "navigaite" && owner !== "edilio-app") {
     throw new BridgeConfigError("invalid_owner");
   }
-  const host = environment["FLAMA_BRIDGE_HOST"] ?? "127.0.0.1";
-  if (host !== "127.0.0.1" && host !== "0.0.0.0" && host !== "::") {
-    throw new BridgeConfigError("invalid_host");
-  }
+  const host = parseHost(environment["FLAMA_BRIDGE_HOST"]);
   const workerId = environment["FLAMA_WORKER_ID"];
   if (workerId === undefined || !/^[A-Za-z0-9._:-]{1,128}$/u.test(workerId)) {
     throw new BridgeConfigError("invalid_worker_id");

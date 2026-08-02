@@ -58,4 +58,31 @@ describe("bridge configuration", () => {
     expect(() => parseBridgeConfig({ ...validEnvironment, FLAMA_WORKER_MAX_ATTEMPTS: "100" }))
       .toThrowError(expect.objectContaining({ code: "invalid_worker_max_attempts" }));
   });
+
+  it("accepts a private bind address so a tunnel connector on another host can reach it", () => {
+    for (const host of ["192.168.1.204", "10.0.0.5", "172.16.0.1", "172.31.255.254", "::1"]) {
+      expect(parseBridgeConfig({ ...validEnvironment, FLAMA_BRIDGE_HOST: host }).host).toBe(host);
+    }
+  });
+
+  it("refuses a bind address that is not demonstrably private", () => {
+    for (const host of [
+      "8.8.8.8", // public
+      "172.32.0.1", // just outside the private range
+      "172.15.255.255",
+      "192.169.1.1",
+      "localhost", // a name resolves to something this process cannot check
+      "bridge.local.bc-family.de",
+      "192.168.01.204", // a leading zero is octal to some resolvers and decimal to others
+      "192.168.1.204:3010",
+      "999.1.1.1",
+      "192.168.1.999", // a private prefix does not make the rest of the address valid
+      "192.168.300.1",
+      "192.168.1",
+      "",
+    ]) {
+      expect(() => parseBridgeConfig({ ...validEnvironment, FLAMA_BRIDGE_HOST: host }))
+        .toThrowError(expect.objectContaining({ code: "invalid_host" }));
+    }
+  });
 });
