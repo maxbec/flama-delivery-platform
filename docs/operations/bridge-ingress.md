@@ -49,3 +49,36 @@ for port in 3010 3011 3012; do curl -sS -o /dev/null -w "$port %{http_code}\n" "
 `/health` reports the process; `/ready` additionally reports the database. A
 webhook that arrives without a valid signature is rejected before parsing and
 is not queued, so a 401 in the logs is the guard working, not an outage.
+
+## What a signed delivery actually does
+
+Replaying a signed `push` for a bound repository over the LAN, before any
+tunnel exists, gives:
+
+| Request | Result |
+| --- | --- |
+| valid signature, fresh delivery id | `202 {"accepted":true,"duplicate":false}` |
+| same delivery id again | `202 {"accepted":true,"duplicate":true}` |
+| tampered signature | `401 invalid_signature` |
+| no signature | `401 invalid_signature` |
+| sent to another owner's bridge | `401` — it fails on that bridge's own secret before scope is ever consulted |
+| unsupported event (`star`) | `202 {"accepted":false,"ignored":true}` |
+
+The accepted delivery is minimized, queued, and marked `completed` in
+`webhook_inbox`; the worker moves it to `transition_outbox`, attempts it five
+times, and dead-letters it with `authorization_missing`.
+
+That last step is the important one. **Ingress alone does not make events
+flow.** The bridge signs a Paperclip routine-trigger request only for a
+lifecycle edge the company controller has already authorized, and the
+controllers are paused and zero-budget, so no authorization exists yet. The
+order is: ingress, then scoped authorization writes, then routine activation.
+A dead letter reading `authorization_missing` is the design holding, not a
+fault.
+
+## Known gap
+
+The bridge logs nothing on a normal delivery — not an acceptance, not a
+dead-letter. The five-attempt failure above is visible only by querying
+`dead_letter` directly. Anything relying on the bridge should watch that table
+rather than the journal until this is addressed.
