@@ -72,7 +72,7 @@ describe("bridge configuration", () => {
       "172.15.255.255",
       "192.169.1.1",
       "localhost", // a name resolves to something this process cannot check
-      "bridge.local.bc-family.de",
+      "bridge.internal.example",
       "192.168.01.204", // a leading zero is octal to some resolvers and decimal to others
       "192.168.1.204:3010",
       "999.1.1.1",

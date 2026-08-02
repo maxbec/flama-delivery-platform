@@ -133,7 +133,7 @@ onto the immutable release entrypoint, paused and zero-budget; project and
 workspace mappings are selected and every in-scope consumer is bound; both
 routine types are installed paused with their trigger secrets captured; the
 verifier-copy exception is approved; and the bridge runs as three
-owner-scoped services on `ai-vm` (see `operations/bridge-ingress.md`).
+owner-scoped services on its runtime host (see `operations/bridge-ingress.md`).
 
 Still pending:
 

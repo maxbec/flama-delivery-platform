@@ -1,9 +1,9 @@
 # Bridge ingress
 
-The bridge binds to exactly one GitHub owner, so it runs as three services —
-`flama-bridge-maxbec`, `flama-bridge-navigaite`, `flama-bridge-edilio` — each
-with its own webhook secret, its own Paperclip trigger credential, and its own
-port (3010, 3011, 3012) on `ai-vm`.
+The bridge binds to exactly one GitHub owner, so it runs as one service per
+owner — three in this estate — each with its own webhook secret, its own
+Paperclip trigger credential, and its own port. Concrete hosts, addresses, and
+public hostnames are deployment facts and are recorded privately, not here.
 
 ## Bind address
 
@@ -15,45 +15,37 @@ address with a leading zero is refused because resolvers disagree on whether it
 is octal. A routable address is refused outright: the bridge is reached through
 a tunnel, so binding it to one would be a mistake, not a configuration choice.
 
-The services bind `192.168.1.204`. That is narrower than `0.0.0.0` — the
-wildcard would also publish the bridge on every other interface the host gains
-later — and it is what the tunnel connector needs, because the connector does
-not run on the same host.
+Where the tunnel connector runs on a different host from the bridge, bind the
+private interface address rather than a wildcard. The wildcard would also
+publish the bridge on every other interface the host gains later.
 
 ## Public ingress
 
-The connector is the existing `cloudflared` container on `unraid`, running a
-remote-managed tunnel. Its ingress rules resolve three public hostnames to the
-three LAN origins. Nothing on the bridge listens publicly; the only public
-surface is the tunnel, and a Cloudflare WAF rule restricts each hostname to
-GitHub's published hook ranges.
+A tunnel connector terminates the public hostname and forwards to the private
+origin; nothing on the bridge listens publicly. Each hostname is additionally
+restricted at the edge to GitHub's published hook ranges, which change over
+time and should be read from `GET /meta` rather than copied.
 
-| Hostname | Origin | Owner |
-| --- | --- | --- |
-| `flama-bridge-maxbec.bc-family.de` | `http://192.168.1.204:3010` | `maxbec` |
-| `flama-bridge-navigaite.bc-family.de` | `http://192.168.1.204:3011` | `navigaite` |
-| `flama-bridge-edilio.bc-family.de` | `http://192.168.1.204:3012` | `edilio-app` |
-
-Origin traffic crosses the LAN unencrypted between `unraid` and `ai-vm`. That
-is accepted: the payload is already public GitHub metadata, and the bridge
-authenticates every webhook by HMAC before it parses the body, so a LAN
-attacker who cannot read the secret from Infisical cannot forge an event.
+Origin traffic crosses the private network unencrypted between the connector
+and the bridge. That is accepted: the payload is public GitHub metadata, and
+the bridge authenticates every webhook by HMAC before it parses the body, so an
+attacker on that network who cannot read the secret cannot forge an event.
 
 ## Verifying
 
 ```bash
-systemctl --user is-active flama-bridge-maxbec flama-bridge-navigaite flama-bridge-edilio
-for port in 3010 3011 3012; do curl -sS -o /dev/null -w "$port %{http_code}\n" "http://192.168.1.204:$port/health"; done
+systemctl --user is-active flama-bridge-<owner>
+curl -sS -o /dev/null -w '%{http_code}\n' "http://<bind-address>:<port>/health"
 ```
 
 `/health` reports the process; `/ready` additionally reports the database. A
 webhook that arrives without a valid signature is rejected before parsing and
-is not queued, so a 401 in the logs is the guard working, not an outage.
+is not queued, so a 401 is the guard working, not an outage.
 
 ## What a signed delivery actually does
 
-Replaying a signed `push` for a bound repository over the LAN, before any
-tunnel exists, gives:
+Replaying a signed `push` for a bound repository over the private network,
+before any tunnel exists, gives:
 
 | Request | Result |
 | --- | --- |
