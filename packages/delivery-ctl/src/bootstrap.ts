@@ -118,6 +118,13 @@ interface OwnedTarget {
   readonly content: string;
   readonly mode: number;
   readonly appendToExisting?: true;
+  /**
+   * Written before the block when the file does not exist yet. A markdown file
+   * whose first line is not a top-level heading fails markdownlint MD041, and a
+   * second one fails MD025 — so the title belongs to the created file, never to
+   * the block that is appended to a file that already has its own.
+   */
+  readonly createPrefix?: string;
   /** Marker pair proving this block is already present, for appendable files. */
   readonly markers?: readonly [string, string];
   /**
@@ -382,6 +389,7 @@ async function ownedTargets(
       content: agentsBlock(input),
       mode: 0o644,
       appendToExisting: true as const,
+      createPrefix: "# Agent instructions\n\n",
     },
     {
       path: "scripts/delivery",
@@ -474,7 +482,7 @@ async function applyOwnedTargets(root: string, states: readonly OwnedState[]): P
       await appendFile(destination, `${appendPrefix(currentContent)}${state.target.content}`, "utf8");
     } else if (!state.exists) {
       await mkdir(dirname(destination), { recursive: true });
-      await writeFile(destination, state.target.content, {
+      await writeFile(destination, `${state.target.createPrefix ?? ""}${state.target.content}`, {
         encoding: "utf8",
         flag: "wx",
         mode: state.target.mode,

@@ -19,14 +19,19 @@ async function git(root: string, ...args: readonly string[]): Promise<string> {
   return result.stdout.trim();
 }
 
-async function initializeRepository(existingDeliveryScript = false): Promise<{ root: string; sha: string }> {
+async function initializeRepository(
+  existingDeliveryScript = false,
+  options: { agents?: boolean } = {},
+): Promise<{ root: string; sha: string }> {
   const root = await mkdtemp(join(tmpdir(), "flama-bootstrap-"));
   await git(root, "init", "--initial-branch=main");
   await git(root, "config", "user.name", "Bootstrap Test");
   await git(root, "config", "user.email", "bootstrap@example.invalid");
   await git(root, "remote", "add", "origin", "https://github.com/maxbec/example.git");
   await writeFile(join(root, "README.md"), "# Existing repository\n", "utf8");
-  await writeFile(join(root, "AGENTS.md"), "# Existing instructions\n\nKeep this text.\n", "utf8");
+  if (options.agents !== false) {
+    await writeFile(join(root, "AGENTS.md"), "# Existing instructions\n\nKeep this text.\n", "utf8");
+  }
   if (existingDeliveryScript) {
     await mkdir(join(root, "scripts"), { recursive: true });
     await writeFile(join(root, "scripts/delivery"), "#!/usr/bin/env bash\necho repository-owned\n", {
@@ -316,5 +321,38 @@ describe("repository bootstrap", () => {
     expect(trunk.lint.ignore).toHaveLength(2);
     expect(JSON.stringify(trunk.lint.ignore)).toContain("CHANGELOG.md");
     expect(JSON.stringify(trunk.lint.ignore)).toContain(".flama/**");
+  });
+});
+
+describe("generated agent instructions", () => {
+  it("creates AGENTS.md with a top-level heading and adds none when appending", async () => {
+    // markdownlint MD041 fails a file whose first line is not a top-level
+    // heading, and MD025 fails a second one — so a created file needs a title
+    // and an appended block must not bring its own.
+    const created = await initializeRepository(false, { agents: false });
+    await bootstrapRepository({
+      repositoryRoot: platformRoot,
+      outputRoot: created.root,
+      input: bootstrapInput(created.sha),
+      dryRun: false,
+    });
+    // The title belongs to AGENTS.md alone; every other created file is untouched.
+    const script = await readFile(join(created.root, "scripts/delivery"), "utf8");
+    expect(script.startsWith("#!")).toBe(true);
+    const fresh = await readFile(join(created.root, "AGENTS.md"), "utf8");
+    expect(fresh.split("\n")[0]).toMatch(/^# \S/u);
+    expect(fresh.match(/^# /gmu)).toHaveLength(1);
+    expect(fresh).toContain("<!-- flama-delivery:start -->");
+
+    const existing = await initializeRepository(false);
+    await bootstrapRepository({
+      repositoryRoot: platformRoot,
+      outputRoot: existing.root,
+      input: bootstrapInput(existing.sha),
+      dryRun: false,
+    });
+    const appended = await readFile(join(existing.root, "AGENTS.md"), "utf8");
+    expect(appended).toContain("Keep this text.");
+    expect(appended.match(/^# /gmu)).toHaveLength(1);
   });
 });
