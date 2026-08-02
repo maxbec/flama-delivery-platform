@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   guard:
-    name: Branch Guard
+    name: Flama Branch Guard
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:

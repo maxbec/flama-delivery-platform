@@ -77,7 +77,7 @@ case "$endpoint" in
       exit 1
     fi
     emit '{
-      "required_status_checks": {"strict": true, "contexts": ["Branch Guard", "Paperclip Preflight", "Policy Gate"]},
+      "required_status_checks": {"strict": true, "contexts": ["Flama Branch Guard", "Paperclip Preflight", "Flama Policy Gate"]},
       "required_pull_request_reviews": {"dismiss_stale_reviews": true, "require_code_owner_reviews": true, "require_last_push_approval": true},
       "required_signatures": {"enabled": true},
       "required_conversation_resolution": {"enabled": true},
@@ -92,7 +92,7 @@ case "$endpoint" in
       exit 1
     fi
     emit '{
-      "required_status_checks": {"strict": true, "contexts": ["Branch Guard", "Paperclip Preflight", "Final Gate"]},
+      "required_status_checks": {"strict": true, "contexts": ["Flama Branch Guard", "Paperclip Preflight", "Flama Final Gate"]},
       "required_pull_request_reviews": {"dismiss_stale_reviews": true, "require_code_owner_reviews": true, "require_last_push_approval": true},
       "required_signatures": {"enabled": true},
       "required_conversation_resolution": {"enabled": true},

@@ -34,7 +34,7 @@ concurrency:
 
 jobs:
   policy:
-    name: Policy Gate
+    name: Flama Policy Gate
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:

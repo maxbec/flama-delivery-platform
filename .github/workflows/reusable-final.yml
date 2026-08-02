@@ -25,7 +25,7 @@ concurrency:
 
 jobs:
   final:
-    name: Final Gate
+    name: Flama Final Gate
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

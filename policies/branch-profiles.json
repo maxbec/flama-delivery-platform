@@ -7,7 +7,11 @@
       "stableBranch": "main",
       "featureTarget": "main",
       "featureMergeMethod": "squash",
-      "requiredChecks": ["Branch Guard", "Paperclip Preflight", "Final Gate"]
+      "requiredChecks": [
+        "Flama Branch Guard",
+        "Paperclip Preflight",
+        "Flama Final Gate"
+      ]
     },
     "major": {
       "defaultBranch": "dev",
@@ -15,8 +19,15 @@
       "featureTarget": "dev",
       "featureMergeMethod": "squash",
       "promotionMergeMethod": "merge",
-      "integrationChecks": ["Branch Guard", "Paperclip Preflight", "Policy Gate"],
-      "stableChecks": ["Branch Guard", "Final Gate"]
+      "integrationChecks": [
+        "Flama Branch Guard",
+        "Paperclip Preflight",
+        "Flama Policy Gate"
+      ],
+      "stableChecks": [
+        "Flama Branch Guard",
+        "Flama Final Gate"
+      ]
     }
   },
   "common": {

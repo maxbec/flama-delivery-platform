@@ -13,9 +13,9 @@
     {
       "name": "main",
       "requiredChecks": [
-        "Branch Guard",
-        "Paperclip Preflight",
-        "Final Gate"
+        "Flama Branch Guard",
+        "Flama Final Gate",
+        "Paperclip Preflight"
       ],
       "pullRequestRequired": true,
       "strictChecks": true,
