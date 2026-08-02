@@ -196,7 +196,11 @@ apply_branch_protection() {
       required_pull_request_reviews: {
         dismiss_stale_reviews: true,
         require_code_owner_reviews: true,
-        require_last_push_approval: true,
+        # Requiring the last push to be approved only means anything when an
+        # approval is required at all. With a count of zero it demands an
+        # approval nobody is asked for, which leaves every pull request
+        # unmergeable by its author — including the platform's own.
+        require_last_push_approval: false,
         required_approving_review_count: 0
       },
       restrictions: null,
