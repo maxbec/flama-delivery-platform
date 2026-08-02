@@ -79,6 +79,9 @@ jobs:
           ref: ${{ inputs.head-sha }}
           persist-credentials: false
 
+      - name: Enable the package manager the repository declares
+        run: corepack enable
+
       - name: Build release package without repeating tests
         run: ./scripts/delivery buildable
 

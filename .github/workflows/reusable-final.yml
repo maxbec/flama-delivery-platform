@@ -64,6 +64,10 @@ jobs:
             echo 'mode=code' >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Enable the package manager the repository declares
+        if: ${{ steps.change.outputs.mode == 'code' }}
+        run: corepack enable
+
       - name: Run authoritative full verification
         if: ${{ steps.change.outputs.mode == 'code' }}
         working-directory: consumer
