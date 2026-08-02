@@ -137,12 +137,20 @@ apply_actions_policy() {
     # An empty pattern list is not a stricter policy. Every reusable workflow
     # lives in another repository — the Flama gates above all — so an allow-list
     # without them fails every run at startup before a single step executes.
+    # The patterns come from the approved posture, because the platform cannot
+    # infer which actions a repository's existing workflows already depend on,
+    # and an allow-list missing one fails every run at startup. The platform's
+    # own reusable workflows are always permitted.
     request PUT "repos/$REPOSITORY/actions/permissions/selected-actions" \
-      "$(jq -nc --arg owner "${REPOSITORY%%/*}/*" '{
+      "$(jq -c --arg owner "${REPOSITORY%%/*}" '{
         github_owned_allowed: true,
         verified_allowed: true,
-        patterns_allowed: ["maxbec/flama-delivery-platform/*", $owner]
-      }')"
+        patterns_allowed: (
+          (.owners[$owner].allowedActionPatterns // [])
+          + ["maxbec/flama-delivery-platform/*", ($owner + "/*")]
+          | unique
+        )
+      }' "$POSTURE_PATH")"
   else
     ACTIONS_POLICY_DEFERRED=true
     printf 'PARTIAL actions_trust_policy_drift: workflow permissions set; action allow-list deferred until bootstrap\n' >&2
