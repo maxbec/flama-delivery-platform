@@ -133,3 +133,35 @@ grep -q "failed to read repository rulesets" "$TMP_DIR/rulesets.err" || {
 }
 
 echo "github policy observer tests passed"
+
+# A Major-profile repository defaults to dev and keeps main as its stable
+# branch. The observer used to look only at the default branch and at dev, so
+# main was never observed at all and every Major repository reported permanent
+# branch-set and required-check drift no matter how it was configured.
+PATH="$FIXTURE_DIR/bin:$PATH" FLAMA_GH_DEFAULT_BRANCH=dev "$OBSERVER" \
+  --repository maxbec/example --profile major \
+  --posture "$FIXTURE_DIR/posture.json" --output "$TMP_DIR/major.json" >/dev/null
+
+jq -e '
+  ([.protectedBranches[].name] | sort) == ["dev", "main"] and
+  (.protectedBranches[] | select(.name == "main") | .requiredChecks | length) > 0 and
+  (.protectedBranches[] | select(.name == "dev") | .requiredChecks | length) > 0
+' "$TMP_DIR/major.json" >/dev/null || {
+  echo "a Major repository did not observe both dev and main" >&2
+  jq '.protectedBranches' "$TMP_DIR/major.json" >&2
+  exit 1
+}
+
+# A repository that genuinely has no main is different from one whose main was
+# never looked at: the branch is absent, not silently assumed compliant.
+PATH="$FIXTURE_DIR/bin:$PATH" FLAMA_GH_DEFAULT_BRANCH=dev FLAMA_GH_NO_MAIN=1 "$OBSERVER" \
+  --repository maxbec/example --profile major \
+  --posture "$FIXTURE_DIR/posture.json" --output "$TMP_DIR/major-no-main.json" >/dev/null
+
+jq -e '[.protectedBranches[].name] == ["dev"]' "$TMP_DIR/major-no-main.json" >/dev/null || {
+  echo "a missing main branch was invented rather than omitted" >&2
+  jq '.protectedBranches' "$TMP_DIR/major-no-main.json" >&2
+  exit 1
+}
+
+echo "github policy observer tests passed"

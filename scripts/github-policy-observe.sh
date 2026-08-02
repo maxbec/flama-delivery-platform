@@ -100,12 +100,17 @@ DEFAULT_BRANCH=$(jq -r '.default_branch // ""' "$REPO_JSON")
 BRANCHES_JSON="$TASK_TMP_DIR/branches.json"
 printf '[]\n' > "$BRANCHES_JSON"
 for branch in main dev; do
-  [[ "$branch" == "$DEFAULT_BRANCH" || "$branch" == "dev" ]] || continue
+  # A Major repository defaults to dev and keeps main as its stable branch, so
+  # observing only the default branch left main unseen and every Major
+  # repository reporting drift it could not clear. Any branch the contract
+  # models is observed when it exists.
+  if [[ "$branch" != "$DEFAULT_BRANCH" ]]; then
+    gh_get "repos/$REPOSITORY/branches/$branch" >/dev/null 2>&1 || continue
+  fi
   protection="$TASK_TMP_DIR/protection-$branch.json"
   if ! gh_get "repos/$REPOSITORY/branches/$branch/protection" > "$protection" 2>/dev/null; then
-    # An unprotected branch is drift the audit exists to report. Only the
-    # default branch is reported that way; a missing dev branch is not invented.
-    [[ "$branch" == "$DEFAULT_BRANCH" ]] || continue
+    # An unprotected branch that exists is drift the audit exists to report; a
+    # branch that does not exist is omitted rather than invented.
     printf '{}\n' > "$protection"
   fi
   jq --slurpfile protection "$protection" --arg name "$branch" '
