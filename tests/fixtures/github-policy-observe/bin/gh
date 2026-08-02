@@ -104,6 +104,13 @@ case "$endpoint" in
   repos/maxbec/example/actions/permissions)
     emit '{"enabled": true, "allowed_actions": "selected"}'
     ;;
+  repos/maxbec/example/actions/permissions/selected-actions)
+    emit '{
+      "github_owned_allowed": true,
+      "verified_allowed": true,
+      "patterns_allowed": ["maxbec/flama-delivery-platform/*", "maxbec/*"]
+    }'
+    ;;
   repos/maxbec/example/actions/permissions/workflow)
     emit '{"default_workflow_permissions": "read", "can_approve_pull_request_reviews": false}'
     ;;

@@ -36,6 +36,10 @@
     "workflowCanApprovePullRequests": false,
     "policy": "selected",
     "thirdPartyFullShaPins": true,
+    "allowedPatterns": [
+      "maxbec/flama-delivery-platform/*",
+      "maxbec/*"
+    ],
     "pullRequestTarget": false
   },
   "security": {

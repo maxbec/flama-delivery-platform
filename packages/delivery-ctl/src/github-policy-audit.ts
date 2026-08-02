@@ -69,6 +69,7 @@ export interface GitHubPolicyAuditInput {
     readonly policy: "selected" | "all" | "local_only";
     readonly thirdPartyFullShaPins: boolean;
     readonly pullRequestTarget: boolean;
+    readonly allowedPatterns: readonly string[];
   };
   readonly security: {
     readonly vulnerabilityAlerts: boolean;
@@ -146,6 +147,8 @@ function featureCompliant(feature: AvailableFeature): boolean {
   return feature.available ? feature.enabled : !feature.enabled;
 }
 
+const platformActionsPattern = "maxbec/flama-delivery-platform/*";
+
 export function auditGitHubPolicy(
   input: GitHubPolicyAuditInput,
   policy: BranchProfilesPolicy,
@@ -197,9 +200,16 @@ export function auditGitHubPolicy(
   if (!input.merge.squash || input.merge.mergeCommit !== expectedMergeCommit || input.merge.rebase) {
     add("merge_method_drift", "merge");
   }
+  // A `selected` policy whose allow-list omits the platform is not a stricter
+  // policy, it is a broken one: the Flama gates are reusable workflows from
+  // another repository, so they stop resolving and every run fails at startup.
+  const allowsPlatform = input.actions.allowedPatterns.some(
+    (pattern) => pattern === platformActionsPattern || pattern === "maxbec/*",
+  );
   if (
     input.actions.defaultWorkflowPermissions !== "read" || input.actions.workflowCanApprovePullRequests ||
-    input.actions.policy !== "selected" || !input.actions.thirdPartyFullShaPins || input.actions.pullRequestTarget
+    input.actions.policy !== "selected" || !input.actions.thirdPartyFullShaPins ||
+    input.actions.pullRequestTarget || !allowsPlatform
   ) add("actions_trust_policy_drift", "actions");
   if (
     !input.security.vulnerabilityAlerts || !input.security.dependabotAlerts ||

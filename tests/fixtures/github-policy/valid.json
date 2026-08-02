@@ -12,7 +12,11 @@
   "protectedBranches": [
     {
       "name": "main",
-      "requiredChecks": ["Branch Guard", "Paperclip Preflight", "Final Gate"],
+      "requiredChecks": [
+        "Branch Guard",
+        "Paperclip Preflight",
+        "Final Gate"
+      ],
       "pullRequestRequired": true,
       "strictChecks": true,
       "signedCommits": true,
@@ -22,20 +26,34 @@
       "bypassActorCount": 0
     }
   ],
-  "merge": { "squash": true, "mergeCommit": false, "rebase": false },
+  "merge": {
+    "squash": true,
+    "mergeCommit": false,
+    "rebase": false
+  },
   "actions": {
     "defaultWorkflowPermissions": "read",
     "workflowCanApprovePullRequests": false,
     "policy": "selected",
     "thirdPartyFullShaPins": true,
-    "pullRequestTarget": false
+    "pullRequestTarget": false,
+    "allowedPatterns": [
+      "maxbec/flama-delivery-platform/*",
+      "maxbec/*"
+    ]
   },
   "security": {
     "vulnerabilityAlerts": true,
     "dependabotAlerts": true,
     "dependabotSecurityUpdates": true,
-    "secretScanning": { "available": true, "enabled": true },
-    "pushProtection": { "available": true, "enabled": true }
+    "secretScanning": {
+      "available": true,
+      "enabled": true
+    },
+    "pushProtection": {
+      "available": true,
+      "enabled": true
+    }
   },
   "supplyChain": {
     "protectedVersionTags": {
@@ -45,7 +63,10 @@
       "forceUpdate": false,
       "deletion": false
     },
-    "immutableReleases": { "available": false, "enabled": false }
+    "immutableReleases": {
+      "available": false,
+      "enabled": false
+    }
   },
   "deployment": {
     "codeOwners": true,

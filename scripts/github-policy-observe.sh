@@ -145,6 +145,17 @@ WORKFLOW_JSON="$TASK_TMP_DIR/workflow.json"
 gh_get "repos/$REPOSITORY/actions/permissions/workflow" > "$WORKFLOW_JSON" || \
   die "failed to read default workflow permissions"
 
+# Which actions a `selected` policy actually permits. Without this the audit
+# cannot tell a stricter policy from one that blocks the platform's own
+# reusable workflows and fails every run at startup.
+ALLOWED_PATTERNS='[]'
+if [[ "$(jq -r '.allowed_actions // ""' "$ACTIONS_JSON")" == "selected" ]]; then
+  SELECTED_JSON="$TASK_TMP_DIR/selected-actions.json"
+  if gh_get "repos/$REPOSITORY/actions/permissions/selected-actions" > "$SELECTED_JSON" 2>/dev/null; then
+    ALLOWED_PATTERNS=$(jq -c '.patterns_allowed // []' "$SELECTED_JSON")
+  fi
+fi
+
 # Workflow trust: every third-party action must be pinned to a full 40-character
 # commit SHA, and no workflow may use pull_request_target.
 TREE_JSON="$TASK_TMP_DIR/tree.json"
@@ -235,6 +246,7 @@ jq -n \
   --slurpfile posture "$(printf '%s' "$POSTURE_PATH")" \
   --arg owner "$OWNER" \
   --argjson thirdPartyFullShaPins "$third_party_pins" \
+  --argjson allowedPatterns "$ALLOWED_PATTERNS" \
   --argjson pullRequestTarget "$pull_request_target" \
   --argjson vulnerabilityAlerts "$vulnerability_alerts" \
   --argjson securityUpdates "$security_updates" \
@@ -275,6 +287,7 @@ jq -n \
       policy: (if ($actions[0].enabled == false) then "local_only"
                else ($actions[0].allowed_actions // "all") end),
       thirdPartyFullShaPins: $thirdPartyFullShaPins,
+      allowedPatterns: $allowedPatterns,
       pullRequestTarget: $pullRequestTarget
     },
     security: {

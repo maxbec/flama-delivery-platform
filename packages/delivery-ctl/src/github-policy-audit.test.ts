@@ -159,3 +159,26 @@ describe("GitHub repository policy audit", () => {
     expect(auditGitHubPolicy(unavailable, policy)).toMatchObject({ status: "passed" });
   });
 });
+
+describe("Actions allow-list", () => {
+  it("refuses a selected allow-list that blocks the platform's own workflows", () => {
+    // Setting `selected` with no patterns is not a stricter policy, it is a
+    // broken one: every reusable workflow stops resolving, including the Flama
+    // gates themselves, and the audit used to call that compliant.
+    const empty = { ...compliant, actions: { ...compliant.actions, allowedPatterns: [] } };
+    expect(auditGitHubPolicy(empty, policy).findings.map(({ code }) => code))
+      .toContain("actions_trust_policy_drift");
+
+    // An owner pattern that does not cover the platform is the realistic case:
+    // a navigaite repository allowing its own organization and nothing else.
+    const missingPlatform = {
+      ...compliant,
+      actions: { ...compliant.actions, allowedPatterns: ["navigaite/*"] },
+    };
+    expect(auditGitHubPolicy(missingPlatform, policy).findings.map(({ code }) => code))
+      .toContain("actions_trust_policy_drift");
+
+    expect(auditGitHubPolicy(compliant, policy).findings.map(({ code }) => code))
+      .not.toContain("actions_trust_policy_drift");
+  });
+});
