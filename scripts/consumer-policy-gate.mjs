@@ -21,6 +21,19 @@ function exactKeys(value, keys) {
     JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...keys].sort());
 }
 
+/**
+ * Every required key present, and nothing beyond the optional ones. Used where
+ * the delivery-contract schema itself allows an optional field: an enumerated
+ * exact list here silently diverges from the schema and rejects contracts the
+ * platform generates.
+ */
+function exactKeysWithOptional(value, required, optional) {
+  if (!isObject(value)) return false;
+  const present = Object.keys(value);
+  return required.every((key) => present.includes(key)) &&
+    present.every((key) => required.includes(key) || optional.includes(key));
+}
+
 async function readRegular(root, relativePath) {
   const path = join(root, relativePath);
   const metadata = await lstat(path);
@@ -38,7 +51,7 @@ async function readJson(root, relativePath) {
   }
 }
 
-function assertContract(contract, profile) {
+export function assertContract(contract, profile) {
   const expectedBranch = profile === "major" ? "dev" : "main";
   if (
     !exactKeys(contract, [
@@ -111,7 +124,11 @@ function assertContract(contract, profile) {
       "custom",
     ].includes(contract.deployment.provider) ||
     contract.deployment.manifestPath !== ".deploy/production.yaml" ||
-    !exactKeys(contract.secrets, ["source", "projectSlug", "paths", "exceptionsFile"]) ||
+    !exactKeysWithOptional(
+      contract.secrets,
+      ["source", "projectSlug", "paths", "exceptionsFile"],
+      ["organization", "projectId"],
+    ) ||
     contract.secrets.source !== "infisical" ||
     typeof contract.secrets.projectSlug !== "string" ||
     contract.secrets.projectSlug.length === 0 ||
