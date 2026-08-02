@@ -201,3 +201,26 @@ describe("delivery command contract", () => {
     expect(accepted.files.length).toBeGreaterThan(0);
   });
 });
+
+describe("delivery CODEOWNERS", () => {
+  it("claims review only for the deployment manifest", async () => {
+    // Branch protection requires code-owner review, and the code owner is the
+    // same account that opens every migration pull request — so listing the
+    // generated files here made the platform's own re-render unmergeable.
+    // Those files are already validated against the pinned platform by the
+    // Policy Gate on every pull request, which is stronger than a review.
+    const outputRoot = await mkdtemp(join(tmpdir(), "flama-render-"));
+    await renderTemplates({ repositoryRoot, outputRoot, input, dryRun: false });
+    const codeowners = await readFile(join(outputRoot, ".github", "CODEOWNERS"), "utf8");
+
+    expect(codeowners).toContain("/.deploy/production.yaml @maxbec");
+    for (const generated of [
+      "/.github/workflows/flama-*.yml",
+      "/.flama/platform-lock.json",
+      "/.github/dependabot.yml",
+      "/.release-please-manifest.json",
+    ]) {
+      expect(codeowners).not.toContain(`${generated} @`);
+    }
+  });
+});
