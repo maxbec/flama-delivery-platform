@@ -34,12 +34,12 @@ describe("GitHub repository policy audit", () => {
         {
           ...compliant.protectedBranches[0]!,
           name: "dev",
-          requiredChecks: ["Flama Branch Guard", "Paperclip Preflight", "Flama Policy Gate"],
+          requiredChecks: ["branch-guard / Flama Branch Guard", "Paperclip Preflight", "policy / Flama Policy Gate"],
         },
         {
           ...compliant.protectedBranches[0]!,
           name: "main",
-          requiredChecks: ["Flama Branch Guard", "Flama Final Gate"],
+          requiredChecks: ["branch-guard / Flama Branch Guard", "final / Flama Final Gate"],
         },
       ],
       merge: { squash: true, mergeCommit: true, rebase: false },

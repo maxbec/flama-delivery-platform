@@ -34,7 +34,7 @@
           "requiredChecks": {
             "type": "array",
             "uniqueItems": true,
-            "items": { "enum": ["Flama Branch Guard", "Paperclip Preflight", "Flama Policy Gate", "Flama Final Gate"] }
+            "items": { "enum": ["branch-guard / Flama Branch Guard", "Paperclip Preflight", "policy / Flama Policy Gate", "final / Flama Final Gate"] }
           },
           "pullRequestRequired": { "type": "boolean" },
           "strictChecks": { "type": "boolean" },

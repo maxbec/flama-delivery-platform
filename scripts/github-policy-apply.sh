@@ -184,6 +184,16 @@ branch_checks() {
   fi
 }
 
+# Review settings must be internally consistent. Code-owner review and
+# last-push approval both require an approval to exist; with a required count of
+# zero they demand one nobody is ever asked for, and every pull request becomes
+# unmergeable by whoever pushed it. The estate has one maintainer, so the count
+# stays zero and neither dependent setting is enabled.
+#
+# Production approval does not rely on these. It is enforced on the deployment
+# path, where `deployment-pr` validates Max's review against the exact pull
+# request head SHA and permits only `.deploy/production.yaml` to change — a
+# stronger, SHA-bound control than a branch-protection review flag.
 apply_branch_protection() {
   local branch checks body
   local -a branches=()
@@ -195,11 +205,7 @@ apply_branch_protection() {
       enforce_admins: true,
       required_pull_request_reviews: {
         dismiss_stale_reviews: true,
-        require_code_owner_reviews: true,
-        # Requiring the last push to be approved only means anything when an
-        # approval is required at all. With a count of zero it demands an
-        # approval nobody is asked for, which leaves every pull request
-        # unmergeable by its author — including the platform's own.
+        require_code_owner_reviews: false,
         require_last_push_approval: false,
         required_approving_review_count: 0
       },

@@ -121,8 +121,9 @@ for branch in main dev; do
       {
       name: $name,
       requiredChecks: ([(.required_status_checks.contexts // [])[]
-        | select(. == "Flama Branch Guard" or . == "Paperclip Preflight"
-                 or . == "Flama Policy Gate" or . == "Flama Final Gate")] | unique),
+        | select(. == "branch-guard / Flama Branch Guard" or . == "Paperclip Preflight"
+                 or . == "policy / Flama Policy Gate"
+                 or . == "final / Flama Final Gate")] | unique),
       pullRequestRequired: (.required_pull_request_reviews != null),
       strictChecks: flag(.required_status_checks.strict; false),
       signedCommits: flag(.required_signatures.enabled; false),
