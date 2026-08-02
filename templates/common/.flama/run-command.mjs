@@ -60,8 +60,8 @@ function spawnCommand([executable, ...args], root) {
 
 export async function run(name) {
   const root = new URL("../", import.meta.url);
-  const command = await loadCommand(name);
-  const install = await installCommand(root);
+  // Neither read depends on the other, so they are not made to wait in turn.
+  const [command, install] = await Promise.all([loadCommand(name), installCommand(root)]);
   if (install !== undefined) {
     const installed = await spawnCommand(install, root);
     if (installed !== 0) return installed;
