@@ -18,7 +18,10 @@ Implemented commands:
   schema with strict AJV rules.
 - `classify --input <inventory>` validates a Phase 0 inventory and recommends
   Fast or Major only for mutable, in-scope consumers.
-- `render --dry-run --input <render-plan> --output <checkout>` plans pinned
+- `render --dry-run --input <render-plan> --output <checkout>` refuses a
+  delivery command that cannot fail — an inert executable, or one invoked
+  with nothing but `--version`/`--help` — because a gate that always passes
+  is read as evidence and is worse than no gate. It then plans pinned
   Fast/Major Branch Guard, Policy, Final, and Deploy callers, staggered Dependabot policy, Release Please
   configuration, delivery `CODEOWNERS`, the platform lock, and secret-free
   Paperclip webhook routing metadata. Direct writes are denied; `bootstrap`

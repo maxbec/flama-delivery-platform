@@ -356,7 +356,38 @@ export async function assertSafeParents(root: string, targetPath: string): Promi
   }
 }
 
+/** Executables that succeed no matter what the repository contains. */
+const inertExecutables = new Set(["true", ":", "echo", "printf", "cat", "ls", "pwd"]);
+
+/** Flags that make any executable report itself instead of checking anything. */
+const inertFlags = new Set(["--version", "-v", "-V", "--help", "-h", "help", "version"]);
+
+/**
+ * Refuse a delivery command that cannot fail. One canary shipped with all five
+ * commands set to `node --version`: the pipeline was green on every run, and
+ * that green was read as evidence the repository built. A gate that cannot fail
+ * is worse than no gate, so the platform will not render one.
+ *
+ * This catches the specific mistake, not every possible vacuous command — a
+ * script that always exits 0 still passes here. What it guarantees is that the
+ * contract names work the repository actually has to do.
+ */
+function assertVerifyingCommands(commands: RenderInput["commands"]): void {
+  for (const [name, argv] of Object.entries(commands)) {
+    const parts = argv.map((part) => part.trim());
+    if (parts.length === 0 || parts.some((part) => part.length === 0)) {
+      throw new Error(`delivery command ${name} is empty`);
+    }
+    const [executable, ...args] = parts;
+    const onlyInertFlags = args.length > 0 && args.every((argument) => inertFlags.has(argument));
+    if (inertExecutables.has(executable ?? "") || onlyInertFlags) {
+      throw new Error(`delivery command ${name} proves nothing: it cannot fail`);
+    }
+  }
+}
+
 export async function renderTemplates(options: RenderOptions): Promise<RenderResult> {
+  assertVerifyingCommands(options.input.commands);
   const root = await assertSafeOutputRoot(options.outputRoot);
   const targets = await buildTargets(options.repositoryRoot, options.input);
   const states: Array<{ target: TargetFile; exists: boolean; same: boolean }> = [];

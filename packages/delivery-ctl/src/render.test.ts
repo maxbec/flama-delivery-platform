@@ -160,3 +160,44 @@ describe("template renderer", () => {
     })).rejects.toThrow();
   });
 });
+
+describe("delivery command contract", () => {
+  const render = async (commands: RenderInput["commands"]) =>
+    renderTemplates({
+      repositoryRoot,
+      outputRoot: await mkdtemp(join(tmpdir(), "flama-render-")),
+      input: { ...input, commands },
+      dryRun: true,
+    });
+
+  it("refuses a command that cannot fail", async () => {
+    // This is the exact contract one canary shipped: every command was
+    // `node --version`, so the gate passed on any machine with Node installed.
+    for (const command of [
+      ["node", "--version"],
+      ["python3", "-V"],
+      ["true"],
+      [":"],
+      ["echo", "ok"],
+      ["pnpm", "--help"],
+    ]) {
+      await expect(render({ ...input.commands, buildable: command })).rejects.toThrow(
+        /proves nothing/u,
+      );
+    }
+  });
+
+  it("refuses an empty or blank command", async () => {
+    await expect(render({ ...input.commands, affected: [] })).rejects.toThrow();
+    await expect(render({ ...input.commands, affected: ["   "] })).rejects.toThrow();
+  });
+
+  it("accepts a command that can actually fail", async () => {
+    const accepted = await render({
+      ...input.commands,
+      buildable: ["python3", "scripts/config-check.py"],
+      affected: ["npm", "run", "test"],
+    });
+    expect(accepted.files.length).toBeGreaterThan(0);
+  });
+});
