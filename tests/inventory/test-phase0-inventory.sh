@@ -18,18 +18,18 @@ jq -e '
   .schemaVersion == 1 and
   .observedAt == "2026-07-28T12:00:00Z" and
   .summary == {
-    total: 5,
-    inScope: 2,
+    total: 6,
+    inScope: 3,
     private: 1,
-    public: 1,
+    public: 2,
     forks: 1,
     archived: 1,
     platform: 1,
-    mutationAllowed: 3,
+    mutationAllowed: 4,
     mutationDenied: 2
   } and
-  ([.repositories[] | select(.disposition == "in_scope")] | length) == 2 and
-  ([.repositories[] | select(.mutationAllowed == true)] | length) == 3 and
+  ([.repositories[] | select(.disposition == "in_scope")] | length) == 3 and
+  ([.repositories[] | select(.mutationAllowed == true)] | length) == 4 and
   ([.repositories[] | select(.isFork or .isArchived) | select(.mutationAllowed == true)] | length) == 0 and
   ([.repositories[] | has("profile")] | any | not) and
   (.inventoryDigest | test("^sha256:[0-9a-f]{64}$")) and
@@ -37,6 +37,11 @@ jq -e '
   ([.repositories[] | select(.nameWithOwner == "alpha/fast-app")][0] | .githubRepositoryId == 4102) and
   ([.repositories[] | select(.nameWithOwner == "alpha/fast-app")][0] | .stack == ["node"] and .providerIndicators == ["docker"] and .paperclipCompany == "Alpha Paperclip") and
   ([.repositories[] | select(.nameWithOwner == "alpha/major-app")][0] | .stack == ["python"] and .providerIndicators == ["vercel"]) and
+  # A Home Assistant add-on repository builds its Dockerfile through Supervisor
+  # on the machine that installs it. There is no environment to deploy to, so
+  # reading it as a deployment provider forces the two-branch profile onto a
+  # repository whose default branch the add-on store serves straight to users.
+  ([.repositories[] | select(.nameWithOwner == "alpha/addon-store")][0] | .providerIndicators == []) and
   ([.repositories[] | select(.nameWithOwner == "alpha/platform")][0] | .disposition == "platform" and .mutationAllowed == true) and
   ([.repositories[] | select(.nameWithOwner == "alpha/upstream-fork")][0] | .disposition == "excluded_fork" and .mutationDeniedReason == "fork") and
   ([.repositories[] | select(.nameWithOwner == "alpha/retired")][0] | .disposition == "excluded_archived" and .mutationDeniedReason == "archived")
@@ -65,7 +70,7 @@ if [[ "$TAMPERED" == "$PUBLISHED" ]]; then
   exit 1
 fi
 
-jq '.owners.alpha.expected.inScope = 3' "$FIXTURE_DIR/policy.json" > "$TMP_DIR/bad-policy.json"
+jq '.owners.alpha.expected.inScope = 4' "$FIXTURE_DIR/policy.json" > "$TMP_DIR/bad-policy.json"
 if "$ROOT_DIR/scripts/phase0-inventory.sh" \
   --policy "$TMP_DIR/bad-policy.json" \
   --fixture "$FIXTURE_DIR/repositories.json" \
@@ -88,7 +93,7 @@ FLAMA_GH_FIXTURE_DIR="$FIXTURE_DIR" \
 
 jq -e '
   .source.mode == "live" and
-  .summary.inScope == 2 and
+  .summary.inScope == 3 and
   .summary.platform == 1 and
   .summary.mutationDenied == 2 and
   ([.repositories[] | select(.nameWithOwner == "alpha/fast-app")][0] |

@@ -323,12 +323,21 @@ jq -n \
       (if any($paths[]; . == "Cargo.toml") then "rust" else empty end),
       (if any($paths[]; . == "wp-content" or startswith("wp-content/")) then "wordpress" else empty end)
     ] | unique;
+  # A Home Assistant add-on repository: a store manifest at the root and at
+  # least one add-on manifest beside a Dockerfile. Supervisor builds that
+  # Dockerfile on the machine that installs the add-on, so it names no
+  # deployment target of ours.
+  def home_assistant_addon_store:
+    .paths as $paths |
+    (any($paths[]; . == "repository.json")) and
+    (any($paths[]; endswith("/config.json") or endswith("/config.yaml"))) and
+    (any($paths[]; endswith("/Dockerfile")));
   def providers:
     .paths as $paths |
     [
       (if any($paths[]; . == "vercel.json") then "vercel" else empty end),
       (if any($paths[]; . == "render.yaml") then "render" else empty end),
-      (if any($paths[]; . == "Dockerfile" or endswith("/Dockerfile") or . == "docker-compose.yml" or . == "compose.yaml") then "docker" else empty end),
+      (if (home_assistant_addon_store | not) and any($paths[]; . == "Dockerfile" or endswith("/Dockerfile") or . == "docker-compose.yml" or . == "compose.yaml") then "docker" else empty end),
       (if any($paths[]; . == ".do/app.yaml") then "digitalocean-app" else empty end),
       (if any($paths[]; . == "coolify.yaml") then "coolify" else empty end)
     ] | unique;

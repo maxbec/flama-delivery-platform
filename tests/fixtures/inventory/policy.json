@@ -4,9 +4,9 @@
     "alpha": {
       "paperclipCompany": "Alpha Paperclip",
       "expected": {
-        "inScope": 2,
+        "inScope": 3,
         "private": 1,
-        "public": 1,
+        "public": 2,
         "forks": 1,
         "archived": 1
       }

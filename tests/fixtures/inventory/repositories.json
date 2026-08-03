@@ -82,5 +82,23 @@
     ],
     "latestWorkflow": null,
     "databaseId": 4105
+  },
+  {
+    "nameWithOwner": "alpha/addon-store",
+    "isFork": false,
+    "isArchived": false,
+    "isPrivate": false,
+    "defaultBranch": "main",
+    "defaultBranchHeadSha": "5555555555555555555555555555555555555555",
+    "primaryLanguage": "Dockerfile",
+    "pushedAt": "2026-07-28T13:00:00Z",
+    "paths": [
+      "repository.json",
+      "widget/config.json",
+      "widget/Dockerfile",
+      "widget/run.sh"
+    ],
+    "latestWorkflow": null,
+    "databaseId": 4105
   }
 ]
