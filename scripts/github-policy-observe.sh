@@ -234,6 +234,44 @@ while IFS= read -r ruleset_id; do
   jq -e '[.rules[]?.type] | any(. == "update" or . == "non_fast_forward")' "$detail" >/dev/null && tag_force_update=false
 done < <(jq -r '[.[]? | select(.target == "tag") | .id][]' "$RULESETS_JSON")
 
+# Whether this repository deploys at all, and the Environment the deploy job
+# runs through. Section 13 places the production boundary on the deploy path,
+# so that is where it is read from; a repository that deploys nothing has no
+# boundary to observe.
+deployable=false
+CONTRACT_JSON="$TASK_TMP_DIR/delivery-contract.json"
+if gh_get "repos/$REPOSITORY/contents/.flama/delivery-contract.json?ref=$DEFAULT_BRANCH" \
+    > "$CONTRACT_JSON" 2>/dev/null; then
+  deployable=$(jq -r '.content' "$CONTRACT_JSON" | tr -d '\n' | base64 -d 2>/dev/null \
+    | jq -r '.deployment.deployable // false' 2>/dev/null || printf 'false')
+fi
+[[ "$deployable" == "true" ]] || deployable=false
+
+environment_exists=false
+environment_reviewers='[]'
+environment_branch_policy=false
+if [[ "$deployable" == "true" ]]; then
+  ENVIRONMENTS_JSON="$TASK_TMP_DIR/environments.json"
+  if gh_get "repos/$REPOSITORY/environments" > "$ENVIRONMENTS_JSON" 2>/dev/null; then
+    ENVIRONMENT_NAME=$(jq -r '[.environments[]?.name | select(test("prod"; "i"))][0] // ""' \
+      "$ENVIRONMENTS_JSON")
+    if [[ -n "$ENVIRONMENT_NAME" ]]; then
+      environment_exists=true
+      DETAIL_JSON="$TASK_TMP_DIR/environment.json"
+      if gh_get "repos/$REPOSITORY/environments/$ENVIRONMENT_NAME" > "$DETAIL_JSON" 2>/dev/null; then
+        environment_reviewers=$(jq -c '[.protection_rules[]? | select(.type == "required_reviewers")
+          | .reviewers[]? | .reviewer.login // .reviewer.slug // empty]' "$DETAIL_JSON")
+        # `protected_branches` confines a deployment to the stable branch;
+        # `custom_branch_policies` means someone wrote their own list, which the
+        # audit cannot read as equivalent.
+        environment_branch_policy=$(jq -r '.deployment_branch_policy.protected_branches // false' \
+          "$DETAIL_JSON")
+      fi
+    fi
+  fi
+fi
+[[ "$environment_branch_policy" == "true" ]] || environment_branch_policy=false
+
 code_owners=false
 for path in .github/CODEOWNERS CODEOWNERS docs/CODEOWNERS; do
   if gh_get "repos/$REPOSITORY/contents/$path" >/dev/null 2>&1; then
@@ -265,7 +303,11 @@ jq -n \
   --argjson tagEnabled "$tag_enabled" \
   --argjson tagForceUpdate "$tag_force_update" \
   --argjson tagDeletion "$tag_deletion" \
-  --argjson codeOwners "$code_owners" '
+  --argjson codeOwners "$code_owners" \
+  --argjson deployable "$deployable" \
+  --argjson environmentExists "$environment_exists" \
+  --argjson environmentReviewers "$environment_reviewers" \
+  --argjson environmentBranchPolicy "$environment_branch_policy" '
   ($repository[0]) as $repo |
   ($protection[0]) as $branch |
   ($posture[0]) as $approved |
@@ -333,7 +375,13 @@ jq -n \
       codeOwners: $codeOwners,
       staleReviewDismissal: ($branch.required_pull_request_reviews.dismiss_stale_reviews // false),
       pathRestricted: ($branch.required_pull_request_reviews.require_code_owner_reviews // false),
-      exactShaApproval: ($branch.required_pull_request_reviews.require_last_push_approval // false)
+      exactShaApproval: ($branch.required_pull_request_reviews.require_last_push_approval // false),
+      deployable: $deployable,
+      environment: {
+        exists: $environmentExists,
+        requiredReviewers: $environmentReviewers,
+        branchPolicyLimited: $environmentBranchPolicy
+      }
     },
     githubApp: $approved.owners[$owner].githubApp,
     runners: $approved.runners,

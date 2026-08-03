@@ -93,6 +93,14 @@ export interface GitHubPolicyAuditInput {
     readonly staleReviewDismissal: boolean;
     readonly pathRestricted: boolean;
     readonly exactShaApproval: boolean;
+    /** Whether this repository deploys anything at all. */
+    readonly deployable: boolean;
+    /** The GitHub Environment the deploy job runs through. */
+    readonly environment: {
+      readonly exists: boolean;
+      readonly requiredReviewers: readonly string[];
+      readonly branchPolicyLimited: boolean;
+    };
   };
   readonly githubApp: {
     readonly ownerScoped: boolean;
@@ -242,10 +250,23 @@ export function auditGitHubPolicy(
     add("version_tag_protection_drift", "supplyChain");
   }
   if (!featureCompliant(input.supplyChain.immutableReleases)) add("immutable_releases_disabled", "supplyChain");
-  if (
-    !input.deployment.codeOwners || !input.deployment.staleReviewDismissal ||
-    !input.deployment.pathRestricted || !input.deployment.exactShaApproval
-  ) add("deployment_review_boundary_drift", "deployment");
+  // The boundary is measured where it is enforced: on the deploy path. A
+  // repository that deploys nothing has no production to hold shut, and
+  // demanding a review boundary of it reports drift no change could clear.
+  //
+  // Where a deployment does happen, the Environment rule is what stops it:
+  // `deployment-pr` already validates the review against the exact head SHA and
+  // permits only the production manifest to change, and the Environment adds
+  // the reviewer gate and confines deploys to the stable branch. Requiring an
+  // approving review on every pull request in the estate would enforce the same
+  // thing in the wrong place, on every change rather than on the deploy.
+  if (input.deployment.deployable) {
+    const environment = input.deployment.environment;
+    if (
+      !input.deployment.codeOwners || !environment.exists ||
+      environment.requiredReviewers.length === 0 || !environment.branchPolicyLimited
+    ) add("deployment_review_boundary_drift", "deployment");
+  }
   if (
     !input.githubApp.ownerScoped || input.githubApp.repositorySelection !== "selected" ||
     input.githubApp.installationTokens !== "short_lived" || !input.githubApp.leastPrivilegePermissions ||

@@ -108,12 +108,23 @@
     "deployment": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["codeOwners", "staleReviewDismissal", "pathRestricted", "exactShaApproval"],
+      "required": ["codeOwners", "staleReviewDismissal", "pathRestricted", "exactShaApproval", "deployable", "environment"],
       "properties": {
         "codeOwners": { "type": "boolean" },
         "staleReviewDismissal": { "type": "boolean" },
         "pathRestricted": { "type": "boolean" },
-        "exactShaApproval": { "type": "boolean" }
+        "exactShaApproval": { "type": "boolean" },
+        "deployable": { "type": "boolean" },
+        "environment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["exists", "requiredReviewers", "branchPolicyLimited"],
+          "properties": {
+            "exists": { "type": "boolean" },
+            "requiredReviewers": { "type": "array", "items": { "type": "string" } },
+            "branchPolicyLimited": { "type": "boolean" }
+          }
+        }
       }
     },
     "githubApp": {

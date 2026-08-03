@@ -5,10 +5,10 @@
     "maxbec": {
       "paperclipCompany": "Private",
       "expected": {
-        "inScope": 15,
-        "private": 11,
-        "public": 4,
-        "forks": 13,
+        "inScope": 13,
+        "private": 10,
+        "public": 3,
+        "forks": 2,
         "archived": 0
       }
     },

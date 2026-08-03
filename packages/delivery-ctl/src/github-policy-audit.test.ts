@@ -97,6 +97,10 @@ describe("GitHub repository policy audit", () => {
         staleReviewDismissal: false,
         pathRestricted: false,
         exactShaApproval: false,
+        // This repository deploys, so the boundary is one of the controls it
+        // is failing rather than one that does not apply to it.
+        deployable: true,
+        environment: { exists: false, requiredReviewers: [], branchPolicyLimited: false },
       },
       githubApp: {
         ownerScoped: false,
@@ -231,5 +235,49 @@ describe("Actions allow-list", () => {
     };
     expect(auditGitHubPolicy(platformOnly, policy).findings.map(({ code }) => code))
       .not.toContain("actions_trust_policy_drift");
+  });
+});
+
+describe("Deployment review boundary", () => {
+  const deployable = {
+    ...compliant,
+    deployment: {
+      ...compliant.deployment,
+      deployable: true,
+      environment: { exists: true, requiredReviewers: ["maxbec"], branchPolicyLimited: true },
+    },
+  };
+
+  it("passes a repository that deploys nothing", () => {
+    // There is no production to protect, so demanding a review boundary here
+    // reports drift that no change to the repository could ever clear. Every
+    // repository in the estate was failing this control for that reason.
+    const inert = {
+      ...compliant,
+      deployment: {
+        ...compliant.deployment,
+        deployable: false,
+        environment: { exists: false, requiredReviewers: [], branchPolicyLimited: false },
+      },
+    };
+    expect(auditGitHubPolicy(inert, policy).findings.map(({ code }) => code))
+      .not.toContain("deployment_review_boundary_drift");
+  });
+
+  it("requires the boundary where a deployment actually happens", () => {
+    expect(auditGitHubPolicy(deployable, policy).findings.map(({ code }) => code))
+      .not.toContain("deployment_review_boundary_drift");
+
+    // The environment rule is what holds production shut. Without it a green
+    // pipeline deploys with nobody having looked at the commit.
+    for (const broken of [
+      { ...deployable.deployment, environment: { ...deployable.deployment.environment, exists: false } },
+      { ...deployable.deployment, environment: { ...deployable.deployment.environment, requiredReviewers: [] } },
+      { ...deployable.deployment, environment: { ...deployable.deployment.environment, branchPolicyLimited: false } },
+      { ...deployable.deployment, codeOwners: false },
+    ]) {
+      expect(auditGitHubPolicy({ ...compliant, deployment: broken }, policy).findings.map(({ code }) => code))
+        .toContain("deployment_review_boundary_drift");
+    }
   });
 });

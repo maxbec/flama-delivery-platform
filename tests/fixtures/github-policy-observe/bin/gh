@@ -143,8 +143,17 @@ case "$endpoint" in
   repos/maxbec/example/contents/.github/CODEOWNERS)
     emit '{"type": "file", "size": 42}'
     ;;
+  repos/maxbec/example/contents/.flama/delivery-contract.json*)
+    # This repository deploys, so the boundary applies to it.
+    emit '{"type": "file", "content": "eyJkZXBsb3ltZW50Ijp7ImRlcGxveWFibGUiOnRydWUsIm1hbmlmZXN0UGF0aCI6Ii5kZXBsb3kvcHJvZHVjdGlvbi55YW1sIn19"}'
+    ;;
   repos/maxbec/example/environments)
-    emit '{"environments": [{"name": "production", "protection_rules": [{"type": "required_reviewers"}], "deployment_branch_policy": {"protected_branches": false, "custom_branch_policies": true}}]}'
+    emit '{"environments": [{"name": "production"}]}'
+    ;;
+  repos/maxbec/example/environments/production)
+    emit '{"name": "production",
+      "protection_rules": [{"type": "required_reviewers", "reviewers": [{"type": "User", "reviewer": {"login": "maxbec"}}]}],
+      "deployment_branch_policy": {"protected_branches": true, "custom_branch_policies": false}}'
     ;;
   repos/maxbec/example/git/trees/main*|repos/maxbec/example/git/trees/dev*)
     emit '{"truncated": false, "tree": [{"path": ".github/workflows/delivery.yml"}]}'

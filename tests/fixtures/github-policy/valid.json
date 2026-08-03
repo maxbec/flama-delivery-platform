@@ -75,7 +75,13 @@
     "codeOwners": true,
     "staleReviewDismissal": true,
     "pathRestricted": true,
-    "exactShaApproval": true
+    "exactShaApproval": true,
+    "deployable": false,
+    "environment": {
+      "exists": false,
+      "requiredReviewers": [],
+      "branchPolicyLimited": false
+    }
   },
   "githubApp": {
     "ownerScoped": true,
