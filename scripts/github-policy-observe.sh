@@ -166,6 +166,8 @@ jq -e '.truncated == false' "$TREE_JSON" >/dev/null || die "GitHub returned a tr
 
 third_party_pins=true
 pull_request_target=false
+REUSABLE_REFS="$TASK_TMP_DIR/reusable-refs"
+: > "$REUSABLE_REFS"
 while IFS= read -r workflow_path; do
   [[ -n "$workflow_path" ]] || continue
   body="$TASK_TMP_DIR/workflow-body"
@@ -180,6 +182,13 @@ while IFS= read -r workflow_path; do
     # Local (./) and same-repository reusable workflows are not third party.
     [[ "$reference" == ./* ]] && continue
     [[ "$reference" == "$REPOSITORY"@* || "$reference" == "$REPOSITORY/"* ]] && continue
+    # A reusable workflow is addressed by a path inside the owning repository.
+    # It is never github-owned and never a verified creator's action, so the
+    # allow-list is the only thing that can authorize it, and one the allow-list
+    # misses fails the whole run at startup.
+    if [[ "$reference" == */.github/workflows/* ]]; then
+      printf '%s\n' "${reference%%@*}" | cut -d/ -f1,2 >> "$REUSABLE_REFS"
+    fi
     [[ "$reference" =~ @[0-9a-f]{40}$ ]] || third_party_pins=false
   done < <(grep -Eo '^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*\S+' "$body" | sed -E 's/.*uses:[[:space:]]*//')
 done < <(jq -r '[.tree[]?.path | select(startswith(".github/workflows/"))
@@ -248,6 +257,7 @@ jq -n \
   --arg owner "$OWNER" \
   --argjson thirdPartyFullShaPins "$third_party_pins" \
   --argjson allowedPatterns "$ALLOWED_PATTERNS" \
+  --argjson referencedReusableWorkflows "$(sort -u "$REUSABLE_REFS" | jq -R . | jq -sc .)" \
   --argjson pullRequestTarget "$pull_request_target" \
   --argjson vulnerabilityAlerts "$vulnerability_alerts" \
   --argjson securityUpdates "$security_updates" \
@@ -289,6 +299,7 @@ jq -n \
                else ($actions[0].allowed_actions // "all") end),
       thirdPartyFullShaPins: $thirdPartyFullShaPins,
       allowedPatterns: $allowedPatterns,
+      referencedReusableWorkflows: $referencedReusableWorkflows,
       pullRequestTarget: $pullRequestTarget
     },
     security: {

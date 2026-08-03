@@ -40,6 +40,9 @@
       "maxbec/flama-delivery-platform/*",
       "maxbec/*"
     ],
+    "referencedReusableWorkflows": [
+      "maxbec/flama-delivery-platform"
+    ],
     "pullRequestTarget": false
   },
   "security": {

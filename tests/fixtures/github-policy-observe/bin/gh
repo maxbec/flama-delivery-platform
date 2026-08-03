@@ -150,8 +150,9 @@ case "$endpoint" in
     emit '{"truncated": false, "tree": [{"path": ".github/workflows/delivery.yml"}]}'
     ;;
   repos/maxbec/example/contents/.github/workflows/delivery.yml)
-    # base64 of a workflow using a full-SHA third-party pin and no pull_request_target
-    emit "{\"type\": \"file\", \"content\": \"$(printf 'on:\n  pull_request:\njobs:\n  gate:\n    steps:\n      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683\n' | base64 -w0)\"}"
+    # base64 of a workflow using a full-SHA third-party pin, no pull_request_target,
+    # and a cross-repository reusable workflow the allow-list has to authorize.
+    emit "{\"type\": \"file\", \"content\": \"$(printf 'on:\n  pull_request:\njobs:\n  gate:\n    uses: maxbec/flama-delivery-platform/.github/workflows/reusable-policy.yml@11bd71901bbe5b1630ceea73d27597364c9af683\n  build:\n    steps:\n      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683\n' | base64 -w0)\"}"
     ;;
   *)
     echo "unexpected mock gh API endpoint: $endpoint" >&2

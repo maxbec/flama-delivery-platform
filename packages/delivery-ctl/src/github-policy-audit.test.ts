@@ -181,4 +181,55 @@ describe("Actions allow-list", () => {
     expect(auditGitHubPolicy(compliant, policy).findings.map(({ code }) => code))
       .not.toContain("actions_trust_policy_drift");
   });
+
+  it("refuses an allow-list that blocks a reusable workflow the repository calls", () => {
+    // The allow-list is derived per owner, but a repository may call a reusable
+    // workflow belonging to a different owner. `edilio-app/edilio` and
+    // `maxbec/platzl-finder` both call the legacy universal pipeline in
+    // `navigaite/.github`, and an allow-list covering only their own owner and
+    // the platform failed every run at startup while the audit called it
+    // compliant. Every reusable workflow the repository actually calls has to
+    // be covered, because none of them is ever github-owned or verified.
+    const foreign = {
+      ...compliant,
+      actions: {
+        ...compliant.actions,
+        referencedReusableWorkflows: ["navigaite/.github"],
+      },
+    };
+    expect(auditGitHubPolicy(foreign, policy).findings.map(({ code }) => code))
+      .toContain("actions_trust_policy_drift");
+
+    const covered = {
+      ...foreign,
+      actions: {
+        ...foreign.actions,
+        allowedPatterns: [...compliant.actions.allowedPatterns, "navigaite/.github/*"],
+      },
+    };
+    expect(auditGitHubPolicy(covered, policy).findings.map(({ code }) => code))
+      .not.toContain("actions_trust_policy_drift");
+
+    // A whole-owner pattern covers it too, and the platform's own workflows
+    // must keep passing on the pattern that already authorizes them.
+    const byOwner = {
+      ...foreign,
+      actions: {
+        ...foreign.actions,
+        allowedPatterns: [...compliant.actions.allowedPatterns, "navigaite/*"],
+      },
+    };
+    expect(auditGitHubPolicy(byOwner, policy).findings.map(({ code }) => code))
+      .not.toContain("actions_trust_policy_drift");
+
+    const platformOnly = {
+      ...compliant,
+      actions: {
+        ...compliant.actions,
+        referencedReusableWorkflows: ["maxbec/flama-delivery-platform"],
+      },
+    };
+    expect(auditGitHubPolicy(platformOnly, policy).findings.map(({ code }) => code))
+      .not.toContain("actions_trust_policy_drift");
+  });
 });

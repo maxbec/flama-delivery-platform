@@ -59,14 +59,18 @@
     "actions": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["defaultWorkflowPermissions", "workflowCanApprovePullRequests", "policy", "thirdPartyFullShaPins", "pullRequestTarget", "allowedPatterns"],
+      "required": ["defaultWorkflowPermissions", "workflowCanApprovePullRequests", "policy", "thirdPartyFullShaPins", "pullRequestTarget", "allowedPatterns", "referencedReusableWorkflows"],
       "properties": {
         "defaultWorkflowPermissions": { "enum": ["read", "write"] },
         "workflowCanApprovePullRequests": { "type": "boolean" },
         "policy": { "enum": ["selected", "all", "local_only"] },
         "thirdPartyFullShaPins": { "type": "boolean" },
         "pullRequestTarget": { "type": "boolean" },
-        "allowedPatterns": { "type": "array", "items": { "type": "string" } }
+        "allowedPatterns": { "type": "array", "items": { "type": "string" } },
+        "referencedReusableWorkflows": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^[^/]+/[^/]+$" }
+        }
       }
     },
     "security": {

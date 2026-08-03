@@ -40,6 +40,9 @@
     "allowedPatterns": [
       "maxbec/flama-delivery-platform/*",
       "maxbec/*"
+    ],
+    "referencedReusableWorkflows": [
+      "maxbec/flama-delivery-platform"
     ]
   },
   "security": {

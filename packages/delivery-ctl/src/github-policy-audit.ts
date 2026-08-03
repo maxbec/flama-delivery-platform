@@ -70,6 +70,8 @@ export interface GitHubPolicyAuditInput {
     readonly thirdPartyFullShaPins: boolean;
     readonly pullRequestTarget: boolean;
     readonly allowedPatterns: readonly string[];
+    /** Cross-repository reusable workflows the default branch actually calls. */
+    readonly referencedReusableWorkflows: readonly string[];
   };
   readonly security: {
     readonly vulnerabilityAlerts: boolean;
@@ -206,10 +208,24 @@ export function auditGitHubPolicy(
   const allowsPlatform = input.actions.allowedPatterns.some(
     (pattern) => pattern === platformActionsPattern || pattern === "maxbec/*",
   );
+  // The allow-list is derived per owner, but a repository may call a reusable
+  // workflow from another owner — the legacy universal pipeline in
+  // `navigaite/.github` is one, and the platform narrowed two repositories out
+  // of it. A reusable workflow is never github-owned and never verified, so the
+  // allow-list is the only thing that can authorize it, and one that is missing
+  // fails every run at startup while every other control still looks compliant.
+  const allowsEveryReusableWorkflow = input.actions.referencedReusableWorkflows.every(
+    (reference) => {
+      const owner = reference.slice(0, reference.indexOf("/"));
+      return input.actions.allowedPatterns.some(
+        (pattern) => pattern === `${reference}/*` || pattern === `${owner}/*`,
+      );
+    },
+  );
   if (
     input.actions.defaultWorkflowPermissions !== "read" || input.actions.workflowCanApprovePullRequests ||
     input.actions.policy !== "selected" || !input.actions.thirdPartyFullShaPins ||
-    input.actions.pullRequestTarget || !allowsPlatform
+    input.actions.pullRequestTarget || !allowsPlatform || !allowsEveryReusableWorkflow
   ) add("actions_trust_policy_drift", "actions");
   if (
     !input.security.vulnerabilityAlerts || !input.security.dependabotAlerts ||
