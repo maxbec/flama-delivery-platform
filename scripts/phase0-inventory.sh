@@ -337,7 +337,10 @@ jq -n \
     [
       (if any($paths[]; . == "vercel.json") then "vercel" else empty end),
       (if any($paths[]; . == "render.yaml") then "render" else empty end),
-      (if (home_assistant_addon_store | not) and any($paths[]; . == "Dockerfile" or endswith("/Dockerfile") or . == "docker-compose.yml" or . == "compose.yaml") then "docker" else empty end),
+      # A compose file on its own composes images built elsewhere. Without a
+      # Dockerfile in the repository there is nothing here to build and nothing
+      # here to deploy, whatever the compose file starts locally.
+      (if (home_assistant_addon_store | not) and any($paths[]; (split("/") | last) | startswith("Dockerfile") or endswith(".Dockerfile")) then "docker" else empty end),
       (if any($paths[]; . == ".do/app.yaml") then "digitalocean-app" else empty end),
       (if any($paths[]; . == "coolify.yaml") then "coolify" else empty end)
     ] | unique;

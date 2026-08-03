@@ -100,5 +100,40 @@
     ],
     "latestWorkflow": null,
     "databaseId": 4105
+  },
+  {
+    "nameWithOwner": "alpha/compose-only",
+    "isFork": false,
+    "isArchived": false,
+    "isPrivate": true,
+    "defaultBranch": "main",
+    "defaultBranchHeadSha": "6666666666666666666666666666666666666666",
+    "primaryLanguage": "Python",
+    "pushedAt": "2026-07-28T14:00:00Z",
+    "paths": [
+      "pyproject.toml",
+      "docker-compose.yml",
+      "src/main.py"
+    ],
+    "latestWorkflow": null,
+    "databaseId": 4106
+  },
+  {
+    "nameWithOwner": "alpha/suffixed-dockerfiles",
+    "isFork": false,
+    "isArchived": false,
+    "isPrivate": true,
+    "defaultBranch": "main",
+    "defaultBranchHeadSha": "7777777777777777777777777777777777777777",
+    "primaryLanguage": "TypeScript",
+    "pushedAt": "2026-07-28T15:00:00Z",
+    "paths": [
+      "package.json",
+      "Dockerfile-webapp",
+      "Dockerfile-service",
+      "docker-compose.yml"
+    ],
+    "latestWorkflow": null,
+    "databaseId": 4107
   }
 ]

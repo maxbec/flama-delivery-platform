@@ -18,18 +18,18 @@ jq -e '
   .schemaVersion == 1 and
   .observedAt == "2026-07-28T12:00:00Z" and
   .summary == {
-    total: 6,
-    inScope: 3,
-    private: 1,
+    total: 8,
+    inScope: 5,
+    private: 3,
     public: 2,
     forks: 1,
     archived: 1,
     platform: 1,
-    mutationAllowed: 4,
+    mutationAllowed: 6,
     mutationDenied: 2
   } and
-  ([.repositories[] | select(.disposition == "in_scope")] | length) == 3 and
-  ([.repositories[] | select(.mutationAllowed == true)] | length) == 4 and
+  ([.repositories[] | select(.disposition == "in_scope")] | length) == 5 and
+  ([.repositories[] | select(.mutationAllowed == true)] | length) == 6 and
   ([.repositories[] | select(.isFork or .isArchived) | select(.mutationAllowed == true)] | length) == 0 and
   ([.repositories[] | has("profile")] | any | not) and
   (.inventoryDigest | test("^sha256:[0-9a-f]{64}$")) and
@@ -42,6 +42,14 @@ jq -e '
   # reading it as a deployment provider forces the two-branch profile onto a
   # repository whose default branch the add-on store serves straight to users.
   ([.repositories[] | select(.nameWithOwner == "alpha/addon-store")][0] | .providerIndicators == []) and
+  # A compose file with no Dockerfile in the repository composes images built
+  # elsewhere. Nothing here is built and nothing here is deployed, so it names
+  # no deployment target either.
+  ([.repositories[] | select(.nameWithOwner == "alpha/compose-only")][0] | .providerIndicators == []) and
+  # Dockerfiles are not always called exactly that. platzl-finder ships
+  # `Dockerfile-webapp` and `Dockerfile-service`, and matching only the bare
+  # name dropped a repository that really does build and deploy images.
+  ([.repositories[] | select(.nameWithOwner == "alpha/suffixed-dockerfiles")][0] | .providerIndicators == ["docker"]) and
   ([.repositories[] | select(.nameWithOwner == "alpha/platform")][0] | .disposition == "platform" and .mutationAllowed == true) and
   ([.repositories[] | select(.nameWithOwner == "alpha/upstream-fork")][0] | .disposition == "excluded_fork" and .mutationDeniedReason == "fork") and
   ([.repositories[] | select(.nameWithOwner == "alpha/retired")][0] | .disposition == "excluded_archived" and .mutationDeniedReason == "archived")
@@ -70,7 +78,7 @@ if [[ "$TAMPERED" == "$PUBLISHED" ]]; then
   exit 1
 fi
 
-jq '.owners.alpha.expected.inScope = 4' "$FIXTURE_DIR/policy.json" > "$TMP_DIR/bad-policy.json"
+jq '.owners.alpha.expected.inScope = 6' "$FIXTURE_DIR/policy.json" > "$TMP_DIR/bad-policy.json"
 if "$ROOT_DIR/scripts/phase0-inventory.sh" \
   --policy "$TMP_DIR/bad-policy.json" \
   --fixture "$FIXTURE_DIR/repositories.json" \
@@ -93,7 +101,7 @@ FLAMA_GH_FIXTURE_DIR="$FIXTURE_DIR" \
 
 jq -e '
   .source.mode == "live" and
-  .summary.inScope == 3 and
+  .summary.inScope == 5 and
   .summary.platform == 1 and
   .summary.mutationDenied == 2 and
   ([.repositories[] | select(.nameWithOwner == "alpha/fast-app")][0] |
