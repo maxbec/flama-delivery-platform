@@ -156,7 +156,10 @@ case "$endpoint" in
       "deployment_branch_policy": {"protected_branches": true, "custom_branch_policies": false}}'
     ;;
   repos/maxbec/example/git/trees/main*|repos/maxbec/example/git/trees/dev*)
-    emit '{"truncated": false, "tree": [{"path": ".github/workflows/delivery.yml"}]}'
+    # GitHub runs only the files directly in `.github/workflows/`. Anything in
+    # a subdirectory is documentation, and treating it as a workflow reports
+    # unpinned actions that never run.
+    emit '{"truncated": false, "tree": [{"path": ".github/workflows/delivery.yml"}, {"path": ".github/workflows/examples/sample.yaml"}]}'
     ;;
   repos/maxbec/example/contents/.github/workflows/delivery.yml)
     # base64 of a workflow using a full-SHA third-party pin, no pull_request_target,

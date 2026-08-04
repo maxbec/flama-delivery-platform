@@ -191,7 +191,12 @@ while IFS= read -r workflow_path; do
     fi
     [[ "$reference" =~ @[0-9a-f]{40}$ ]] || third_party_pins=false
   done < <(grep -Eo '^[[:space:]]*-?[[:space:]]*uses:[[:space:]]*\S+' "$body" | sed -E 's/.*uses:[[:space:]]*//')
+# GitHub runs only the files directly in `.github/workflows/`. A file in a
+# subdirectory there is documentation — `navigaite/.github` keeps worked
+# examples in `.github/workflows/examples/` — and reading it as a workflow
+# reported unpinned actions for jobs that can never run.
 done < <(jq -r '[.tree[]?.path | select(startswith(".github/workflows/"))
+  | select((ltrimstr(".github/workflows/") | contains("/")) | not)
   | select(endswith(".yml") or endswith(".yaml"))][]' "$TREE_JSON")
 
 vulnerability_alerts=false
