@@ -224,3 +224,30 @@ describe("delivery CODEOWNERS", () => {
     }
   });
 });
+
+describe("push guard", () => {
+  it("renders only where the plan refuses branch protection", async () => {
+    // Every repository would otherwise carry a workflow that runs on every push
+    // to report something branch protection already prevents.
+    const outputRoot = await mkdtemp(join(tmpdir(), "flama-guard-off-"));
+    const without = await renderTemplates({ repositoryRoot, outputRoot, input, dryRun: true });
+    expect(without.files.map(({ path }) => path))
+      .not.toContain(".github/workflows/flama-push-guard.yml");
+
+    const guardedRoot = await mkdtemp(join(tmpdir(), "flama-guard-on-"));
+    const guarded = await renderTemplates({
+      repositoryRoot,
+      outputRoot: guardedRoot,
+      input: { ...input, substituteControls: { pushGuard: true } },
+      dryRun: false,
+    });
+    expect(guarded.files.map(({ path }) => path))
+      .toContain(".github/workflows/flama-push-guard.yml");
+
+    const workflow = parseYaml(
+      await readFile(join(guardedRoot, ".github", "workflows", "flama-push-guard.yml"), "utf8"),
+    ) as { on: { push: { branches: string[] } }; jobs: Record<string, { with: Record<string, string> }> };
+    expect(workflow.on.push.branches).toEqual(["main"]);
+    expect(workflow.jobs["push-guard"]?.with["app-slug"]).toBe(input.paperclip.appSlug);
+  });
+});

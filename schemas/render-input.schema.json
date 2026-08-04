@@ -4,38 +4,104 @@
   "title": "Deterministic consumer template render input",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "repository", "profile", "platformRef", "platformVersion", "paperclip", "release", "dependabot", "commands"],
+  "required": [
+    "schemaVersion",
+    "repository",
+    "profile",
+    "platformRef",
+    "platformVersion",
+    "paperclip",
+    "release",
+    "dependabot",
+    "commands"
+  ],
   "properties": {
-    "schemaVersion": { "const": 1 },
-    "repository": { "type": "string", "pattern": "^(maxbec|navigaite|edilio-app)/[^/]+$" },
-    "profile": { "enum": ["fast", "major"] },
-    "platformRef": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
-    "platformVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "schemaVersion": {
+      "const": 1
+    },
+    "repository": {
+      "type": "string",
+      "pattern": "^(maxbec|navigaite|edilio-app)/[^/]+$"
+    },
+    "profile": {
+      "enum": [
+        "fast",
+        "major"
+      ]
+    },
+    "platformRef": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "platformVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
     "paperclip": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["company", "projectId", "workspaceId", "appSlug"],
+      "required": [
+        "company",
+        "projectId",
+        "workspaceId",
+        "appSlug"
+      ],
       "properties": {
-        "company": { "enum": ["Private", "// Navigaite", "Edilio"] },
-        "projectId": { "type": "string", "minLength": 1 },
-        "workspaceId": { "type": "string", "minLength": 1 },
-        "appSlug": { "type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?$" }
+        "company": {
+          "enum": [
+            "Private",
+            "// Navigaite",
+            "Edilio"
+          ]
+        },
+        "projectId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "appSlug": {
+          "type": "string",
+          "pattern": "^[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?$"
+        }
       }
     },
     "release": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["enabled", "type", "currentVersion"],
+      "required": [
+        "enabled",
+        "type",
+        "currentVersion"
+      ],
       "properties": {
-        "enabled": { "type": "boolean" },
-        "type": { "enum": ["node", "python", "php", "flutter", "go", "simple"] },
-        "currentVersion": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+        "enabled": {
+          "type": "boolean"
+        },
+        "type": {
+          "enum": [
+            "node",
+            "python",
+            "php",
+            "flutter",
+            "go",
+            "simple"
+          ]
+        },
+        "currentVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+        }
       }
     },
     "dependabot": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["ecosystems"],
+      "required": [
+        "ecosystems"
+      ],
       "properties": {
         "ecosystems": {
           "type": "array",
@@ -43,10 +109,29 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["packageEcosystem", "directory"],
+            "required": [
+              "packageEcosystem",
+              "directory"
+            ],
             "properties": {
-              "packageEcosystem": { "enum": ["npm", "pip", "composer", "docker", "github-actions", "pub", "gomod", "gradle", "maven", "cargo"] },
-              "directory": { "type": "string", "pattern": "^/" }
+              "packageEcosystem": {
+                "enum": [
+                  "npm",
+                  "pip",
+                  "composer",
+                  "docker",
+                  "github-actions",
+                  "pub",
+                  "gomod",
+                  "gradle",
+                  "maven",
+                  "cargo"
+                ]
+              },
+              "directory": {
+                "type": "string",
+                "pattern": "^/"
+              }
             }
           }
         }
@@ -55,13 +140,41 @@
     "commands": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["buildable", "affected", "full", "smoke", "health"],
+      "required": [
+        "buildable",
+        "affected",
+        "full",
+        "smoke",
+        "health"
+      ],
       "properties": {
-        "buildable": { "$ref": "#/$defs/command" },
-        "affected": { "$ref": "#/$defs/command" },
-        "full": { "$ref": "#/$defs/command" },
-        "smoke": { "$ref": "#/$defs/command" },
-        "health": { "$ref": "#/$defs/command" }
+        "buildable": {
+          "$ref": "#/$defs/command"
+        },
+        "affected": {
+          "$ref": "#/$defs/command"
+        },
+        "full": {
+          "$ref": "#/$defs/command"
+        },
+        "smoke": {
+          "$ref": "#/$defs/command"
+        },
+        "health": {
+          "$ref": "#/$defs/command"
+        }
+      }
+    },
+    "substituteControls": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pushGuard"
+      ],
+      "properties": {
+        "pushGuard": {
+          "type": "boolean"
+        }
       }
     }
   },
@@ -69,7 +182,10 @@
     "command": {
       "type": "array",
       "minItems": 1,
-      "items": { "type": "string", "minLength": 1 }
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
     }
   }
 }

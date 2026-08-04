@@ -21,6 +21,12 @@ export interface DependabotEntry {
 }
 
 export interface RenderInput {
+  /**
+   * Controls that stand in where a platform feature is unavailable. The push
+   * guard is rendered only where the plan refuses branch protection; elsewhere
+   * it would run on every push to report what protection already prevents.
+   */
+  readonly substituteControls?: { readonly pushGuard: boolean };
   readonly schemaVersion: 1;
   readonly repository: string;
   readonly profile: "fast" | "major";
@@ -235,6 +241,15 @@ async function buildTargets(repositoryRoot: string, input: RenderInput): Promise
       ),
       mode: 0o644,
     },
+    ...(input.substituteControls?.pushGuard === true
+      ? [{
+        path: ".github/workflows/flama-push-guard.yml",
+        content: replacePlatformRef(
+          await readTemplate(join(profile, ".github", "workflows", "flama-push-guard.yml.tmpl")),
+        ),
+        mode: 0o644,
+      }]
+      : []),
     {
       path: ".flama/paperclip-webhook.json",
       content: jsonFile({
