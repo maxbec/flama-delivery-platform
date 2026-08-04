@@ -93,7 +93,7 @@ jq -e '
   .protectedBranches[0] == {
     name: "main", requiredChecks: [], pullRequestRequired: false, strictChecks: false,
     signedCommits: false, conversationResolution: false, forcePush: true,
-    deletion: true, bypassActorCount: 0
+    deletion: true, protectionAvailable: true, bypassActorCount: 0
   } and
   .deployment.staleReviewDismissal == false and
   .deployment.pathRestricted == false and
@@ -101,6 +101,36 @@ jq -e '
 ' "$TMP_DIR/unprotected.json" >/dev/null || {
   echo "unprotected default branch was not reported as fully unprotected" >&2
   jq '.protectedBranches, .deployment' "$TMP_DIR/unprotected.json" >&2
+  exit 1
+}
+
+# A free plan refuses branch protection on a private repository outright. That is
+# the plan not selling the control, not a control switched off, and the audit
+# requires the push guard in its place rather than reporting drift that no change
+# to the repository could ever clear.
+PATH="$FIXTURE_DIR/bin:$PATH" FLAMA_GH_PROTECTION_FORBIDDEN=1 "$OBSERVER" \
+  --repository maxbec/example --profile fast \
+  --posture "$FIXTURE_DIR/posture.json" --output "$TMP_DIR/no-plan.json" >/dev/null
+
+jq -e '.protectedBranches[0].protectionAvailable == false' "$TMP_DIR/no-plan.json" >/dev/null || {
+  echo "plan-refused branch protection was not reported as unavailable" >&2
+  jq '.protectedBranches' "$TMP_DIR/no-plan.json" >&2
+  exit 1
+}
+
+# The push guard is the substitute the audit requires where the plan refuses
+# branch protection, so its presence has to be observed rather than assumed.
+PATH="$FIXTURE_DIR/bin:$PATH" FLAMA_GH_PUSH_GUARD=1 "$OBSERVER" \
+  --repository maxbec/example --profile fast \
+  --posture "$FIXTURE_DIR/posture.json" --output "$TMP_DIR/guarded.json" >/dev/null
+
+jq -e '.substituteControls.pushGuard == true' "$TMP_DIR/guarded.json" >/dev/null || {
+  echo "push guard workflow was not observed as present" >&2
+  jq '.substituteControls' "$TMP_DIR/guarded.json" >&2
+  exit 1
+}
+jq -e '.substituteControls.pushGuard == false' "$OUTPUT" >/dev/null || {
+  echo "push guard reported present when the workflow is absent" >&2
   exit 1
 }
 

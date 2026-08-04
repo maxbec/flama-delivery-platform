@@ -281,3 +281,54 @@ describe("Deployment review boundary", () => {
     }
   });
 });
+
+describe("Branch protection the plan does not sell", () => {
+  // GitHub refuses branch protection on a private repository under a free plan.
+  // `maxbec` and `edilio-app` are free, so twelve repositories cannot have it at
+  // any price they are willing to pay, and reporting drift they cannot clear is
+  // the same defect as demanding a deploy boundary of a repository that deploys
+  // nothing: a control that cannot pass trains everyone to ignore the report.
+  //
+  // The substitute is the push guard, which watches the stable branch and raises
+  // an alarm for a commit that did not arrive through a gated pull request. Where
+  // protection is unavailable, that is what the audit requires instead.
+  const unavailable = {
+    ...compliant,
+    protectedBranches: [{
+      ...compliant.protectedBranches[0]!,
+      protectionAvailable: false,
+      requiredChecks: [],
+      pullRequestRequired: false,
+      strictChecks: false,
+      signedCommits: false,
+      conversationResolution: false,
+      forcePush: true,
+      deletion: true,
+    }],
+  };
+
+  it("requires the push guard instead of protection it cannot have", () => {
+    const guarded = { ...unavailable, substituteControls: { pushGuard: true } };
+    const codes = auditGitHubPolicy(guarded, policy).findings.map(({ code }) => code);
+    expect(codes).not.toContain("branch_protection_drift");
+    expect(codes).not.toContain("required_checks_drift");
+    expect(codes).not.toContain("push_guard_missing");
+
+    const unguarded = { ...unavailable, substituteControls: { pushGuard: false } };
+    expect(auditGitHubPolicy(unguarded, policy).findings.map(({ code }) => code))
+      .toContain("push_guard_missing");
+  });
+
+  it("still demands real protection wherever the plan allows it", () => {
+    // The escape hatch must not become a way to switch protection off. Where
+    // protection is available, the push guard buys nothing.
+    const available = {
+      ...compliant,
+      protectedBranches: [{ ...unavailable.protectedBranches[0]!, protectionAvailable: true }],
+      substituteControls: { pushGuard: true },
+    };
+    const codes = auditGitHubPolicy(available, policy).findings.map(({ code }) => code);
+    expect(codes).toContain("branch_protection_drift");
+    expect(codes).toContain("required_checks_drift");
+  });
+});

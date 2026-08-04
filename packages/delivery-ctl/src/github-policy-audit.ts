@@ -61,7 +61,11 @@ export interface GitHubPolicyAuditInput {
     readonly forcePush: boolean;
     readonly deletion: boolean;
     readonly bypassActorCount: number;
+    /** False when the plan does not sell branch protection for this repository. */
+    readonly protectionAvailable?: boolean;
   }[];
+  /** Controls that stand in where a platform feature is unavailable. */
+  readonly substituteControls?: { readonly pushGuard: boolean };
   readonly merge: { readonly squash: boolean; readonly mergeCommit: boolean; readonly rebase: boolean };
   readonly actions: {
     readonly defaultWorkflowPermissions: "read" | "write";
@@ -191,8 +195,24 @@ export function auditGitHubPolicy(
     new Set(observedBranchNames).size !== observedBranchNames.length ||
     !sameStrings(observedBranchNames, expectedBranches.map(({ name }) => name))
   ) add("protected_branch_set_drift", "branches");
+  // GitHub refuses branch protection on a private repository under a free plan.
+  // Reporting drift a repository cannot clear at any price is the same defect as
+  // demanding a deploy boundary of something that deploys nothing: the control
+  // never passes, and a control that never passes gets ignored.
+  //
+  // Where it is unavailable the audit requires the substitute instead — the push
+  // guard, which watches the stable branch and raises an alarm for a commit that
+  // did not arrive through a gated pull request. That is detective where
+  // protection is preventive, and it is what is actually available.
+  const protectionUnavailable = input.protectedBranches.some(
+    (branch) => branch.protectionAvailable === false,
+  );
+  if (protectionUnavailable && input.substituteControls?.pushGuard !== true) {
+    add("push_guard_missing", "branches");
+  }
   for (const expected of expectedBranches) {
     const observed = input.protectedBranches.find(({ name }) => name === expected.name);
+    if (observed?.protectionAvailable === false) continue;
     if (observed === undefined || !sameStrings(observed.requiredChecks, expected.checks)) {
       add("required_checks_drift", "branches");
     }

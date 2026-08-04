@@ -108,12 +108,22 @@ for branch in main dev; do
     gh_get "repos/$REPOSITORY/branches/$branch" >/dev/null 2>&1 || continue
   fi
   protection="$TASK_TMP_DIR/protection-$branch.json"
-  if ! gh_get "repos/$REPOSITORY/branches/$branch/protection" > "$protection" 2>/dev/null; then
+  # GitHub refuses branch protection on a private repository under a free plan,
+  # and says so with a 403. That is the plan not selling the control, which the
+  # audit scores differently from a control that exists and is switched off —
+  # the same distinction already drawn for rulesets below.
+  protection_available=true
+  if ! gh_get "repos/$REPOSITORY/branches/$branch/protection" > "$protection" \
+      2>"$TASK_TMP_DIR/protection-$branch.err"; then
+    if grep -q "Upgrade to GitHub" "$TASK_TMP_DIR/protection-$branch.err"; then
+      protection_available=false
+    fi
     # An unprotected branch that exists is drift the audit exists to report; a
     # branch that does not exist is omitted rather than invented.
     printf '{}\n' > "$protection"
   fi
-  jq --slurpfile protection "$protection" --arg name "$branch" '
+  jq --slurpfile protection "$protection" --arg name "$branch" \
+    --argjson protectionAvailable "$protection_available" '
     . + [$protection[0] | (
       # The jq alternative operator substitutes on false as well as null, so a
       # boolean whose real value is false needs an explicit null test.
@@ -130,6 +140,7 @@ for branch in main dev; do
       conversationResolution: flag(.required_conversation_resolution.enabled; false),
       forcePush: flag(.allow_force_pushes.enabled; true),
       deletion: flag(.allow_deletions.enabled; true),
+      protectionAvailable: $protectionAvailable,
       bypassActorCount: (((.restrictions.users // []) | length)
         + ((.restrictions.teams // []) | length)
         + ((.restrictions.apps // []) | length))
@@ -277,6 +288,14 @@ if [[ "$deployable" == "true" ]]; then
 fi
 [[ "$environment_branch_policy" == "true" ]] || environment_branch_policy=false
 
+# The substitute for branch protection where the plan does not sell it. Read
+# from the tree already fetched, so this costs no extra request.
+push_guard=false
+if jq -e '[.tree[]?.path] | any(. == ".github/workflows/flama-push-guard.yml")' \
+    "$TREE_JSON" >/dev/null 2>&1; then
+  push_guard=true
+fi
+
 code_owners=false
 for path in .github/CODEOWNERS CODEOWNERS docs/CODEOWNERS; do
   if gh_get "repos/$REPOSITORY/contents/$path" >/dev/null 2>&1; then
@@ -309,6 +328,7 @@ jq -n \
   --argjson tagForceUpdate "$tag_force_update" \
   --argjson tagDeletion "$tag_deletion" \
   --argjson codeOwners "$code_owners" \
+  --argjson pushGuard "$push_guard" \
   --argjson deployable "$deployable" \
   --argjson environmentExists "$environment_exists" \
   --argjson environmentReviewers "$environment_reviewers" \
@@ -388,6 +408,7 @@ jq -n \
         branchPolicyLimited: $environmentBranchPolicy
       }
     },
+    substituteControls: { pushGuard: $pushGuard },
     githubApp: $approved.owners[$owner].githubApp,
     runners: $approved.runners,
     mutationAllowed: false

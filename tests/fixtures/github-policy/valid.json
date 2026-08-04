@@ -23,7 +23,8 @@
       "conversationResolution": true,
       "forcePush": false,
       "deletion": false,
-      "bypassActorCount": 0
+      "bypassActorCount": 0,
+      "protectionAvailable": true
     }
   ],
   "merge": {
@@ -99,5 +100,8 @@
     "deploymentSeparated": true,
     "publicPullRequestProductionNetwork": false
   },
-  "mutationAllowed": false
+  "mutationAllowed": false,
+  "substituteControls": {
+    "pushGuard": false
+  }
 }

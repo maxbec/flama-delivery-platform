@@ -23,6 +23,7 @@
       "conversationResolution": true,
       "forcePush": false,
       "deletion": false,
+      "protectionAvailable": true,
       "bypassActorCount": 0
     }
   ],
@@ -84,6 +85,9 @@
       ],
       "branchPolicyLimited": true
     }
+  },
+  "substituteControls": {
+    "pushGuard": false
   },
   "githubApp": {
     "ownerScoped": true,

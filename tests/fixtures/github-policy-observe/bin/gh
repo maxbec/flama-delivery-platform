@@ -87,6 +87,11 @@ case "$endpoint" in
     }'
     ;;
   repos/maxbec/example/branches/main/protection)
+    if [[ -n "${FLAMA_GH_PROTECTION_FORBIDDEN:-}" ]]; then
+      # What a free plan actually returns for a private repository.
+      echo '{"message": "Upgrade to GitHub Pro or make this repository public to enable this feature.","status":"403"}' >&2
+      exit 1
+    fi
     if [[ -n "${FLAMA_GH_NO_PROTECTION:-}" ]]; then
       echo '{"message": "Branch not protected"}' >&2
       exit 1
@@ -159,7 +164,14 @@ case "$endpoint" in
     # GitHub runs only the files directly in `.github/workflows/`. Anything in
     # a subdirectory is documentation, and treating it as a workflow reports
     # unpinned actions that never run.
-    emit '{"truncated": false, "tree": [{"path": ".github/workflows/delivery.yml"}, {"path": ".github/workflows/examples/sample.yaml"}]}'
+    if [[ -n "${FLAMA_GH_PUSH_GUARD:-}" ]]; then
+      emit '{"truncated": false, "tree": [{"path": ".github/workflows/delivery.yml"}, {"path": ".github/workflows/flama-push-guard.yml"}]}'
+    else
+      emit '{"truncated": false, "tree": [{"path": ".github/workflows/delivery.yml"}, {"path": ".github/workflows/examples/sample.yaml"}]}'
+    fi
+    ;;
+  repos/maxbec/example/contents/.github/workflows/flama-push-guard.yml)
+    emit "{\"type\": \"file\", \"content\": \"$(printf 'on:\n  push:\n    branches: [main]\njobs:\n  push-guard:\n    uses: maxbec/flama-delivery-platform/.github/workflows/reusable-push-guard.yml@11bd71901bbe5b1630ceea73d27597364c9af683\n' | base64 -w0)\"}"
     ;;
   repos/maxbec/example/contents/.github/workflows/delivery.yml)
     # base64 of a workflow using a full-SHA third-party pin, no pull_request_target,
