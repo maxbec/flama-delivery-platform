@@ -180,7 +180,18 @@ export function auditGitHubPolicy(
   if (profile !== undefined && input.repository.defaultBranch !== profile.defaultBranch) {
     add("default_branch_drift", "repository");
   }
-  if (!input.repository.autoMerge || !input.repository.deleteHeadBranch) {
+  // Auto-merge rides on the same paid-plan gate as branch protection, but
+  // fails silently rather than with a 403: GitHub answers the PATCH with a 200
+  // and leaves the flag false. It is also close to meaningless without required
+  // checks for it to wait on. Head-branch deletion is not gated and is still
+  // required either way.
+  const planRefusesPrivateFeatures = input.protectedBranches.some(
+    (branch) => branch.protectionAvailable === false,
+  );
+  if (
+    (!planRefusesPrivateFeatures && !input.repository.autoMerge) ||
+    !input.repository.deleteHeadBranch
+  ) {
     add("repository_merge_automation_drift", "repository");
   }
 
@@ -204,10 +215,7 @@ export function auditGitHubPolicy(
   // guard, which watches the stable branch and raises an alarm for a commit that
   // did not arrive through a gated pull request. That is detective where
   // protection is preventive, and it is what is actually available.
-  const protectionUnavailable = input.protectedBranches.some(
-    (branch) => branch.protectionAvailable === false,
-  );
-  if (protectionUnavailable && input.substituteControls?.pushGuard !== true) {
+  if (planRefusesPrivateFeatures && input.substituteControls?.pushGuard !== true) {
     add("push_guard_missing", "branches");
   }
   for (const expected of expectedBranches) {

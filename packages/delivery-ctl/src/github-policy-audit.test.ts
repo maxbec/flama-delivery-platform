@@ -319,6 +319,26 @@ describe("Branch protection the plan does not sell", () => {
       .toContain("push_guard_missing");
   });
 
+  it("does not demand auto-merge the plan also refuses", () => {
+    // GitHub answers the PATCH with a 200 and leaves `allow_auto_merge` false on
+    // a private repository under a free plan — the same gate as branch
+    // protection, silently rather than with a 403. Auto-merge is also close to
+    // meaningless without required checks to wait for.
+    //
+    // Head-branch deletion is not gated and is still required.
+    const noAutoMerge = {
+      ...unavailable,
+      repository: { ...compliant.repository, autoMerge: false, deleteHeadBranch: true },
+      substituteControls: { pushGuard: true },
+    };
+    expect(auditGitHubPolicy(noAutoMerge, policy).findings.map(({ code }) => code))
+      .not.toContain("repository_merge_automation_drift");
+
+    const noDeletion = { ...noAutoMerge, repository: { ...noAutoMerge.repository, deleteHeadBranch: false } };
+    expect(auditGitHubPolicy(noDeletion, policy).findings.map(({ code }) => code))
+      .toContain("repository_merge_automation_drift");
+  });
+
   it("still demands real protection wherever the plan allows it", () => {
     // The escape hatch must not become a way to switch protection off. Where
     // protection is available, the push guard buys nothing.
