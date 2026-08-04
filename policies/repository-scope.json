@@ -46,5 +46,9 @@
     "archived": "deny",
     "unknownOwners": "deny",
     "inventoryOnlyExclusions": true
+  },
+  "profileOverrides": {
+    "maxbec/platzl-finder": "fast",
+    "maxbec/subscription-manager": "fast"
   }
 }

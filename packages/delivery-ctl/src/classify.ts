@@ -9,10 +9,17 @@ export interface InventoryRepository {
 
 export interface ClassificationInput {
   readonly repositories: readonly InventoryRepository[];
+  /**
+   * Profiles the approved policy states directly, for the repositories whose
+   * shape misleads the rules. `platzl-finder` and `subscription-manager` ship
+   * Dockerfiles, which reads as a deployment provider and so as the two-branch
+   * profile, but both are run single-branch.
+   */
+  readonly profileOverrides?: Readonly<Record<string, BranchProfile>>;
 }
 
 export type BranchProfile = "fast" | "major";
-export type MajorReason = "integration_branch" | "monorepo" | "deployment_provider";
+export type MajorReason = "integration_branch" | "monorepo" | "deployment_provider" | "explicit_override";
 
 export interface RepositoryClassification {
   readonly nameWithOwner: string;
@@ -35,9 +42,28 @@ export function classifyInventory(input: ClassificationInput): ClassificationRes
     throw new Error(`inconsistent mutation policy for ${inconsistent.nameWithOwner}`);
   }
 
+  const classifiable = new Set(
+    input.repositories
+      .filter((repository) => repository.disposition === "in_scope" && repository.mutationAllowed)
+      .map(({ nameWithOwner }) => nameWithOwner),
+  );
+  for (const nameWithOwner of Object.keys(input.profileOverrides ?? {})) {
+    if (!classifiable.has(nameWithOwner)) {
+      throw new Error(`profile override for a repository outside the classified set: ${nameWithOwner}`);
+    }
+  }
+
   const repositories = input.repositories
     .filter((repository) => repository.disposition === "in_scope" && repository.mutationAllowed)
     .map((repository): RepositoryClassification => {
+      const override = input.profileOverrides?.[repository.nameWithOwner];
+      if (override !== undefined) {
+        return {
+          nameWithOwner: repository.nameWithOwner,
+          profile: override,
+          reasons: ["explicit_override"],
+        };
+      }
       const reasons: MajorReason[] = [];
       if (repository.defaultBranch === "dev") reasons.push("integration_branch");
       if (repository.stack.includes("node-monorepo")) reasons.push("monorepo");

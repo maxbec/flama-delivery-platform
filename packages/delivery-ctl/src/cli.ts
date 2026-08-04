@@ -219,11 +219,26 @@ function isSchemaName(value: string | undefined): value is SchemaName {
   ].includes(value ?? "");
 }
 
-function classificationInput(value: unknown): ClassificationInput {
+function classificationInput(value: unknown, overrides?: unknown): ClassificationInput {
   if (typeof value !== "object" || value === null) throw new Error("invalid inventory");
   const repositories = Reflect.get(value, "repositories");
   if (!Array.isArray(repositories)) throw new Error("invalid inventory");
-  return { repositories } as ClassificationInput;
+  if (overrides === undefined) return { repositories } as ClassificationInput;
+  if (typeof overrides !== "object" || overrides === null) throw new Error("invalid profile overrides");
+  for (const profile of Object.values(overrides)) {
+    if (profile !== "fast" && profile !== "major") throw new Error("invalid profile override");
+  }
+  return { repositories, profileOverrides: overrides } as ClassificationInput;
+}
+
+/** Profiles the approved scope policy states directly, for repositories whose shape misleads the rules. */
+async function readProfileOverrides(root: string): Promise<unknown> {
+  try {
+    const policy = JSON.parse(await readFile(join(root, "policies", "repository-scope.json"), "utf8")) as unknown;
+    return typeof policy === "object" && policy !== null ? Reflect.get(policy, "profileOverrides") : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function secretsAuditInput(value: unknown): SecretsAuditInput {
@@ -438,7 +453,7 @@ export async function runCli(
         return 1;
       }
       io.writeStdout(
-        jsonLine({ command, dryRun: options["dry-run"] ?? false, ok: true, toolVersion, result: classifyInventory(classificationInput(input)) }),
+        jsonLine({ command, dryRun: options["dry-run"] ?? false, ok: true, toolVersion, result: classifyInventory(classificationInput(input, await readProfileOverrides(repositoryRoot))) }),
       );
       return 0;
     }
