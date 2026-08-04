@@ -52,16 +52,25 @@ jobs:
 
           number=$(jq -r --arg branch "$FLAMA_BRANCH" \
             '[.[] | select(.merged_at != null and .base.ref == $branch)][0].number // ""' "$pulls")
-          if [[ -z "$number" ]]; then
+          # The gates ran on the pull request's head, not on the commit that
+          # landed. A squash produces a new commit and a promotion produces a
+          # merge commit, and neither carries the checks. Verifying the wrong
+          # SHA would raise an alarm on every correctly delivered change, which
+          # is the surest way to get this switched off.
+          subject=$FLAMA_SHA
+          if [[ -n "$number" ]]; then
+            subject=$(jq -r --argjson n "$number" \
+              '[.[] | select(.number == $n)][0].head.sha // ""' "$pulls")
+            [[ -n "$subject" ]] || subject=$FLAMA_SHA
+          else
             printf 'reached %s without a merged pull request\n' "$FLAMA_BRANCH" >> "$faults"
           fi
 
-          # The gates only mean something if they ran on this exact commit. A
-          # preflight published by the owner's App is what proves the delivery
-          # commands actually ran against it.
+          # A preflight published by the owner's App is what proves the delivery
+          # commands actually ran against the change.
           checks=$(mktemp "$RUNNER_TEMP/flama-checks-XXXXXX.json")
           gh api -H 'Accept: application/vnd.github+json' \
-            "/repos/$GITHUB_REPOSITORY/commits/$FLAMA_SHA/check-runs?filter=all&per_page=100" \
+            "/repos/$GITHUB_REPOSITORY/commits/$subject/check-runs?filter=all&per_page=100" \
             > "$checks" 2>/dev/null || printf '{"check_runs":[]}\n' > "$checks"
 
           jq -e --arg app "$FLAMA_APP_SLUG" '[.check_runs[] | select(

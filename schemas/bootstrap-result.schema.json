@@ -58,7 +58,8 @@
         "files": {
           "type": "array",
           "minItems": 8,
-          "maxItems": 10,
+          "$comment": "Eleven with the push guard, which is rendered only where the plan refuses branch protection.",
+          "maxItems": 11,
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -77,6 +78,7 @@
                   ".github/workflows/flama-deploy.yml",
                   ".github/workflows/flama-final.yml",
                   ".github/workflows/flama-policy.yml",
+                  ".github/workflows/flama-push-guard.yml",
                   ".release-please-config.json",
                   ".release-please-manifest.json"
                 ]

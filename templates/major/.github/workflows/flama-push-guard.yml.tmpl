@@ -7,7 +7,9 @@ name: Flama Push Guard
 
 on:
   push:
-    branches: [main]
+    # Both, on this profile. Feature work lands on `dev` through a gated pull
+    # request and is promoted to `main`; a direct push to either skips the gates.
+    branches: [dev, main]
 
 permissions:
   contents: read
@@ -19,5 +21,5 @@ jobs:
   push-guard:
     uses: maxbec/flama-delivery-platform/.github/workflows/reusable-push-guard.yml@__FLAMA_PLATFORM_REF__
     with:
-      stable-branch: main
+      stable-branch: ${{ github.ref_name }}
       app-slug: __FLAMA_PAPERCLIP_APP_SLUG__
