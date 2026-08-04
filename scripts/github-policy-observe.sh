@@ -105,7 +105,14 @@ for branch in main dev; do
   # repository reporting drift it could not clear. Any branch the contract
   # models is observed when it exists.
   if [[ "$branch" != "$DEFAULT_BRANCH" ]]; then
-    gh_get "repos/$REPOSITORY/branches/$branch" >/dev/null 2>&1 || continue
+    # GitHub answers 200 with the *default* branch when the requested one does
+    # not exist, rather than 404 — `navigaite/nvgt-trunk-plugin` has no `dev`
+    # and returns `main`. Probing by status alone invented a protected branch
+    # that is not there, and reported drift against a branch set the repository
+    # could not have.
+    probe="$TASK_TMP_DIR/branch-$branch.json"
+    gh_get "repos/$REPOSITORY/branches/$branch" > "$probe" 2>/dev/null || continue
+    [[ "$(jq -r '.name // ""' "$probe")" == "$branch" ]] || continue
   fi
   protection="$TASK_TMP_DIR/protection-$branch.json"
   # GitHub refuses branch protection on a private repository under a free plan,

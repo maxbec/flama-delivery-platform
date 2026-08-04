@@ -60,10 +60,13 @@ case "$endpoint" in
     emit '{"name": "main"}'
     ;;
   repos/maxbec/example/branches/dev)
-    # A Fast repository has no dev branch at all.
+    # A Fast repository has no dev branch at all — and GitHub answers 200 with
+    # the *default* branch rather than 404, which is what
+    # navigaite/nvgt-trunk-plugin does. Probing for existence by status alone
+    # invents a branch that is not there.
     [[ "${FLAMA_GH_DEFAULT_BRANCH:-main}" == "dev" ]] || {
-      echo '{"message": "Branch not found"}' >&2
-      exit 1
+      emit '{"name": "main"}'
+      exit 0
     }
     emit '{"name": "dev"}'
     ;;
