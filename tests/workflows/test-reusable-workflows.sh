@@ -23,13 +23,13 @@ for workflow in "$BRANCH_GUARD" "$POLICY" "$FINAL"; do
   done < <(sed -nE 's/^[[:space:]]*uses:[[:space:]]+[^@]+@([^[:space:]#]+).*/\1/p' "$workflow")
 done
 
-grep -Fqx '    name: Branch Guard' "$BRANCH_GUARD"
+grep -Fqx '    name: Flama Branch Guard' "$BRANCH_GUARD"
 grep -Fq 'github.event.pull_request.head.sha' "$BRANCH_GUARD"
 for workflow in "$POLICY" "$FINAL"; do
   grep -Fq 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' "$workflow"
   grep -Fqx '          persist-credentials: false' "$workflow"
 done
-grep -Fqx '    name: Policy Gate' "$POLICY"
+grep -Fqx '    name: Flama Policy Gate' "$POLICY"
 grep -Fqx '  checks: read' "$POLICY"
 grep -Fq 'consumer-policy-gate.mjs' "$POLICY"
 grep -Fq 'check_name=Paperclip%20Preflight' "$POLICY"
@@ -39,7 +39,7 @@ if grep -Eq './scripts/delivery (buildable|affected|full)' "$POLICY"; then
   echo "policy workflow duplicates application tests" >&2
   exit 1
 fi
-grep -Fqx '    name: Final Gate' "$FINAL"
+grep -Fqx '    name: Flama Final Gate' "$FINAL"
 grep -Fqx '        run: ./scripts/delivery full' "$FINAL"
 grep -Fq "if: \${{ steps.change.outputs.mode == 'code' }}" "$FINAL"
 grep -Fq "if: \${{ steps.change.outputs.mode == 'deployment' }}" "$FINAL"
