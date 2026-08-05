@@ -262,6 +262,16 @@ restart.
 8. Prove every completion criterion across all 28 consumers before retiring
    the legacy v3 implementation.
 
+## Delivery loop
+
+[The delivery loop, end to end](./operations/delivery-loop.md) records how a
+change reaches Paperclip, what each hop proves, and where the loop stops. It is
+worth reading before diagnosing a delivery that appears not to arrive, because
+two of the failure modes it covers read as something other than what they are: a
+`202` on a provider's setup ping proves routing and signature verification only,
+and an outbox claim that is not company-scoped dead-letters an event with a
+reason naming authorization rather than the claim.
+
 ## Evidence index
 
 - [Phase 0 inventory evidence](evidence/phase-0.md)
