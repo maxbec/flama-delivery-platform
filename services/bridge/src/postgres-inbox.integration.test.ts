@@ -126,6 +126,53 @@ describe("PostgreSQL durable inbox and outbox", () => {
     await expect(inbox.claimNextTransition("publisher-c")).resolves.toBeUndefined();
   });
 
+  it("never claims a transition belonging to another company", async () => {
+    // All three bridges share one database and one outbox. Without a company
+    // filter each worker claims whichever row is next, and a bridge that picks
+    // up another company's transition fails the publisher's scope check —
+    // a permanent code, so the event is dead-lettered immediately and never
+    // retried by the bridge that could actually have published it.
+    //
+    // Observed live: of nineteen real transitions, seventeen were destroyed
+    // this way and two survived only because the right worker won the race.
+    await inbox.enqueue({
+      deliveryId: "delivery-other-company",
+      eventName: "workflow_run",
+      owner: "navigaite",
+      repository: "navigaite/example",
+      payload: { conclusion: "success" },
+      receivedAt: new Date(),
+    });
+    await pool.query(
+      `INSERT INTO flama_delivery.transition_outbox
+         (delivery_id, company, transition_kind, payload, status)
+       VALUES ($1, $2, $3, $4, 'pending')`,
+      ["delivery-other-company", "// Navigaite", "workflow_run_completed",
+       JSON.stringify({ repository: "navigaite/example" })],
+    );
+
+    const foreign = new PostgresInbox(pool, "Edilio");
+    await expect(foreign.claimNextTransition("publisher-edilio")).resolves.toBeUndefined();
+
+    const owner = new PostgresInbox(pool, "// Navigaite");
+    const claimed = await owner.claimNextTransition("publisher-navigaite");
+    expect(claimed).toMatchObject({
+      deliveryId: "delivery-other-company",
+      company: "// Navigaite",
+    });
+
+    // These tests share one database and run in order, so this one removes its
+    // own row rather than changing what the next test claims.
+    await pool.query(
+      "DELETE FROM flama_delivery.transition_outbox WHERE delivery_id = $1",
+      ["delivery-other-company"],
+    );
+    await pool.query(
+      "DELETE FROM flama_delivery.webhook_inbox WHERE delivery_id = $1",
+      ["delivery-other-company"],
+    );
+  });
+
   it("bounds retries and moves terminal failures to the dead-letter queue", async () => {
     await inbox.enqueue({
       deliveryId: "delivery-postgres-2",

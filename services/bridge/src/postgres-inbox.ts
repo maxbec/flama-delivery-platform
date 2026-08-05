@@ -59,7 +59,13 @@ async function inTransaction<T>(pool: Pool, operation: (client: PoolClient) => P
 }
 
 export class PostgresInbox implements EnqueueWebhook {
-  constructor(private readonly pool: Pool) {}
+  /**
+   * `company` scopes transition claiming. All three bridges share one database
+   * and one outbox, so a worker that claims another company's transition fails
+   * the publisher's scope check — a permanent code, which dead-letters the
+   * event immediately and denies it to the bridge that could have published it.
+   */
+  constructor(private readonly pool: Pool, private readonly company?: string) {}
 
   async check(): Promise<void> {
     await this.pool.query("SELECT 1");
@@ -219,6 +225,7 @@ export class PostgresInbox implements EnqueueWebhook {
          SELECT id
          FROM flama_delivery.transition_outbox
          WHERE status IN ('pending', 'retry') AND available_at <= CURRENT_TIMESTAMP
+           AND ($2::text IS NULL OR company = $2)
          ORDER BY available_at, created_at
          FOR UPDATE SKIP LOCKED
          LIMIT 1
@@ -233,7 +240,7 @@ export class PostgresInbox implements EnqueueWebhook {
        WHERE outbox.id = candidate.id
        RETURNING outbox.id, outbox.delivery_id, outbox.company,
                  outbox.transition_kind, outbox.payload, outbox.attempts`,
-      [workerId],
+      [workerId, this.company ?? null],
     );
     const row = result.rows[0];
     if (row === undefined) return undefined;

@@ -29,7 +29,9 @@ export async function runBridgeRuntime(
   const config = parseBridgeConfig(environment);
   const webhook = new PaperclipSignedRoutineWebhookApi(environment);
   const pool = new Pool({ connectionString: config.databaseUrl.reveal(), max: 8 });
-  const inbox = new PostgresInbox(pool);
+  // Same company the publisher enforces, so this worker only ever claims
+  // transitions it is able to publish.
+  const inbox = new PostgresInbox(pool, companyByOwner[config.allowedOwner]);
   const repositoryScope = new PostgresRepositoryScope(pool);
   const authorizations = new PostgresTransitionAuthorizationStore(pool);
   const publisher = new AuthorizedRoutineWebhookPublisher(
