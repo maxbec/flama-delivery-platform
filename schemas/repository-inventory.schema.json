@@ -1,0 +1,106 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/repository-inventory.schema.json",
+  "title": "Flama repository inventory evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "observedAt", "inventoryDigest", "source", "policyVersion", "summary", "owners", "repositories"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "observedAt": { "type": "string", "format": "date-time" },
+    "inventoryDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mode"],
+      "properties": { "mode": { "enum": ["live", "fixture"] } }
+    },
+    "policyVersion": { "type": "integer", "minimum": 1 },
+    "summary": { "$ref": "#/$defs/summary" },
+    "owners": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["expected", "observed"],
+        "properties": {
+          "expected": { "$ref": "#/$defs/counts" },
+          "observed": { "$ref": "#/$defs/counts" }
+        }
+      }
+    },
+    "repositories": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/repository" }
+    }
+  },
+  "$defs": {
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inScope", "private", "public", "forks", "archived"],
+      "properties": {
+        "inScope": { "type": "integer", "minimum": 0 },
+        "private": { "type": "integer", "minimum": 0 },
+        "public": { "type": "integer", "minimum": 0 },
+        "forks": { "type": "integer", "minimum": 0 },
+        "archived": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["total", "inScope", "private", "public", "forks", "archived", "platform", "mutationAllowed", "mutationDenied"],
+      "properties": {
+        "total": { "type": "integer", "minimum": 0 },
+        "inScope": { "type": "integer", "minimum": 0 },
+        "private": { "type": "integer", "minimum": 0 },
+        "public": { "type": "integer", "minimum": 0 },
+        "forks": { "type": "integer", "minimum": 0 },
+        "archived": { "type": "integer", "minimum": 0 },
+        "platform": { "type": "integer", "minimum": 0 },
+        "mutationAllowed": { "type": "integer", "minimum": 0 },
+        "mutationDenied": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nameWithOwner", "githubRepositoryId", "owner", "isFork", "isArchived", "isPrivate", "defaultBranch", "defaultBranchHeadSha", "pushedAt", "primaryLanguage", "disposition", "mutationAllowed", "mutationDeniedReason", "paperclipCompany", "branchNormalizationRequired", "stack", "providerIndicators", "workflowFiles", "deliveryEntrypoints", "defaultBranchStatus", "latestWorkflow", "health"],
+      "properties": {
+        "nameWithOwner": { "type": "string", "pattern": "^[^/]+/[^/]+$" },
+        "githubRepositoryId": { "type": "integer", "minimum": 1 },
+        "owner": { "type": "string", "minLength": 1 },
+        "isFork": { "type": "boolean" },
+        "isArchived": { "type": "boolean" },
+        "isPrivate": { "type": "boolean" },
+        "defaultBranch": { "type": "string" },
+        "defaultBranchHeadSha": { "type": ["string", "null"], "pattern": "^[0-9a-f]{40}$" },
+        "pushedAt": { "type": "string" },
+        "primaryLanguage": { "type": "string" },
+        "disposition": { "enum": ["in_scope", "platform", "excluded_fork", "excluded_archived", "excluded_unknown_owner"] },
+        "mutationAllowed": { "type": "boolean" },
+        "mutationDeniedReason": { "type": ["string", "null"], "enum": ["fork", "archived", "unknown_owner", null] },
+        "paperclipCompany": { "type": ["string", "null"] },
+        "branchNormalizationRequired": { "type": "boolean" },
+        "stack": { "type": "array", "uniqueItems": true, "items": { "enum": ["node", "node-monorepo", "python", "php", "flutter", "go", "jvm", "rust", "wordpress"] } },
+        "providerIndicators": { "type": "array", "uniqueItems": true, "items": { "enum": ["docker", "vercel", "render", "digitalocean-app", "coolify"] } },
+        "workflowFiles": { "type": "integer", "minimum": 0 },
+        "deliveryEntrypoints": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["script", "paperclipProject", "deliveryContract", "productionManifest"],
+          "properties": {
+            "script": { "type": "boolean" },
+            "paperclipProject": { "type": "boolean" },
+            "deliveryContract": { "type": "boolean" },
+            "productionManifest": { "type": "boolean" }
+          }
+        },
+        "defaultBranchStatus": { "type": ["string", "null"] },
+        "latestWorkflow": { "type": ["object", "null"] },
+        "health": { "enum": ["green", "red", "pending", "stale", "unknown", "no_runs", "inventory_only"] }
+      }
+    }
+  }
+}

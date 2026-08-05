@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/github-policy-audit-result.schema.json",
+  "title": "Identifier-free GitHub repository policy audit result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "status", "profile", "findingCount", "findings", "contractDigest"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "status": { "enum": ["passed", "failed"] },
+    "profile": { "enum": ["fast", "major"] },
+    "findingCount": { "type": "integer", "minimum": 0 },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "location"],
+        "properties": {
+          "code": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "location": { "enum": ["actions", "branches", "deployment", "githubApp", "merge", "repository", "runners", "security", "supplyChain"] }
+        }
+      }
+    },
+    "contractDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "passed" } }, "required": ["status"] },
+      "then": { "properties": { "findingCount": { "type": "integer", "const": 0 }, "findings": { "type": "array", "maxItems": 0 } } }
+    },
+    {
+      "if": { "properties": { "status": { "const": "failed" } }, "required": ["status"] },
+      "then": { "properties": { "findingCount": { "type": "integer", "minimum": 1 }, "findings": { "type": "array", "minItems": 1 } } }
+    }
+  ]
+}

@@ -1,0 +1,25 @@
+name: Flama Push Guard
+
+# Branch protection is unavailable on this repository's plan, so nothing can
+# refuse a commit that skips the delivery flow. This notices when one does.
+# Detective, not preventive: whoever can push directly can also delete this
+# file. What it removes is the silent case.
+
+on:
+  push:
+    # Both, on this profile. Feature work lands on `dev` through a gated pull
+    # request and is promoted to `main`; a direct push to either skips the gates.
+    branches: [dev, main]
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write
+  checks: read
+
+jobs:
+  push-guard:
+    uses: maxbec/flama-delivery-platform/.github/workflows/reusable-push-guard.yml@__FLAMA_PLATFORM_REF__
+    with:
+      stable-branch: ${{ github.ref_name }}
+      app-slug: __FLAMA_PAPERCLIP_APP_SLUG__

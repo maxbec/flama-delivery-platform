@@ -1,0 +1,23 @@
+{
+  "schemaVersion": 1,
+  "key": "flama-github-transition-v1",
+  "title": "Flama GitHub Evidence Transition",
+  "description": "Consume one minimized, HMAC-authenticated GitHub delivery accepted through the durable Flama bridge. Revalidate the exact controller authorization, repository binding, event digest, lifecycle edge, company, pipeline, stage, and optimistic case version before making one deterministic Paperclip transition. Never infer a case, expose payload contents in comments, retrieve secret values, call GitHub, approve production, or deploy an artifact.",
+  "priority": "high",
+  "initialStatus": "paused",
+  "concurrencyPolicy": "always_enqueue",
+  "catchUpPolicy": "skip_missed",
+  "execution": {
+    "command": "transition-external-evidence",
+    "mode": "paperclip-native",
+    "authorizationStore": "flama_delivery.external_transition_authorization"
+  },
+  "trigger": {
+    "kind": "webhook",
+    "label": "flama-github-transition-v1",
+    "enabled": true,
+    "signingMode": "hmac_sha256",
+    "replayWindowSeconds": 300,
+    "credentialSource": "infisical-oidc"
+  }
+}

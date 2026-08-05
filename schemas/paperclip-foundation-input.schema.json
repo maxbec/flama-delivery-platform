@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/paperclip-foundation-input.schema.json",
+  "title": "Paperclip foundation installation input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "company", "controller", "mutationAllowed"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "company": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "name": { "enum": ["Private", "// Navigaite", "Edilio"] }
+      }
+    },
+    "controller": {
+      "enum": [
+        "maxbec-delivery-controller",
+        "navigaite-delivery-controller",
+        "edilio-delivery-controller"
+      ]
+    },
+    "mutationAllowed": { "const": true }
+  },
+  "allOf": [
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "company": {
+            "type": "object",
+            "properties": { "name": { "const": "Private" } }
+          }
+        },
+        "required": ["company"]
+      },
+      "then": {
+        "type": "object",
+        "properties": { "controller": { "const": "maxbec-delivery-controller" } }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "company": {
+            "type": "object",
+            "properties": { "name": { "const": "// Navigaite" } }
+          }
+        },
+        "required": ["company"]
+      },
+      "then": {
+        "type": "object",
+        "properties": { "controller": { "const": "navigaite-delivery-controller" } }
+      }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": {
+          "company": {
+            "type": "object",
+            "properties": { "name": { "const": "Edilio" } }
+          }
+        },
+        "required": ["company"]
+      },
+      "then": {
+        "type": "object",
+        "properties": { "controller": { "const": "edilio-delivery-controller" } }
+      }
+    }
+  ]
+}

@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/delivery-contract.schema.json",
+  "title": "Flama consumer delivery contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "repository", "paperclip", "profile", "branches", "commands", "changeDetection", "release", "deployment", "secrets", "platform"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["owner", "name", "visibility"],
+      "properties": {
+        "owner": { "enum": ["maxbec", "navigaite", "edilio-app"] },
+        "name": { "type": "string", "minLength": 1 },
+        "visibility": { "enum": ["private", "public"] }
+      }
+    },
+    "paperclip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["company", "projectId", "workspaceId"],
+      "properties": {
+        "company": { "enum": ["Private", "// Navigaite", "Edilio"] },
+        "projectId": { "type": "string", "minLength": 1 },
+        "workspaceId": { "type": "string", "minLength": 1 }
+      }
+    },
+    "profile": { "enum": ["fast", "major"] },
+    "branches": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["default", "stable", "featureTarget"],
+      "properties": {
+        "default": { "enum": ["main", "dev"] },
+        "stable": { "const": "main" },
+        "featureTarget": { "enum": ["main", "dev"] }
+      }
+    },
+    "commands": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["buildable", "affected", "full", "smoke", "health"],
+      "properties": {
+        "buildable": { "const": "./scripts/delivery buildable" },
+        "affected": { "const": "./scripts/delivery affected" },
+        "full": { "const": "./scripts/delivery full" },
+        "smoke": { "const": "./scripts/delivery smoke" },
+        "health": { "const": "./scripts/delivery health" }
+      }
+    },
+    "changeDetection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["failClosed", "broadenOn"],
+      "properties": {
+        "failClosed": { "const": true },
+        "broadenOn": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["shared_packages", "lockfiles", "ci_build_tooling", "authentication", "database_schema", "breaking_change", "uncertain_detection"] },
+          "allOf": [
+            { "contains": { "const": "lockfiles" } },
+            { "contains": { "const": "authentication" } },
+            { "contains": { "const": "database_schema" } },
+            { "contains": { "const": "uncertain_detection" } }
+          ]
+        }
+      }
+    },
+    "release": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["enabled", "strategy", "impactSource", "type"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "strategy": { "const": "release-please" },
+        "impactSource": { "const": "paperclip_task" },
+        "type": { "enum": ["node", "python", "php", "flutter", "go", "simple"] }
+      }
+    },
+    "deployment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deployable", "provider", "manifestPath"],
+      "properties": {
+        "deployable": { "type": "boolean" },
+        "provider": { "enum": ["none", "docker-compose", "vercel-prebuilt", "digitalocean-app", "digitalocean-droplet", "hostinger-vps", "coolify", "render", "custom"] },
+        "manifestPath": { "const": ".deploy/production.yaml" }
+      }
+    },
+    "secrets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "paths", "exceptionsFile"],
+      "anyOf": [
+        { "required": ["projectSlug"], "properties": { "projectSlug": { "type": "string", "minLength": 1 } } },
+        {
+          "$comment": "A project in another organization cannot have its slug read at all; Infisical identifies it by id in its own URLs and in the configuration repositories check in.",
+          "required": ["projectId"],
+          "properties": { "projectId": { "type": "string", "format": "uuid" } }
+        }
+      ],
+      "properties": {
+        "source": { "const": "infisical" },
+        "projectSlug": { "type": "string", "minLength": 1 },
+        "projectId": { "type": "string", "format": "uuid" },
+        "organization": {
+          "$comment": "Infisical organization holding the project. Needed only where a company's repositories span more than one organization, because a project slug alone is then ambiguous.",
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,119}$"
+        },
+        "paths": { "type": "object", "additionalProperties": { "type": "string", "pattern": "^/" } },
+        "exceptionsFile": { "const": ".flama/secret-exceptions.json" }
+      }
+    },
+    "platform": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "version"],
+      "properties": {
+        "repository": { "const": "maxbec/flama-delivery-platform" },
+        "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "profile": { "const": "fast" } }, "required": ["profile"] },
+      "then": { "properties": { "branches": { "type": "object", "properties": { "default": { "const": "main" }, "featureTarget": { "const": "main" } } } } }
+    },
+    {
+      "if": { "properties": { "profile": { "const": "major" } }, "required": ["profile"] },
+      "then": { "properties": { "branches": { "type": "object", "properties": { "default": { "const": "dev" }, "featureTarget": { "const": "dev" } } } } }
+    }
+  ]
+}

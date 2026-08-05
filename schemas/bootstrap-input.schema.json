@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/bootstrap-input.schema.json",
+  "title": "Deterministic consumer repository bootstrap input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "repository",
+    "baseSha",
+    "sourceBranch",
+    "contract",
+    "render"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nameWithOwner",
+        "disposition",
+        "mutationAllowed",
+        "isFork",
+        "isArchived"
+      ],
+      "properties": {
+        "nameWithOwner": {
+          "type": "string",
+          "pattern": "^(maxbec|navigaite|edilio-app)/[^/]+$"
+        },
+        "disposition": {
+          "const": "in_scope"
+        },
+        "mutationAllowed": {
+          "const": true
+        },
+        "isFork": {
+          "const": false
+        },
+        "isArchived": {
+          "const": false
+        }
+      }
+    },
+    "baseSha": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "sourceBranch": {
+      "enum": [
+        "main",
+        "dev"
+      ]
+    },
+    "contract": {
+      "type": "object"
+    },
+    "render": {
+      "type": "object"
+    },
+    "replaceExisting": {
+      "$comment": "Exact generated paths an earlier delivery system owns that this migration is authorized to replace. Any other conflict still fails closed.",
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 20,
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 200
+      }
+    }
+  }
+}

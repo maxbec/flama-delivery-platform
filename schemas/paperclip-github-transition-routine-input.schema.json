@@ -1,0 +1,107 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/paperclip-github-transition-routine-input.schema.json",
+  "title": "Secret-safe Paperclip GitHub-transition routine provisioning input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "company",
+    "controller",
+    "controllerAgentId",
+    "projectId",
+    "infisical",
+    "paperclipSecretStorageException",
+    "mutationAllowed"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "company": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "name": { "enum": ["Private", "// Navigaite", "Edilio"] }
+      }
+    },
+    "controller": {
+      "enum": [
+        "maxbec-delivery-controller",
+        "navigaite-delivery-controller",
+        "edilio-delivery-controller"
+      ]
+    },
+    "controllerAgentId": { "type": "string", "format": "uuid" },
+    "projectId": { "type": "string", "format": "uuid" },
+    "infisical": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceOfTruth", "projectId", "environment", "secretPath", "credentialSource"],
+      "properties": {
+        "sourceOfTruth": { "const": true },
+        "projectId": { "type": "string", "format": "uuid" },
+        "environment": { "type": "string", "pattern": "^[a-z][a-z0-9_-]{0,63}$" },
+        "secretPath": {
+          "type": "string",
+          "pattern": "^/[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)*$",
+          "maxLength": 512
+        },
+        "credentialSource": { "const": "infisical-oidc" }
+      }
+    },
+    "paperclipSecretStorageException": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "destination",
+        "reason",
+        "owner",
+        "scope",
+        "rotationDays",
+        "expiresAt",
+        "reviewAfter",
+        "status"
+      ],
+      "properties": {
+        "key": { "const": "PAPERCLIP_ROUTINE_WEBHOOK_SECRET" },
+        "destination": { "const": "provider_native_secret" },
+        "reason": { "type": "string", "minLength": 20, "maxLength": 1000 },
+        "owner": { "type": "string", "minLength": 1, "maxLength": 120 },
+        "scope": { "const": "provider" },
+        "rotationDays": { "type": "integer", "minimum": 1, "maximum": 365 },
+        "expiresAt": { "type": "string", "format": "date" },
+        "reviewAfter": { "type": "string", "format": "date" },
+        "status": { "const": "approved" }
+      }
+    },
+    "mutationAllowed": { "const": true }
+  },
+  "allOf": [
+    {
+      "if": {
+        "type": "object",
+        "properties": { "company": { "type": "object", "properties": { "name": { "const": "Private" } }, "required": ["name"] } },
+        "required": ["company"]
+      },
+      "then": { "type": "object", "properties": { "controller": { "const": "maxbec-delivery-controller" } } }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": { "company": { "type": "object", "properties": { "name": { "const": "// Navigaite" } }, "required": ["name"] } },
+        "required": ["company"]
+      },
+      "then": { "type": "object", "properties": { "controller": { "const": "navigaite-delivery-controller" } } }
+    },
+    {
+      "if": {
+        "type": "object",
+        "properties": { "company": { "type": "object", "properties": { "name": { "const": "Edilio" } }, "required": ["name"] } },
+        "required": ["company"]
+      },
+      "then": { "type": "object", "properties": { "controller": { "const": "edilio-delivery-controller" } } }
+    }
+  ]
+}

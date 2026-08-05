@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/reconciliation-result.schema.json",
+  "title": "Secret-minimized reconciliation audit result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "status", "controller", "mode", "contractDigest"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "status": { "enum": ["planned", "compliant", "attention", "insufficient_data"] },
+    "controller": { "enum": ["maxbec-delivery-controller", "navigaite-delivery-controller", "edilio-delivery-controller"] },
+    "mode": { "const": "read_only" },
+    "contractDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "evidenceDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  },
+  "oneOf": [
+    {
+      "properties": {
+        "status": { "const": "planned" },
+        "evidenceDigest": false
+      },
+      "required": ["status"]
+    },
+    {
+      "properties": {
+        "status": { "enum": ["compliant", "attention", "insufficient_data"] },
+        "evidenceDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+      },
+      "required": ["status", "evidenceDigest"]
+    }
+  ]
+}

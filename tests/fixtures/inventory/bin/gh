@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+[[ -n "${FLAMA_GH_FIXTURE_DIR:-}" ]] || { echo "FLAMA_GH_FIXTURE_DIR is required" >&2; exit 1; }
+
+if [[ "${1:-}" == "auth" && "${2:-}" == "status" ]]; then
+  exit 0
+fi
+
+if [[ "${1:-}" != "api" ]]; then
+  echo "unexpected mock gh command" >&2
+  exit 1
+fi
+
+if [[ "${2:-}" == "graphql" ]]; then
+  jq '[.[] | {
+    nameWithOwner,
+    databaseId,
+    isFork,
+    isArchived,
+    isPrivate,
+    pushedAt,
+    primaryLanguage: {name: .primaryLanguage},
+    defaultBranchRef: {
+      name: .defaultBranch,
+      target: {
+        oid: .defaultBranchHeadSha,
+        statusCheckRollup: null
+      }
+    }
+  }]' "$FLAMA_GH_FIXTURE_DIR/repositories.json"
+  exit 0
+fi
+
+endpoint=${2:-}
+case "$endpoint" in
+  repos/*/git/trees/*)
+    repo=${endpoint#repos/}
+    repo=${repo%%/git/trees/*}
+    jq -n \
+      --arg repo "$repo" \
+      --slurpfile repositories "$FLAMA_GH_FIXTURE_DIR/repositories.json" '
+      ($repositories[0] | map(select(.nameWithOwner == $repo)) | .[0]) as $record |
+      if $record == null then error("unknown fixture repository") else {
+        truncated: false,
+        tree: [$record.paths[] | {path: .}]
+      } end
+    '
+    ;;
+  *)
+    echo "unexpected mock gh API endpoint" >&2
+    exit 1
+    ;;
+esac

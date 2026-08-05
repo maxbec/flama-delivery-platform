@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "pool": "flama-ci-budget",
+  "targets": {
+    "fast": {
+      "p50WallMinutes": 3,
+      "p95WallMinutes": 6,
+      "runnerMinutesPerMainPr": 8
+    },
+    "major": {
+      "p50WallMinutes": 6,
+      "p95WallMinutes": 12,
+      "runnerMinutesPerPromotion": 20
+    }
+  },
+  "controls": {
+    "cancelSuperseded": true,
+    "duplicatePushAndPullRequestRuns": "deny",
+    "cacheMissChangesCorrectness": false,
+    "mandatoryGateMaySkip": false,
+    "transientRetryLimit": 1,
+    "deterministicRetryLimit": 0,
+    "staggerDependabot": true,
+    "reduceOptionalWorkAtThreshold": true
+  }
+}

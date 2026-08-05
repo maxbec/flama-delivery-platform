@@ -1,0 +1,122 @@
+name: Reusable Policy Gate
+
+on:
+  workflow_call:
+    inputs:
+      base-sha:
+        description: Exact pull-request base SHA
+        required: true
+        type: string
+      head-sha:
+        description: Exact untrusted pull-request head SHA to verify
+        required: true
+        type: string
+      paperclip-app-slug:
+        description: Owner-scoped Delivery Controller GitHub App slug
+        required: true
+        type: string
+      platform-sha:
+        description: Exact platform commit used by generated callers
+        required: true
+        type: string
+      profile:
+        description: Flama branch profile
+        required: true
+        type: string
+
+permissions:
+  checks: read
+  contents: read
+
+concurrency:
+  group: policy-${{ github.repository }}-${{ inputs.head-sha }}
+  cancel-in-progress: true
+
+jobs:
+  policy:
+    name: Flama Policy Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - name: Validate exact SHA input
+        env:
+          FLAMA_BASE_SHA: ${{ inputs.base-sha }}
+          FLAMA_EVENT_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          FLAMA_EVENT_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          FLAMA_HEAD_SHA: ${{ inputs.head-sha }}
+          FLAMA_PLATFORM_SHA: ${{ inputs.platform-sha }}
+        run: |
+          [[ "$FLAMA_BASE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$FLAMA_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$FLAMA_PLATFORM_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$FLAMA_BASE_SHA" == "$FLAMA_EVENT_BASE_SHA" ]]
+          [[ "$FLAMA_HEAD_SHA" == "$FLAMA_EVENT_HEAD_SHA" ]]
+
+      - name: Check out exact platform policy
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: maxbec/flama-delivery-platform
+          ref: ${{ inputs.platform-sha }}
+          path: platform
+          persist-credentials: false
+
+      - name: Check out exact consumer source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.head-sha }}
+          fetch-depth: 0
+          path: consumer
+          persist-credentials: false
+
+      - name: Classify deployment-only changes
+        id: change
+        env:
+          FLAMA_BASE_SHA: ${{ inputs.base-sha }}
+          FLAMA_HEAD_SHA: ${{ inputs.head-sha }}
+        run: |
+          mapfile -d '' files < <(git -C consumer diff --name-only --no-renames -z "$FLAMA_BASE_SHA" "$FLAMA_HEAD_SHA")
+          if [[ "${#files[@]}" -eq 1 && "${files[0]}" == ".deploy/production.yaml" ]]; then
+            echo 'mode=deployment' >> "$GITHUB_OUTPUT"
+          else
+            echo 'mode=code' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Validate delivery contract and generated trust boundary
+        env:
+          FLAMA_APP_SLUG: ${{ inputs.paperclip-app-slug }}
+          FLAMA_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          FLAMA_PLATFORM_SHA: ${{ inputs.platform-sha }}
+          FLAMA_PROFILE: ${{ inputs.profile }}
+        run: |
+          node platform/scripts/consumer-policy-gate.mjs \
+            consumer \
+            "$FLAMA_BASE_REF" \
+            "$FLAMA_PROFILE" \
+            "$FLAMA_PLATFORM_SHA" \
+            "$FLAMA_APP_SLUG" >/dev/null
+
+      - name: Verify exact app-authored Paperclip Preflight check
+        if: ${{ steps.change.outputs.mode == 'code' }}
+        env:
+          FLAMA_APP_SLUG: ${{ inputs.paperclip-app-slug }}
+          FLAMA_HEAD_SHA: ${{ inputs.head-sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          response=$(mktemp "$RUNNER_TEMP/flama-checks-XXXXXX.json")
+          trap 'rm -f "$response"' EXIT
+          gh api \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "/repos/$GITHUB_REPOSITORY/commits/$FLAMA_HEAD_SHA/check-runs?check_name=Paperclip%20Preflight&filter=all&per_page=100" \
+            >"$response" 2>/dev/null
+          jq -e \
+            --arg app "$FLAMA_APP_SLUG" \
+            --arg sha "$FLAMA_HEAD_SHA" \
+            '[.check_runs[] | select(
+              .name == "Paperclip Preflight" and
+              .head_sha == $sha and
+              .status == "completed" and
+              .conclusion == "success" and
+              .app.slug == $app and
+              (.external_id | test("^paperclip-preflight:sha256:[0-9a-f]{64}$"))
+            )] | length == 1' "$response" >/dev/null

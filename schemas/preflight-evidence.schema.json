@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/preflight-evidence.schema.json",
+  "title": "Controller-signed Paperclip preflight evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "repository", "headSha", "baseSha", "startedAt", "finishedAt", "runner", "commands", "releaseImpact", "signature"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "repository": { "type": "string", "pattern": "^[^/]+/[^/]+$" },
+    "headSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "baseSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "finishedAt": { "type": "string", "format": "date-time" },
+    "runner": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["class", "id", "controller"],
+      "properties": {
+        "class": { "const": "paperclip_ephemeral" },
+        "id": { "type": "string", "minLength": 1 },
+        "controller": { "type": "string", "pattern": "^(maxbec|navigaite|edilio)-delivery-controller$" }
+      }
+    },
+    "commands": {
+      "type": "array",
+      "minItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["command", "status", "exitCode", "evidenceDigest"],
+        "properties": {
+          "command": { "enum": ["./scripts/delivery buildable", "./scripts/delivery affected"] },
+          "status": { "const": "passed" },
+          "exitCode": { "const": 0 },
+          "evidenceDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+        }
+      },
+      "allOf": [
+        { "contains": { "type": "object", "properties": { "command": { "const": "./scripts/delivery buildable" } }, "required": ["command"] } },
+        { "contains": { "type": "object", "properties": { "command": { "const": "./scripts/delivery affected" } }, "required": ["command"] } }
+      ]
+    },
+    "releaseImpact": { "enum": ["none", "patch", "minor", "major"] },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issuer", "subject", "algorithm", "payloadDigest", "signedAt"],
+      "properties": {
+        "issuer": { "type": "string", "minLength": 1 },
+        "subject": { "type": "string", "minLength": 1 },
+        "algorithm": { "enum": ["sigstore-keyless", "github-app"] },
+        "payloadDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "signedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

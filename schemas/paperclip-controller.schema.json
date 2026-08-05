@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/paperclip-controller.schema.json",
+  "title": "Flama Paperclip controller contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "name", "mode", "scope", "authority", "runtime"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "name": { "enum": ["maxbec-delivery-controller", "navigaite-delivery-controller", "edilio-delivery-controller", "flama-governance-controller"] },
+    "mode": { "enum": ["company-delivery", "global-governance"] },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["companies", "githubOwners"],
+      "properties": {
+        "companies": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["Private", "// Navigaite", "Edilio"] } },
+        "githubOwners": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "enum": ["maxbec", "navigaite", "edilio-app"] } }
+      }
+    },
+    "authority": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["read", "write", "deny"],
+      "properties": {
+        "read": { "type": "array", "uniqueItems": true, "items": { "enum": ["paperclip_company", "paperclip_attestation", "github_metadata", "delivery_evidence", "ci_usage"] } },
+        "write": { "type": "array", "uniqueItems": true, "items": { "enum": ["paperclip_company_transitions", "github_preflight_checks", "github_pull_requests"] } },
+        "deny": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "enum": ["other_companies", "git_push", "git_merge", "github_release", "production_approval", "production_deploy", "secret_values"] },
+          "allOf": [
+            { "contains": { "const": "git_push" } },
+            { "contains": { "const": "git_merge" } },
+            { "contains": { "const": "production_approval" } },
+            { "contains": { "const": "production_deploy" } },
+            { "contains": { "const": "secret_values" } }
+          ]
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deterministic", "maxImplementationConcurrency", "credentialSource"],
+      "properties": {
+        "deterministic": { "const": true },
+        "maxImplementationConcurrency": { "type": "integer", "minimum": 0, "maximum": 2 },
+        "credentialSource": { "enum": ["infisical-oidc", "paperclip-run+infisical-oidc"] }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "name": { "const": "maxbec-delivery-controller" } }, "required": ["name"] },
+      "then": { "properties": { "mode": { "const": "company-delivery" }, "scope": { "type": "object", "properties": { "companies": { "const": ["Private"] }, "githubOwners": { "const": ["maxbec"] } } } } }
+    },
+    {
+      "if": { "properties": { "name": { "const": "navigaite-delivery-controller" } }, "required": ["name"] },
+      "then": { "properties": { "mode": { "const": "company-delivery" }, "scope": { "type": "object", "properties": { "companies": { "const": ["// Navigaite"] }, "githubOwners": { "const": ["navigaite"] } } } } }
+    },
+    {
+      "if": { "properties": { "name": { "const": "edilio-delivery-controller" } }, "required": ["name"] },
+      "then": { "properties": { "mode": { "const": "company-delivery" }, "scope": { "type": "object", "properties": { "companies": { "const": ["Edilio"] }, "githubOwners": { "const": ["edilio-app"] } } } } }
+    },
+    {
+      "if": { "properties": { "name": { "const": "flama-governance-controller" } }, "required": ["name"] },
+      "then": {
+        "properties": {
+          "mode": { "const": "global-governance" },
+          "scope": { "type": "object", "properties": { "companies": { "const": ["Private", "// Navigaite", "Edilio"] }, "githubOwners": { "const": ["maxbec", "navigaite", "edilio-app"] } } },
+          "authority": { "type": "object", "properties": { "write": { "type": "array", "maxItems": 0 } } },
+          "runtime": { "type": "object", "properties": { "maxImplementationConcurrency": { "const": 0 }, "credentialSource": { "const": "paperclip-run+infisical-oidc" } } }
+        }
+      }
+    }
+  ]
+}

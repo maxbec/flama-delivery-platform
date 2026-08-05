@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/paperclip-binding-input.schema.json",
+  "title": "Paperclip project/workspace repository binding input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "company", "controller", "repository", "project", "workspace", "mutationAllowed"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "company": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "name": { "enum": ["Private", "// Navigaite", "Edilio"] }
+      }
+    },
+    "controller": { "enum": ["maxbec-delivery-controller", "navigaite-delivery-controller", "edilio-delivery-controller"] },
+    "repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nameWithOwner", "githubRepositoryId", "profile", "defaultBranch", "isFork", "isArchived", "inventoryDigest", "inventoryVerifiedAt"],
+      "properties": {
+        "nameWithOwner": { "type": "string", "pattern": "^(maxbec|navigaite|edilio-app)/[A-Za-z0-9._-]+$" },
+        "githubRepositoryId": { "type": "integer", "minimum": 1 },
+        "profile": { "enum": ["fast", "major"] },
+        "defaultBranch": { "type": "string", "minLength": 1, "maxLength": 255 },
+        "isFork": { "const": false },
+        "isArchived": { "const": false },
+        "inventoryDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+        "inventoryVerifiedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": { "id": { "type": "string", "format": "uuid" } }
+    },
+    "workspace": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": { "id": { "type": "string", "format": "uuid" } }
+    },
+    "mutationAllowed": { "const": true }
+  },
+  "allOf": [
+    {
+      "if": { "type": "object", "properties": { "company": { "type": "object", "properties": { "name": { "const": "Private" } }, "required": ["name"] } }, "required": ["company"] },
+      "then": { "type": "object", "properties": { "controller": { "const": "maxbec-delivery-controller" }, "repository": { "type": "object", "properties": { "nameWithOwner": { "type": "string", "pattern": "^maxbec/" } } } } }
+    },
+    {
+      "if": { "type": "object", "properties": { "company": { "type": "object", "properties": { "name": { "const": "// Navigaite" } }, "required": ["name"] } }, "required": ["company"] },
+      "then": { "type": "object", "properties": { "controller": { "const": "navigaite-delivery-controller" }, "repository": { "type": "object", "properties": { "nameWithOwner": { "type": "string", "pattern": "^navigaite/" } } } } }
+    },
+    {
+      "if": { "type": "object", "properties": { "company": { "type": "object", "properties": { "name": { "const": "Edilio" } }, "required": ["name"] } }, "required": ["company"] },
+      "then": { "type": "object", "properties": { "controller": { "const": "edilio-delivery-controller" }, "repository": { "type": "object", "properties": { "nameWithOwner": { "type": "string", "pattern": "^edilio-app/" } } } } }
+    }
+  ]
+}

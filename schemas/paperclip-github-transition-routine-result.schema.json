@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/paperclip-github-transition-routine-result.schema.json",
+  "title": "Secret-minimized Paperclip GitHub-transition routine provisioning result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "status",
+    "controller",
+    "routineKey",
+    "routineDisposition",
+    "triggerDisposition",
+    "initialStatus",
+    "trigger",
+    "infisicalSynced",
+    "contractDigest",
+    "exceptionDigest"
+  ],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "status": { "enum": ["planned", "applied"] },
+    "controller": {
+      "enum": [
+        "maxbec-delivery-controller",
+        "navigaite-delivery-controller",
+        "edilio-delivery-controller"
+      ]
+    },
+    "routineKey": { "const": "flama-github-transition-v1" },
+    "routineDisposition": { "enum": ["planned", "created", "reused"] },
+    "triggerDisposition": { "enum": ["planned", "created", "reused", "rotated"] },
+    "initialStatus": { "const": "paused" },
+    "trigger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "enabled", "signingMode", "replayWindowSeconds"],
+      "properties": {
+        "kind": { "const": "webhook" },
+        "enabled": { "const": true },
+        "signingMode": { "const": "hmac_sha256" },
+        "replayWindowSeconds": { "const": 300 }
+      }
+    },
+    "infisicalSynced": { "type": "boolean" },
+    "contractDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "exceptionDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  },
+  "allOf": [
+    {
+      "if": { "type": "object", "properties": { "status": { "const": "planned" } }, "required": ["status"] },
+      "then": {
+        "type": "object",
+        "properties": {
+          "routineDisposition": { "const": "planned" },
+          "triggerDisposition": { "const": "planned" },
+          "infisicalSynced": { "const": false }
+        }
+      }
+    },
+    {
+      "if": { "type": "object", "properties": { "status": { "const": "applied" } }, "required": ["status"] },
+      "then": {
+        "type": "object",
+        "properties": {
+          "routineDisposition": { "enum": ["created", "reused"] },
+          "triggerDisposition": { "enum": ["created", "reused", "rotated"] },
+          "infisicalSynced": { "const": true }
+        }
+      }
+    }
+  ]
+}

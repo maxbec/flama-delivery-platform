@@ -1,0 +1,201 @@
+{
+  "schemaVersion": 1,
+  "window": {
+    "from": "2026-07-01T00:00:00.000Z",
+    "to": "2026-07-30T00:00:00.000Z"
+  },
+  "status": "compliant",
+  "scopes": [
+    {
+      "key": "maxbec",
+      "status": "compliant",
+      "paperclip": {
+        "company": "compliant",
+        "controller": "compliant",
+        "lifecycles": "compliant"
+      },
+      "delivery": {
+        "status": "compliant",
+        "fast": {
+          "status": "compliant",
+          "samples": 4,
+          "wallSeconds": {
+            "p50": 120,
+            "p95": 200
+          },
+          "queueSeconds": {
+            "p50": 5,
+            "p95": 9
+          },
+          "runnerSeconds": {
+            "p50": 150,
+            "p95": 300
+          },
+          "retryRuns": 1
+        },
+        "major": {
+          "status": "insufficient_data",
+          "samples": 0,
+          "wallSeconds": {
+            "p50": 120,
+            "p95": 200
+          },
+          "queueSeconds": {
+            "p50": 5,
+            "p95": 9
+          },
+          "runnerSeconds": {
+            "p50": 150,
+            "p95": 300
+          },
+          "retryRuns": 1
+        },
+        "cacheHitRate": {
+          "value": 0.75,
+          "coverage": "reported"
+        }
+      }
+    },
+    {
+      "key": "navigaite",
+      "status": "compliant",
+      "paperclip": {
+        "company": "compliant",
+        "controller": "compliant",
+        "lifecycles": "compliant"
+      },
+      "delivery": {
+        "status": "compliant",
+        "fast": {
+          "status": "compliant",
+          "samples": 4,
+          "wallSeconds": {
+            "p50": 120,
+            "p95": 200
+          },
+          "queueSeconds": {
+            "p50": 5,
+            "p95": 9
+          },
+          "runnerSeconds": {
+            "p50": 150,
+            "p95": 300
+          },
+          "retryRuns": 1
+        },
+        "major": {
+          "status": "insufficient_data",
+          "samples": 0,
+          "wallSeconds": {
+            "p50": 120,
+            "p95": 200
+          },
+          "queueSeconds": {
+            "p50": 5,
+            "p95": 9
+          },
+          "runnerSeconds": {
+            "p50": 150,
+            "p95": 300
+          },
+          "retryRuns": 1
+        },
+        "cacheHitRate": {
+          "value": 0.75,
+          "coverage": "reported"
+        }
+      }
+    },
+    {
+      "key": "edilio",
+      "status": "compliant",
+      "paperclip": {
+        "company": "compliant",
+        "controller": "compliant",
+        "lifecycles": "compliant"
+      },
+      "delivery": {
+        "status": "compliant",
+        "fast": {
+          "status": "compliant",
+          "samples": 4,
+          "wallSeconds": {
+            "p50": 120,
+            "p95": 200
+          },
+          "queueSeconds": {
+            "p50": 5,
+            "p95": 9
+          },
+          "runnerSeconds": {
+            "p50": 150,
+            "p95": 300
+          },
+          "retryRuns": 1
+        },
+        "major": {
+          "status": "insufficient_data",
+          "samples": 0,
+          "wallSeconds": {
+            "p50": 120,
+            "p95": 200
+          },
+          "queueSeconds": {
+            "p50": 5,
+            "p95": 9
+          },
+          "runnerSeconds": {
+            "p50": 150,
+            "p95": 300
+          },
+          "retryRuns": 1
+        },
+        "cacheHitRate": {
+          "value": 0.75,
+          "coverage": "reported"
+        }
+      }
+    }
+  ],
+  "pooled": {
+    "status": "compliant",
+    "fast": {
+      "status": "compliant",
+      "samples": 4,
+      "wallSeconds": {
+        "p50": 120,
+        "p95": 200
+      },
+      "queueSeconds": {
+        "p50": 5,
+        "p95": 9
+      },
+      "runnerSeconds": {
+        "p50": 150,
+        "p95": 300
+      },
+      "retryRuns": 1
+    },
+    "major": {
+      "status": "insufficient_data",
+      "samples": 0,
+      "wallSeconds": {
+        "p50": 120,
+        "p95": 200
+      },
+      "queueSeconds": {
+        "p50": 5,
+        "p95": 9
+      },
+      "runnerSeconds": {
+        "p50": 150,
+        "p95": 300
+      },
+      "retryRuns": 1
+    },
+    "cacheHitRate": {
+      "value": 0.75,
+      "coverage": "reported"
+    }
+  }
+}

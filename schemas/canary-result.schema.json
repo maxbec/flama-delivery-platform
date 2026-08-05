@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/canary-result.schema.json",
+  "title": "Identifier-free canary coverage and evidence result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "status", "coverage", "proofs", "findingCount", "findings", "planDigest"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "status": { "enum": ["planned", "passed", "failed"] },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fast", "major", "private", "public", "maxbec", "navigaite", "edilio", "legacyStack", "libraryRelease", "dockerDeployment", "managedPlatformDeployment"],
+      "properties": {
+        "fast": { "type": "boolean" },
+        "major": { "type": "boolean" },
+        "private": { "type": "boolean" },
+        "public": { "type": "boolean" },
+        "maxbec": { "type": "boolean" },
+        "navigaite": { "type": "boolean" },
+        "edilio": { "type": "boolean" },
+        "legacyStack": { "type": "boolean" },
+        "libraryRelease": { "type": "boolean" },
+        "dockerDeployment": { "type": "boolean" },
+        "managedPlatformDeployment": { "type": "boolean" }
+      }
+    },
+    "proofs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preflight", "autoMerge", "release", "deploymentApproval", "secretIsolation", "infisicalOidc", "infisicalSync", "rollback", "eventReplay", "pooledCost"],
+      "properties": {
+        "preflight": { "$ref": "#/$defs/resultProofStatus" },
+        "autoMerge": { "$ref": "#/$defs/resultProofStatus" },
+        "release": { "$ref": "#/$defs/resultProofStatus" },
+        "deploymentApproval": { "$ref": "#/$defs/resultProofStatus" },
+        "secretIsolation": { "$ref": "#/$defs/resultProofStatus" },
+        "infisicalOidc": { "$ref": "#/$defs/resultProofStatus" },
+        "infisicalSync": { "$ref": "#/$defs/resultProofStatus" },
+        "rollback": { "$ref": "#/$defs/resultProofStatus" },
+        "eventReplay": { "$ref": "#/$defs/resultProofStatus" },
+        "pooledCost": { "$ref": "#/$defs/resultProofStatus" }
+      }
+    },
+    "findingCount": { "type": "integer", "minimum": 0 },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["code", "location"],
+        "properties": {
+          "code": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+          "location": { "enum": ["candidate", "coverage", "evidence", "input"] }
+        }
+      }
+    },
+    "planDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "evidenceDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "planned" } }, "required": ["status"] },
+      "then": { "properties": { "evidenceDigest": false } }
+    },
+    {
+      "if": { "properties": { "status": { "const": "passed" } }, "required": ["status"] },
+      "then": {
+        "properties": { "evidenceDigest": { "$ref": "#/$defs/digest" } },
+        "required": ["evidenceDigest"]
+      }
+    }
+  ],
+  "$defs": {
+    "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "resultProofStatus": { "enum": ["planned", "passed", "failed"] }
+  }
+}

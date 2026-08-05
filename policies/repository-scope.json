@@ -1,0 +1,54 @@
+{
+  "$schema": "../schemas/repository-scope-policy.schema.json",
+  "version": 1,
+  "owners": {
+    "maxbec": {
+      "paperclipCompany": "Private",
+      "expected": {
+        "inScope": 13,
+        "private": 10,
+        "public": 3,
+        "forks": 2,
+        "archived": 0
+      }
+    },
+    "navigaite": {
+      "paperclipCompany": "// Navigaite",
+      "expected": {
+        "inScope": 11,
+        "private": 9,
+        "public": 2,
+        "forks": 0,
+        "archived": 3
+      }
+    },
+    "edilio-app": {
+      "paperclipCompany": "Edilio",
+      "expected": {
+        "inScope": 2,
+        "private": 1,
+        "public": 1,
+        "forks": 0,
+        "archived": 0
+      }
+    }
+  },
+  "platformRepositories": [
+    "maxbec/flama-delivery-platform"
+  ],
+  "inclusion": {
+    "owned": true,
+    "fork": false,
+    "archived": false
+  },
+  "mutationGuard": {
+    "forks": "deny",
+    "archived": "deny",
+    "unknownOwners": "deny",
+    "inventoryOnlyExclusions": true
+  },
+  "profileOverrides": {
+    "maxbec/platzl-finder": "fast",
+    "maxbec/subscription-manager": "fast"
+  }
+}

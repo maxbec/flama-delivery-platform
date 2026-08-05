@@ -1,0 +1,139 @@
+[
+  {
+    "nameWithOwner": "alpha/platform",
+    "isFork": false,
+    "isArchived": false,
+    "isPrivate": false,
+    "defaultBranch": "main",
+    "defaultBranchHeadSha": "0000000000000000000000000000000000000000",
+    "primaryLanguage": "Shell",
+    "pushedAt": "2026-07-28T09:00:00Z",
+    "paths": [
+      "scripts/phase0-inventory.sh"
+    ],
+    "latestWorkflow": null,
+    "databaseId": 4101
+  },
+  {
+    "nameWithOwner": "alpha/fast-app",
+    "isFork": false,
+    "isArchived": false,
+    "isPrivate": true,
+    "defaultBranch": "main",
+    "defaultBranchHeadSha": "1111111111111111111111111111111111111111",
+    "primaryLanguage": "TypeScript",
+    "pushedAt": "2026-07-28T10:00:00Z",
+    "paths": [
+      "package.json",
+      "Dockerfile",
+      ".github/workflows/ci.yml"
+    ],
+    "latestWorkflow": {
+      "name": "CI",
+      "status": "completed",
+      "conclusion": "success",
+      "headSha": "1111111111111111111111111111111111111111",
+      "updatedAt": "2026-07-28T10:02:00Z"
+    },
+    "databaseId": 4102
+  },
+  {
+    "nameWithOwner": "alpha/major-app",
+    "isFork": false,
+    "isArchived": false,
+    "isPrivate": false,
+    "defaultBranch": "dev",
+    "defaultBranchHeadSha": "2222222222222222222222222222222222222222",
+    "primaryLanguage": "Python",
+    "pushedAt": "2026-07-28T11:00:00Z",
+    "paths": [
+      "pyproject.toml",
+      "vercel.json"
+    ],
+    "latestWorkflow": null,
+    "databaseId": 4103
+  },
+  {
+    "nameWithOwner": "alpha/upstream-fork",
+    "isFork": true,
+    "isArchived": false,
+    "isPrivate": false,
+    "defaultBranch": "main",
+    "defaultBranchHeadSha": "3333333333333333333333333333333333333333",
+    "primaryLanguage": "Go",
+    "pushedAt": "2026-07-20T10:00:00Z",
+    "paths": [
+      "go.mod"
+    ],
+    "latestWorkflow": null,
+    "databaseId": 4104
+  },
+  {
+    "nameWithOwner": "alpha/retired",
+    "isFork": false,
+    "isArchived": true,
+    "isPrivate": true,
+    "defaultBranch": "master",
+    "defaultBranchHeadSha": "4444444444444444444444444444444444444444",
+    "primaryLanguage": "PHP",
+    "pushedAt": "2020-01-01T10:00:00Z",
+    "paths": [
+      "composer.json"
+    ],
+    "latestWorkflow": null,
+    "databaseId": 4105
+  },
+  {
+    "nameWithOwner": "alpha/addon-store",
+    "isFork": false,
+    "isArchived": false,
+    "isPrivate": false,
+    "defaultBranch": "main",
+    "defaultBranchHeadSha": "5555555555555555555555555555555555555555",
+    "primaryLanguage": "Dockerfile",
+    "pushedAt": "2026-07-28T13:00:00Z",
+    "paths": [
+      "repository.json",
+      "widget/config.json",
+      "widget/Dockerfile",
+      "widget/run.sh"
+    ],
+    "latestWorkflow": null,
+    "databaseId": 4105
+  },
+  {
+    "nameWithOwner": "alpha/compose-only",
+    "isFork": false,
+    "isArchived": false,
+    "isPrivate": true,
+    "defaultBranch": "main",
+    "defaultBranchHeadSha": "6666666666666666666666666666666666666666",
+    "primaryLanguage": "Python",
+    "pushedAt": "2026-07-28T14:00:00Z",
+    "paths": [
+      "pyproject.toml",
+      "docker-compose.yml",
+      "src/main.py"
+    ],
+    "latestWorkflow": null,
+    "databaseId": 4106
+  },
+  {
+    "nameWithOwner": "alpha/suffixed-dockerfiles",
+    "isFork": false,
+    "isArchived": false,
+    "isPrivate": true,
+    "defaultBranch": "main",
+    "defaultBranchHeadSha": "7777777777777777777777777777777777777777",
+    "primaryLanguage": "TypeScript",
+    "pushedAt": "2026-07-28T15:00:00Z",
+    "paths": [
+      "package.json",
+      "Dockerfile-webapp",
+      "Dockerfile-service",
+      "docker-compose.yml"
+    ],
+    "latestWorkflow": null,
+    "databaseId": 4107
+  }
+]

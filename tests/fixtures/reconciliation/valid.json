@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "company": {
+    "id": "10000000-0000-4000-8000-000000000001",
+    "name": "Private"
+  },
+  "controller": "maxbec-delivery-controller",
+  "controls": {
+    "queueLagSeconds": 900,
+    "staleClaimSeconds": 300,
+    "authorizationExpiryWarningSeconds": 300,
+    "lookbackSeconds": 172800,
+    "maximumAuthorizationRecords": 500
+  },
+  "mutationAllowed": false
+}

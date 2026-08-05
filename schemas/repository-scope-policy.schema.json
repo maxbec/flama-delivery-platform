@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/repository-scope-policy.schema.json",
+  "title": "Flama repository scope policy",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "owners", "platformRepositories", "inclusion", "mutationGuard"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "version": { "const": 1 },
+    "owners": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["paperclipCompany", "expected"],
+        "properties": {
+          "paperclipCompany": { "type": "string", "minLength": 1 },
+          "expected": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["inScope", "private", "public", "forks", "archived"],
+            "properties": {
+              "inScope": { "type": "integer", "minimum": 0 },
+              "private": { "type": "integer", "minimum": 0 },
+              "public": { "type": "integer", "minimum": 0 },
+              "forks": { "type": "integer", "minimum": 0 },
+              "archived": { "type": "integer", "minimum": 0 }
+            }
+          }
+        }
+      }
+    },
+    "platformRepositories": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+      }
+    },
+    "inclusion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["owned", "fork", "archived"],
+      "properties": {
+        "owned": { "const": true },
+        "fork": { "const": false },
+        "archived": { "const": false }
+      }
+    },
+    "mutationGuard": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["forks", "archived", "unknownOwners", "inventoryOnlyExclusions"],
+      "properties": {
+        "forks": { "const": "deny" },
+        "archived": { "const": "deny" },
+        "unknownOwners": { "const": "deny" },
+        "inventoryOnlyExclusions": { "const": true }
+      }
+    }
+  }
+}

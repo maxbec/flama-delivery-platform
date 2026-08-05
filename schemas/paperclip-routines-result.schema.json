@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/paperclip-routines-result.schema.json",
+  "title": "Secret-minimized Paperclip managed-routine provisioning result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "status", "controller", "routineKey", "disposition", "initialStatus", "trigger", "contractDigest"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "status": { "enum": ["planned", "applied"] },
+    "controller": { "enum": ["maxbec-delivery-controller", "navigaite-delivery-controller", "edilio-delivery-controller"] },
+    "routineKey": { "const": "flama-nightly-reconciliation-v1" },
+    "disposition": { "enum": ["planned", "created", "reused"] },
+    "initialStatus": { "const": "paused" },
+    "trigger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "enabled", "cronExpression", "timezone"],
+      "properties": {
+        "kind": { "const": "schedule" },
+        "enabled": { "const": true },
+        "cronExpression": { "enum": ["17 1 * * *", "31 1 * * *", "47 1 * * *"] },
+        "timezone": { "const": "Europe/Berlin" }
+      }
+    },
+    "contractDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "planned" } }, "required": ["status"] },
+      "then": { "properties": { "disposition": { "const": "planned" } } }
+    },
+    {
+      "if": { "properties": { "status": { "const": "applied" } }, "required": ["status"] },
+      "then": { "properties": { "disposition": { "enum": ["created", "reused"] } } }
+    }
+  ]
+}

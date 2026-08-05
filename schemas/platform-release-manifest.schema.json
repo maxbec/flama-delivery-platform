@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/platform-release-manifest.schema.json",
+  "title": "Deterministic Flama platform release artifact manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "version", "commitSha", "createdAt", "nodeMajor", "cli", "bridge", "controller", "governance", "sbom", "files"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+    "commitSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "createdAt": { "type": "string", "format": "date-time" },
+    "nodeMajor": { "const": 26 },
+    "cli": { "const": "bin/flama-delivery-ctl.js" },
+    "bridge": { "const": "bin/bridge/index.js" },
+    "controller": { "const": "bin/controller/index.js" },
+    "governance": { "const": "bin/governance/index.js" },
+    "sbom": { "type": "string", "pattern": "^flama-delivery-platform-v[0-9]+\\.[0-9]+\\.[0-9]+\\.sbom\\.spdx\\.json$" },
+    "files": {
+      "type": "array",
+      "minItems": 10,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "digest"],
+        "properties": {
+          "path": { "type": "string", "minLength": 1, "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$" },
+          "digest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/failure-decision.schema.json",
+  "title": "Deterministic delivery failure response decision",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "retry", "retryDelaySeconds", "followUp", "incident", "releasePath", "notifyOwner", "rotateCredential"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "retry": { "enum": ["allowed", "denied"] },
+    "retryDelaySeconds": { "type": ["integer", "null"], "minimum": 5, "maximum": 35 },
+    "followUp": { "enum": ["none", "repair_task", "stabilization_task", "security_incident"] },
+    "incident": { "enum": ["none", "opened", "deduplicated"] },
+    "releasePath": { "enum": ["open", "paused"] },
+    "notifyOwner": { "type": "boolean" },
+    "rotateCredential": { "type": "boolean" }
+  },
+  "allOf": [
+    {
+      "$comment": "A denied retry carries no delay, and an allowed retry always carries one.",
+      "if": { "properties": { "retry": { "const": "denied" } }, "required": ["retry"] },
+      "then": { "properties": { "retryDelaySeconds": { "type": "null" } } },
+      "else": { "properties": { "retryDelaySeconds": { "type": "integer" } } }
+    },
+    {
+      "$comment": "An incident always pauses the release path (plan section 20).",
+      "if": { "properties": { "incident": { "enum": ["opened", "deduplicated"] } }, "required": ["incident"] },
+      "then": { "properties": { "releasePath": { "const": "paused" } } }
+    },
+    {
+      "$comment": "A confirmed secret exposure fails closed: rotate, open a security incident, and never retry.",
+      "if": { "properties": { "followUp": { "const": "security_incident" } }, "required": ["followUp"] },
+      "then": {
+        "properties": {
+          "rotateCredential": { "const": true },
+          "retry": { "const": "denied" },
+          "releasePath": { "const": "paused" }
+        }
+      }
+    }
+  ]
+}

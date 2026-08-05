@@ -1,0 +1,9 @@
+{
+  "name": "@flama/delivery-ctl",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "flama-delivery-ctl": "../../dist/packages/delivery-ctl/src/main.js"
+  }
+}

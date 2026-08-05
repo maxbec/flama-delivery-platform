@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/promotion-result.schema.json",
+  "title": "Secret-minimized Major profile promotion result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "status", "profile", "sourceSha", "targetSha", "integrationEvidenceDigest", "check", "promotion"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "status": { "enum": ["planned", "published"] },
+    "profile": { "const": "major" },
+    "sourceSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "targetSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "integrationEvidenceDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "externalId", "status", "conclusion"],
+      "properties": {
+        "name": { "const": "Paperclip Integration Smoke" },
+        "externalId": { "type": "string", "pattern": "^paperclip-integration:sha256:[0-9a-f]{64}$" },
+        "status": { "const": "completed" },
+        "conclusion": { "const": "success" }
+      }
+    },
+    "promotion": { "type": "object" }
+  },
+  "oneOf": [
+    {
+      "required": ["status", "promotion"],
+      "properties": {
+        "status": { "const": "planned" },
+        "promotion": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sourceBranch", "targetBranch", "action"],
+          "properties": {
+            "sourceBranch": { "const": "dev" },
+            "targetBranch": { "const": "main" },
+            "action": { "const": "create_or_reuse" }
+          }
+        }
+      }
+    },
+    {
+      "required": ["status", "promotion"],
+      "properties": {
+        "status": { "const": "published" },
+        "promotion": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sourceBranch", "targetBranch", "action", "pullRequestNumber"],
+          "properties": {
+            "sourceBranch": { "const": "dev" },
+            "targetBranch": { "const": "main" },
+            "action": { "enum": ["created", "reused"] },
+            "pullRequestNumber": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    }
+  ]
+}

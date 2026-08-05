@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/paperclip-controllers-result.schema.json",
+  "title": "Secret-minimized Paperclip delivery-controller provisioning result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "status", "controller", "disposition", "initialStatus", "budgetMonthlyCents", "contractDigest"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "status": { "enum": ["planned", "applied"] },
+    "controller": { "enum": ["maxbec-delivery-controller", "navigaite-delivery-controller", "edilio-delivery-controller"] },
+    "disposition": { "enum": ["planned", "created", "migrated", "reused"] },
+    "initialStatus": { "const": "paused" },
+    "budgetMonthlyCents": { "const": 0 },
+    "contractDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+  },
+  "allOf": [
+    {
+      "if": { "type": "object", "properties": { "status": { "const": "planned" } }, "required": ["status"] },
+      "then": { "type": "object", "properties": { "disposition": { "const": "planned" } } }
+    },
+    {
+      "if": { "type": "object", "properties": { "status": { "const": "applied" } }, "required": ["status"] },
+      "then": { "type": "object", "properties": { "disposition": { "enum": ["created", "migrated", "reused"] } } }
+    }
+  ]
+}

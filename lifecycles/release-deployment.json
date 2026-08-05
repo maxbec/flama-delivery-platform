@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "release-deployment",
+  "initialState": "Collecting Changes",
+  "terminalStates": ["Closed"],
+  "states": ["Collecting Changes", "Production Verification", "Released", "Deployment PR Open", "Awaiting Owner Approval", "Deploying", "Verified", "Closed"],
+  "transitions": [
+    { "from": "Collecting Changes", "to": "Production Verification", "trigger": "controller_signed", "authority": "delivery-controller", "evidence": ["release_case", "release_impact", "source_sha"] },
+    { "from": "Production Verification", "to": "Released", "trigger": "github_signed", "authority": "github", "evidence": ["release_id", "immutable_tag", "artifact_digest", "sbom_digest", "attestation"] },
+    { "from": "Released", "to": "Deployment PR Open", "trigger": "github_signed", "authority": "github", "evidence": ["deployment_pr", "manifest_only_diff", "release_digest"] },
+    { "from": "Deployment PR Open", "to": "Awaiting Owner Approval", "trigger": "controller_signed", "authority": "delivery-controller", "evidence": ["deployment_pr_audit", "head_sha"] },
+    { "from": "Awaiting Owner Approval", "to": "Deploying", "trigger": "owner_approval", "authority": "max", "evidence": ["max_approval", "approved_head_sha", "merge_sha"] },
+    { "from": "Deploying", "to": "Verified", "trigger": "deployment_verification", "authority": "deploy-workflow", "evidence": ["deployed_digest", "health_result", "version_result", "smoke_result", "soak_result"] },
+    { "from": "Deploying", "to": "Closed", "trigger": "deployment_rollback", "authority": "deploy-workflow", "evidence": ["single_rollback", "incident_case", "rollback_result"] },
+    { "from": "Verified", "to": "Closed", "trigger": "controller_signed", "authority": "delivery-controller", "evidence": ["reconciliation", "deployment_url", "release_case"] }
+  ]
+}

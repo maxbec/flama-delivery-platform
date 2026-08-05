@@ -1,0 +1,12 @@
+# Live inventory contains private repository metadata. Keep it outside this
+# public repository; these patterns are a final accidental-publication guard.
+/evidence/
+/inventory/private/
+phase0-github-*.json
+*.private-inventory.json
+
+# Reproducible local build outputs and dependencies.
+/dist/
+/node_modules/
+/build/
+/release/

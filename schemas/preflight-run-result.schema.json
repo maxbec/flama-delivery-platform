@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/preflight-run-result.schema.json",
+  "title": "Unsigned deterministic preflight run result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "repository", "headSha", "baseSha", "startedAt", "finishedAt", "runnerClass", "releaseImpact", "status", "commands"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "repository": { "type": "string", "pattern": "^(maxbec|navigaite|edilio-app)/[A-Za-z0-9._-]+$" },
+    "headSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "baseSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "finishedAt": { "type": "string", "format": "date-time" },
+    "runnerClass": { "const": "paperclip_ephemeral" },
+    "releaseImpact": { "enum": ["none", "patch", "minor", "major"] },
+    "status": { "enum": ["passed", "failed"] },
+    "commands": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["command", "status", "exitCode", "durationMilliseconds", "outputBytes", "evidenceDigest"],
+        "properties": {
+          "command": { "enum": ["./scripts/delivery buildable", "./scripts/delivery affected"] },
+          "status": { "enum": ["passed", "failed"] },
+          "exitCode": { "type": "integer", "minimum": 0, "maximum": 255 },
+          "durationMilliseconds": { "type": "integer", "minimum": 0 },
+          "outputBytes": { "type": "integer", "minimum": 0, "maximum": 52428800 },
+          "evidenceDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" }
+        },
+        "allOf": [
+          {
+            "if": { "properties": { "status": { "const": "passed" } }, "required": ["status"] },
+            "then": { "properties": { "exitCode": { "const": 0 } } }
+          },
+          {
+            "if": { "properties": { "status": { "const": "failed" } }, "required": ["status"] },
+            "then": { "properties": { "exitCode": { "type": "integer", "minimum": 1 } } }
+          }
+        ]
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "passed" } }, "required": ["status"] },
+      "then": {
+        "properties": {
+          "commands": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "prefixItems": [
+              { "type": "object", "properties": { "command": { "const": "./scripts/delivery buildable" }, "status": { "const": "passed" } }, "required": ["command", "status"] },
+              { "type": "object", "properties": { "command": { "const": "./scripts/delivery affected" }, "status": { "const": "passed" } }, "required": ["command", "status"] }
+            ],
+            "allOf": [
+              { "contains": { "type": "object", "properties": { "command": { "const": "./scripts/delivery buildable" }, "status": { "const": "passed" } }, "required": ["command", "status"] } },
+              { "contains": { "type": "object", "properties": { "command": { "const": "./scripts/delivery affected" }, "status": { "const": "passed" } }, "required": ["command", "status"] } }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

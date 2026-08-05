@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/paperclip-controllers-input.schema.json",
+  "title": "Paperclip delivery-controller provisioning input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "company", "controller", "runtimeRoot", "mutationAllowed"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "company": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "name": { "enum": ["Private", "// Navigaite", "Edilio"] }
+      }
+    },
+    "controller": {
+      "enum": ["maxbec-delivery-controller", "navigaite-delivery-controller", "edilio-delivery-controller"]
+    },
+    "runtimeRoot": { "type": "string", "minLength": 2, "pattern": "^/[^\\u0000\\r\\n]*$" },
+    "legacySourceRoot": {
+      "$comment": "Declared, exact working directory of the topology-v1 source-checkout controller being migrated onto the immutable release root.",
+      "type": "string",
+      "minLength": 2,
+      "pattern": "^/[^\\u0000\\r\\n]*$"
+    },
+    "mutationAllowed": { "const": true }
+  },
+  "allOf": [
+    {
+      "if": { "type": "object", "properties": { "company": { "type": "object", "properties": { "name": { "const": "Private" } }, "required": ["name"] } }, "required": ["company"] },
+      "then": { "type": "object", "properties": { "controller": { "const": "maxbec-delivery-controller" } } }
+    },
+    {
+      "if": { "type": "object", "properties": { "company": { "type": "object", "properties": { "name": { "const": "// Navigaite" } }, "required": ["name"] } }, "required": ["company"] },
+      "then": { "type": "object", "properties": { "controller": { "const": "navigaite-delivery-controller" } } }
+    },
+    {
+      "if": { "type": "object", "properties": { "company": { "type": "object", "properties": { "name": { "const": "Edilio" } }, "required": ["name"] } }, "required": ["company"] },
+      "then": { "type": "object", "properties": { "controller": { "const": "edilio-delivery-controller" } } }
+    }
+  ]
+}

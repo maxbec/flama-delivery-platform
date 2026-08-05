@@ -1,0 +1,136 @@
+name: Flama Push Guard
+
+# The substitute for branch protection in a repository whose plan does not sell
+# it. GitHub refuses branch protection on a private repository under a free
+# plan, so nothing there can *prevent* a commit reaching the stable branch
+# outside the delivery flow. This notices when one has.
+#
+# It is detective, not preventive, and cannot be honestly described otherwise:
+# anyone able to push directly can also delete this workflow. What it removes is
+# the silent case — a commit that skipped the gates and nobody found out.
+
+on:
+  workflow_call:
+    inputs:
+      stable-branch:
+        description: The branch that may only be advanced through a gated pull request.
+        required: true
+        type: string
+      app-slug:
+        description: Slug of the owner's Paperclip delivery App, which publishes the preflight.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  pull-requests: read
+  issues: write
+  checks: read
+
+jobs:
+  push-guard:
+    name: Flama Push Guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Establish how the commit reached the stable branch
+        id: origin
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FLAMA_SHA: ${{ github.event.after || github.sha }}
+          FLAMA_BRANCH: ${{ inputs.stable-branch }}
+          FLAMA_APP_SLUG: ${{ inputs.app-slug }}
+        run: |
+          set -euo pipefail
+          faults=$(mktemp "$RUNNER_TEMP/flama-faults-XXXXXX")
+
+          # A merged pull request whose head or merge commit is this SHA is the
+          # only sanctioned way onto the stable branch.
+          pulls=$(mktemp "$RUNNER_TEMP/flama-pulls-XXXXXX.json")
+          gh api -H 'Accept: application/vnd.github+json' \
+            "/repos/$GITHUB_REPOSITORY/commits/$FLAMA_SHA/pulls" > "$pulls" 2>/dev/null \
+            || printf '[]\n' > "$pulls"
+
+          number=$(jq -r --arg branch "$FLAMA_BRANCH" \
+            '[.[] | select(.merged_at != null and .base.ref == $branch)][0].number // ""' "$pulls")
+          # The gates ran on the pull request's head, not on the commit that
+          # landed. A squash produces a new commit and a promotion produces a
+          # merge commit, and neither carries the checks. Verifying the wrong
+          # SHA would raise an alarm on every correctly delivered change, which
+          # is the surest way to get this switched off.
+          subject=$FLAMA_SHA
+          if [[ -n "$number" ]]; then
+            subject=$(jq -r --argjson n "$number" \
+              '[.[] | select(.number == $n)][0].head.sha // ""' "$pulls")
+            [[ -n "$subject" ]] || subject=$FLAMA_SHA
+          else
+            printf 'reached %s without a merged pull request\n' "$FLAMA_BRANCH" >> "$faults"
+          fi
+
+          # A preflight published by the owner's App is what proves the delivery
+          # commands actually ran against the change.
+          checks=$(mktemp "$RUNNER_TEMP/flama-checks-XXXXXX.json")
+          gh api -H 'Accept: application/vnd.github+json' \
+            "/repos/$GITHUB_REPOSITORY/commits/$subject/check-runs?filter=all&per_page=100" \
+            > "$checks" 2>/dev/null || printf '{"check_runs":[]}\n' > "$checks"
+
+          jq -e --arg app "$FLAMA_APP_SLUG" '[.check_runs[] | select(
+            .name == "Paperclip Preflight" and .status == "completed"
+            and .conclusion == "success" and .app.slug == $app
+          )] | length == 1' "$checks" >/dev/null \
+            || printf 'carries no successful Paperclip Preflight from %s\n' "$FLAMA_APP_SLUG" >> "$faults"
+
+          jq -e '[.check_runs[] | select(
+            (.name | startswith("Flama ")) and .conclusion == "failure"
+          )] | length == 0' "$checks" >/dev/null \
+            || printf 'has a failing Flama gate\n' >> "$faults"
+
+          # Signature verification is the one control a free plan cannot refuse
+          # to report, even though it cannot enforce it.
+          verified=$(gh api -H 'Accept: application/vnd.github+json' \
+            "/repos/$GITHUB_REPOSITORY/commits/$FLAMA_SHA" \
+            --jq '.commit.verification.verified' 2>/dev/null || printf 'false')
+          [[ "$verified" == "true" ]] || printf 'is not a verified signed commit\n' >> "$faults"
+
+          {
+            printf 'faults<<FLAMA_EOF\n'
+            cat "$faults"
+            printf 'FLAMA_EOF\n'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Raise an alarm for a commit that bypassed the delivery flow
+        if: steps.origin.outputs.faults != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FLAMA_SHA: ${{ github.event.after || github.sha }}
+          FLAMA_BRANCH: ${{ inputs.stable-branch }}
+          FLAMA_FAULTS: ${{ steps.origin.outputs.faults }}
+        run: |
+          set -euo pipefail
+          body=$(mktemp "$RUNNER_TEMP/flama-body-XXXXXX.md")
+          {
+            printf 'Commit `%s` on `%s` did not come through the delivery flow.\n\n' \
+              "$FLAMA_SHA" "$FLAMA_BRANCH"
+            printf 'It:\n\n'
+            while IFS= read -r fault; do
+              [[ -n "$fault" ]] || continue
+              printf -- '- %s\n' "$fault"
+            done <<< "$FLAMA_FAULTS"
+            printf '\nThis repository is on a plan that does not sell branch protection, so\n'
+            printf 'nothing could refuse the push. This guard only reports it.\n\n'
+            printf 'Either revert the commit and reland it through a pull request, or record\n'
+            printf 'why it was justified. Leaving it unanswered makes every later alarm easier\n'
+            printf 'to ignore.\n'
+          } > "$body"
+
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "Unguarded commit on ${FLAMA_BRANCH}: ${FLAMA_SHA:0:12}" \
+            --body-file "$body" \
+            --label flama-push-guard 2>/dev/null \
+            || gh issue create --repo "$GITHUB_REPOSITORY" \
+                 --title "Unguarded commit on ${FLAMA_BRANCH}: ${FLAMA_SHA:0:12}" \
+                 --body-file "$body"
+
+          # Fail the run as well. The issue is the durable record; a red mark on
+          # the branch is what gets noticed today.
+          printf 'push guard: %s\n' "$FLAMA_FAULTS" >&2
+          exit 1

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/preflight-run-input.schema.json",
+  "title": "Flama deterministic preflight run input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "repository", "headSha", "baseSha", "releaseImpact"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "repository": { "type": "string", "pattern": "^(maxbec|navigaite|edilio-app)/[A-Za-z0-9._-]+$" },
+    "headSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "baseSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "releaseImpact": { "enum": ["none", "patch", "minor", "major"] }
+  }
+}

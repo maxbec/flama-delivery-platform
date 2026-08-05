@@ -1,0 +1,30 @@
+{
+  "schemaVersion": 1,
+  "repository": "maxbec/example",
+  "profile": "fast",
+  "platformRef": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "platformVersion": "0.1.0",
+  "paperclip": {
+    "company": "Private",
+    "projectId": "project-example",
+    "workspaceId": "workspace-example",
+    "appSlug": "flama-maxbec-delivery"
+  },
+  "release": {
+    "enabled": true,
+    "type": "node",
+    "currentVersion": "1.2.3"
+  },
+  "dependabot": {
+    "ecosystems": [
+      { "packageEcosystem": "npm", "directory": "/" }
+    ]
+  },
+  "commands": {
+    "buildable": ["pnpm", "run", "build"],
+    "affected": ["pnpm", "test"],
+    "full": ["pnpm", "test"],
+    "smoke": ["pnpm", "run", "smoke"],
+    "health": ["pnpm", "run", "health"]
+  }
+}

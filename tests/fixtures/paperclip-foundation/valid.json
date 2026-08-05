@@ -1,0 +1,9 @@
+{
+  "schemaVersion": 1,
+  "company": {
+    "id": "10000000-0000-4000-8000-000000000001",
+    "name": "Private"
+  },
+  "controller": "maxbec-delivery-controller",
+  "mutationAllowed": true
+}

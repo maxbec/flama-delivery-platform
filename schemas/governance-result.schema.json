@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/governance-result.schema.json",
+  "title": "Private metadata-only Flama governance result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "window", "status", "scopes", "pooled"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["from", "to"],
+      "properties": {
+        "from": { "type": "string", "format": "date-time" },
+        "to": { "type": "string", "format": "date-time" }
+      }
+    },
+    "status": { "$ref": "#/$defs/status" },
+    "scopes": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "status", "paperclip", "delivery"],
+        "properties": {
+          "key": { "enum": ["maxbec", "navigaite", "edilio"] },
+          "status": { "$ref": "#/$defs/status" },
+          "paperclip": { "$ref": "#/$defs/paperclip" },
+          "delivery": { "$ref": "#/$defs/delivery" }
+        }
+      }
+    },
+    "pooled": { "$ref": "#/$defs/delivery" }
+  },
+  "$defs": {
+    "status": { "enum": ["compliant", "attention", "insufficient_data"] },
+    "paperclip": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["company", "controller", "lifecycles"],
+      "properties": {
+        "company": { "enum": ["compliant", "drift"] },
+        "controller": { "enum": ["compliant", "drift"] },
+        "lifecycles": { "enum": ["compliant", "drift"] }
+      }
+    },
+    "percentiles": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["p50", "p95"],
+      "properties": {
+        "p50": { "type": ["integer", "null"], "minimum": 0 },
+        "p95": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "samples", "wallSeconds", "queueSeconds", "runnerSeconds", "retryRuns"],
+      "properties": {
+        "status": { "$ref": "#/$defs/status" },
+        "samples": { "type": "integer", "minimum": 0 },
+        "wallSeconds": { "$ref": "#/$defs/percentiles" },
+        "queueSeconds": { "$ref": "#/$defs/percentiles" },
+        "runnerSeconds": { "$ref": "#/$defs/percentiles" },
+        "retryRuns": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "delivery": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "fast", "major", "cacheHitRate"],
+      "properties": {
+        "status": { "$ref": "#/$defs/status" },
+        "fast": { "$ref": "#/$defs/profile" },
+        "major": { "$ref": "#/$defs/profile" },
+        "cacheHitRate": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["value", "coverage"],
+          "properties": {
+            "value": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+            "coverage": { "enum": ["reported", "not_emitted"] }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/paperclip-github-transition-routine.schema.json",
+  "title": "Native Paperclip GitHub-evidence transition routine contract",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "key", "title", "description", "priority", "initialStatus", "concurrencyPolicy", "catchUpPolicy", "execution", "trigger"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "key": { "const": "flama-github-transition-v1" },
+    "title": { "const": "Flama GitHub Evidence Transition" },
+    "description": { "type": "string", "minLength": 100, "maxLength": 2000 },
+    "priority": { "const": "high" },
+    "initialStatus": { "const": "paused" },
+    "concurrencyPolicy": { "const": "always_enqueue" },
+    "catchUpPolicy": { "const": "skip_missed" },
+    "execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["command", "mode", "authorizationStore"],
+      "properties": {
+        "command": { "const": "transition-external-evidence" },
+        "mode": { "const": "paperclip-native" },
+        "authorizationStore": { "const": "flama_delivery.external_transition_authorization" }
+      }
+    },
+    "trigger": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "label", "enabled", "signingMode", "replayWindowSeconds", "credentialSource"],
+      "properties": {
+        "kind": { "const": "webhook" },
+        "label": { "const": "flama-github-transition-v1" },
+        "enabled": { "const": true },
+        "signingMode": { "const": "hmac_sha256" },
+        "replayWindowSeconds": { "const": 300 },
+        "credentialSource": { "const": "infisical-oidc" }
+      }
+    }
+  }
+}

@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# Read-only stub for apply planning. A mutating call is reported so the test can
+# prove planning mode never issues one.
+set -euo pipefail
+[[ "${1:-}" == "auth" && "${2:-}" == "status" ]] && exit 0
+[[ "${1:-}" == "api" ]] || { echo "unexpected mock gh command" >&2; exit 1; }
+
+for argument in "$@"; do
+  case "$argument" in
+    -X|--method) echo "MUTATED $*" >&2; exit 0 ;;
+  esac
+done
+
+endpoint=""
+for argument in "$@"; do
+  case "$argument" in
+    -*|api) ;;
+    *) [[ -n "$endpoint" ]] || endpoint=$argument ;;
+  esac
+done
+
+case "$endpoint" in
+  repos/maxbec/example/contents/.flama/delivery-contract.json)
+    [[ -n "${FLAMA_GH_NO_CONTRACT:-}" ]] && exit 1
+    echo '{"type":"file","size":10}'
+    ;;
+  *) echo "unexpected mock gh API endpoint: $endpoint" >&2; exit 1 ;;
+esac

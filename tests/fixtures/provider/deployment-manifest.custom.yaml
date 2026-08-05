@@ -1,0 +1,36 @@
+schemaVersion: 1
+version: 1.2.0
+release:
+  tag: v1.2.0
+  url: https://github.com/maxbec/example/releases/tag/v1.2.0
+artifact:
+  kind: archive
+  uri: release/example-v1.2.0.tar.gz
+  digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  signature: sigstore-bundle.json
+  sbom: https://github.com/maxbec/example/releases/download/v1.2.0/sbom.spdx.json
+previousArtifact:
+  kind: archive
+  uri: release/example-v1.1.0.tar.gz
+  digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+  signature: previous-sigstore-bundle.json
+  sbom: https://github.com/maxbec/example/releases/download/v1.1.0/sbom.spdx.json
+provider:
+  name: custom
+  configurationRefs:
+    - .flama/provider.cjs
+  infisicalPath: /production/deploy
+migration:
+  required: false
+  mode: none
+  backupVerified: true
+  rollbackCompatible: true
+verification:
+  healthCommand: ./scripts/delivery health
+  smokeCommand: ./scripts/delivery smoke
+  expectedVersion: 1.2.0
+  soakSeconds: 600
+rollback:
+  automatic: true
+  attemptLimit: 1
+  targetDigest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb

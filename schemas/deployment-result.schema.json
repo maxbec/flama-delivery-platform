@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/deployment-result.schema.json",
+  "title": "Immutable deployment and rollback result evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "status", "provider", "artifactDigest", "previousArtifactDigest", "startedAt", "finishedAt", "rollbackAttempts", "checks"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "status": { "enum": ["deployed", "rolled_back", "rollback_failed", "failed"] },
+    "provider": { "enum": ["docker-compose", "vercel-prebuilt", "digitalocean-app", "digitalocean-droplet", "hostinger-vps", "coolify", "render", "custom"] },
+    "artifactDigest": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+    "previousArtifactDigest": { "type": ["string", "null"], "pattern": "^sha256:[0-9a-f]{64}$" },
+    "startedAt": { "type": "string", "format": "date-time" },
+    "finishedAt": { "type": "string", "format": "date-time" },
+    "rollbackAttempts": { "enum": [0, 1] },
+    "reasonCode": { "type": "string", "pattern": "^[a-z][a-z0-9_]+$" },
+    "deploymentUrl": { "type": "string", "format": "uri", "pattern": "^https://" },
+    "providerEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["deploymentId", "observedAt"],
+      "properties": {
+        "deploymentId": { "type": "string", "minLength": 1 },
+        "observedAt": { "type": "string", "format": "date-time" }
+      }
+    },
+    "checks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["observedAt", "phase", "health", "version", "smoke"],
+        "properties": {
+          "observedAt": { "type": "string", "format": "date-time" },
+          "phase": { "enum": ["immediate", "soak"] },
+          "health": { "type": "boolean" },
+          "version": { "type": "boolean" },
+          "smoke": { "type": "boolean" }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "status": { "const": "deployed" } }, "required": ["status"] },
+      "then": {
+        "type": "object",
+        "required": ["deploymentUrl", "providerEvidence"],
+        "properties": {
+          "deploymentUrl": { "$ref": "#/properties/deploymentUrl" },
+          "providerEvidence": { "$ref": "#/properties/providerEvidence" },
+          "rollbackAttempts": { "const": 0 }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "status": { "enum": ["rolled_back", "rollback_failed"] } }, "required": ["status"] },
+      "then": {
+        "type": "object",
+        "required": ["reasonCode"],
+        "properties": {
+          "reasonCode": { "$ref": "#/properties/reasonCode" },
+          "rollbackAttempts": { "const": 1 }
+        }
+      }
+    }
+  ]
+}
