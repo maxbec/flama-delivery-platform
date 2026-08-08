@@ -64,6 +64,12 @@ const githubTransitionDescription =
     createHash("sha256").update(JSON.stringify(stableValue(githubTransitionContract))).digest("hex")
   }\n\n${String(githubTransitionContract["description"])}`;
 
+/**
+ * Deliberately without `desiredSkills`: Paperclip does not put the skill
+ * assignment on the agent representation. The previous fixture invented the
+ * field, which is why the identity check passed here and could never pass
+ * against a live control plane.
+ */
 function identity() {
   return {
     id: agentId,
@@ -73,9 +79,23 @@ function identity() {
     adapterType: "process",
     budgetMonthlyCents: 0,
     status: "running",
-    desiredSkills: ["flama-paperclip-delivery"],
     permissions: { canCreateAgents: false, canCreateSkills: false, canAssignTasks: false },
-    metadata: { managedBy: "flama-delivery-platform", topologyVersion: 1 },
+    metadata: { managedBy: "flama-delivery-platform", topologyVersion: 2 },
+  };
+}
+
+/**
+ * The shape `GET /api/agents/{id}/skills` returns for an adapter without skill
+ * sync, and the namespaced key Paperclip actually assigns.
+ */
+function skillSnapshot() {
+  return {
+    adapterType: "process",
+    supported: false,
+    mode: "unsupported",
+    desiredSkills: ["maxbec/flama-delivery-platform/flama-paperclip-delivery"],
+    entries: [],
+    warnings: ["This adapter does not implement skill sync yet."],
   };
 }
 
@@ -246,6 +266,7 @@ function fetchFor(
       body: typeof init?.body === "string" ? JSON.parse(init.body) as unknown : null,
     });
     if (url.pathname === "/api/agents/me") return jsonResponse(identity());
+    if (url.pathname === `/api/agents/${agentId}/skills`) return jsonResponse(skillSnapshot());
     if (url.pathname === `/api/companies/${companyId}`) {
       return jsonResponse({ id: companyId, name: "Private", status: "active" });
     }
@@ -325,6 +346,34 @@ describe("deterministic delivery controller runtime", () => {
     expect(JSON.stringify(result)).not.toContain(agentId);
     expect(JSON.stringify(result)).not.toContain(companyId);
     expect(JSON.stringify(result)).not.toContain(token);
+  });
+
+  /**
+   * The skill assignment comes from the skills endpoint, not from the agent
+   * representation. Asserting the request is made is the point: the previous
+   * fixture put `desiredSkills` on `/api/agents/me`, so this suite proved a
+   * contract Paperclip does not serve and the live controller failed every run
+   * with `controller_identity_invalid`.
+   */
+  it("reads the skill assignment from the skills endpoint rather than the agent", async () => {
+    const observed: ObservedRequest[] = [];
+    await runControllerRuntime(environment, process.cwd(), fetchFor([], observed));
+
+    expect(observed.map(({ path, method }) => `${method} ${path}`)).toContain(
+      `GET /api/agents/${agentId}/skills`,
+    );
+  });
+
+  it("fails closed when the skill assignment is not a list of keys", async () => {
+    const brokenSkills: typeof fetch = async (input, init) => {
+      const url = new URL(typeof input === "string" ? input : String(input));
+      if (url.pathname === `/api/agents/${agentId}/skills`) return jsonResponse({ desiredSkills: "delivery" });
+      return fetchFor([])(input, init);
+    };
+
+    await expect(runControllerRuntime(environment, process.cwd(), brokenSkills)).rejects.toEqual(
+      expect.objectContaining<Partial<ControllerRuntimeError>>({ code: "controller_identity_invalid" }),
+    );
   });
 
   it("runs only the exact schedule-bound routine issue and emits a digest-only completion", async () => {

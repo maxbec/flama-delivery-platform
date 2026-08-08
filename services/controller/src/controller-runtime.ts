@@ -67,7 +67,7 @@ interface ControllerIdentity {
   readonly adapterType: "process";
   readonly budgetMonthlyCents: 0;
   readonly status: string;
-  readonly desiredSkills: readonly unknown[];
+  readonly desiredSkills: readonly string[];
   readonly permissions: Readonly<Record<string, unknown>> | null;
   readonly metadata: Readonly<Record<string, unknown>> | null;
 }
@@ -324,16 +324,39 @@ async function requestJson(
   }
 }
 
-function parseIdentity(value: unknown, runtime: RuntimeIdentity): ControllerIdentity {
+/**
+ * The skill assignment is not part of the agent representation: Paperclip
+ * serves `GET /api/agents/me` from the agent row plus its chain of command and
+ * access state, and exposes `desiredSkills` only on
+ * `GET /api/agents/{id}/skills`. Requiring the field here made the identity
+ * check unsatisfiable against a live control plane — the runtime fetches the
+ * assignment separately and folds it in, so the governance attestation still
+ * sees a server-sourced list rather than an assumed one.
+ */
+function parseIdentity(
+  value: unknown,
+  runtime: RuntimeIdentity,
+  desiredSkills: readonly string[],
+): ControllerIdentity {
   if (
     !isRecord(value) || value["id"] !== runtime.agentId || value["companyId"] !== runtime.companyId ||
     !isControllerName(value["name"]) || value["role"] !== "devops" || value["adapterType"] !== "process" ||
     value["budgetMonthlyCents"] !== 0 || typeof value["status"] !== "string" ||
-    !Array.isArray(value["desiredSkills"]) ||
     (value["permissions"] !== null && !isRecord(value["permissions"])) ||
     (value["metadata"] !== null && !isRecord(value["metadata"]))
   ) throw new ControllerRuntimeError("controller_identity_invalid");
-  return value as unknown as ControllerIdentity;
+  return { ...value, desiredSkills } as unknown as ControllerIdentity;
+}
+
+/** The `desiredSkills` half of the skill snapshot, and only that half. */
+function parseDesiredSkills(value: unknown): readonly string[] {
+  if (!isRecord(value)) throw new ControllerRuntimeError("controller_identity_invalid");
+  const desiredSkills = value["desiredSkills"];
+  if (
+    !Array.isArray(desiredSkills) || desiredSkills.length > 100 ||
+    !desiredSkills.every((entry) => typeof entry === "string" && entry.length > 0 && entry.length <= 512)
+  ) throw new ControllerRuntimeError("controller_identity_invalid");
+  return desiredSkills as readonly string[];
 }
 
 function parseCompanyObservation(value: unknown): CompanyObservation {
@@ -683,10 +706,16 @@ export async function runControllerRuntime(
   executeTransition: ManagedTransitionExecutor = executeManagedTransition,
 ): Promise<ControllerRuntimeResult> {
   const runtime = runtimeIdentity(environment);
-  const identity = parseIdentity(
-    await requestJson(runtime, "GET", "/api/agents/me", fetchImplementation),
-    runtime,
-  );
+  const [rawIdentity, rawSkills] = await Promise.all([
+    requestJson(runtime, "GET", "/api/agents/me", fetchImplementation),
+    requestJson(
+      runtime,
+      "GET",
+      `/api/agents/${encodeURIComponent(runtime.agentId)}/skills`,
+      fetchImplementation,
+    ),
+  ]);
+  const identity = parseIdentity(rawIdentity, runtime, parseDesiredSkills(rawSkills));
   const controllerContract = validateControllerContract(
     await readJsonContract(
       join(repositoryRoot, "lifecycles", "controllers", `${identity.name}.json`),

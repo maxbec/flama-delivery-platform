@@ -61,6 +61,25 @@ function validDateTime(value: string): boolean {
   return value.length <= 64 && Number.isFinite(timestamp) && new Date(timestamp).toISOString() === value;
 }
 
+const deliverySkillName = "flama-paperclip-delivery";
+
+/**
+ * `desiredSkills` carries Paperclip skill *keys*, and a key is namespaced —
+ * `owner/repo/name`. The provisioner looks the skill up by *name* in the
+ * company library and assigns whatever key that lookup returns
+ * (`paperclip-controllers.ts`), so comparing the assigned list against the bare
+ * name never matched. The name is the final segment of the key.
+ *
+ * The check still has to be an equality on that segment rather than a
+ * substring test: `…/flama-paperclip-delivery-draft` must not satisfy it.
+ */
+function holdsDeliverySkill(desiredSkills: readonly unknown[] | undefined): boolean {
+  return (desiredSkills ?? []).some(
+    (key) =>
+      typeof key === "string" && (key === deliverySkillName || key.endsWith(`/${deliverySkillName}`)),
+  );
+}
+
 function controllerCompliant(observation: PaperclipGovernanceObservation): boolean {
   const controller = observation.controller;
   const permissions = controller.permissions ?? {};
@@ -69,10 +88,14 @@ function controllerCompliant(observation: PaperclipGovernanceObservation): boole
     controller.name === observation.controllerName && controller.role === "devops" &&
     controller.adapterType === "process" && controller.budgetMonthlyCents === 0 &&
     ["idle", "running", "paused"].includes(controller.status ?? "") &&
-    controller.desiredSkills?.includes("flama-paperclip-delivery") === true &&
+    holdsDeliverySkill(controller.desiredSkills) &&
     permissions["canCreateAgents"] === false && permissions["canCreateSkills"] === false &&
     permissions["canAssignTasks"] === false && metadata["managedBy"] === "flama-delivery-platform" &&
-    metadata["topologyVersion"] === 1;
+    // The provisioner is the authority on the topology it writes, and it has
+    // provisioned version 2 since the controller topology migration
+    // (`paperclip-controllers.ts`). This assertion was left on 1 and so could
+    // not hold against any controller the current provisioner produces.
+    metadata["topologyVersion"] === 2;
 }
 
 function lifecyclesCompliant(pipelines: readonly PipelineObservation[]): boolean {

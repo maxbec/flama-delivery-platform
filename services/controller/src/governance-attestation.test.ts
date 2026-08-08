@@ -24,9 +24,9 @@ const observation: PaperclipGovernanceObservation = {
     adapterType: "process",
     budgetMonthlyCents: 0,
     status: "running",
-    desiredSkills: ["flama-paperclip-delivery"],
+    desiredSkills: ["maxbec/flama-delivery-platform/flama-paperclip-delivery"],
     permissions: { canCreateAgents: false, canCreateSkills: false, canAssignTasks: false },
-    metadata: { managedBy: "flama-delivery-platform", topologyVersion: 1 },
+    metadata: { managedBy: "flama-delivery-platform", topologyVersion: 2 },
   },
   pipelines: [
     { key: "flama-project-bootstrap-v1", enforceTransitions: true, archivedAt: null },
@@ -46,6 +46,49 @@ describe("native Paperclip governance attestations", () => {
       checks: { company: "compliant", controller: "compliant", lifecycles: "compliant" },
     });
     expect(verifyPaperclipGovernanceAttestationDigest(attestation)).toBe(true);
+  });
+
+  /**
+   * The assignment carries namespaced skill *keys*; the provisioner resolves
+   * the skill by *name*. Both spellings have to satisfy the check, or the
+   * attestation cannot hold against a controller the provisioner produced.
+   */
+  it("accepts the delivery skill whether the key is namespaced or bare", () => {
+    for (const key of ["flama-paperclip-delivery", "maxbec/flama-delivery-platform/flama-paperclip-delivery"]) {
+      const attestation = attestPaperclipGovernance({
+        ...observation,
+        controller: { ...observation.controller, desiredSkills: [key] },
+      });
+      expect(attestation.checks.controller, key).toBe("compliant");
+    }
+  });
+
+  /* Matching on the final segment must be an equality, not a prefix test. */
+  it("reports drift for a skill key that merely starts with the delivery name", () => {
+    const attestation = attestPaperclipGovernance({
+      ...observation,
+      controller: {
+        ...observation.controller,
+        desiredSkills: ["maxbec/flama-delivery-platform/flama-paperclip-delivery-draft"],
+      },
+    });
+    expect(attestation.checks.controller).toBe("drift");
+  });
+
+  /*
+   * Guards the drift this file used to hide: the fixture asserted topology 1
+   * while the provisioner had been writing 2, so the suite stayed green and
+   * every real attestation failed.
+   */
+  it("reports drift for the superseded controller topology", () => {
+    const attestation = attestPaperclipGovernance({
+      ...observation,
+      controller: {
+        ...observation.controller,
+        metadata: { managedBy: "flama-delivery-platform", topologyVersion: 1 },
+      },
+    });
+    expect(attestation.checks.controller).toBe("drift");
   });
 
   it("reports drift without granting mutation authority", () => {
