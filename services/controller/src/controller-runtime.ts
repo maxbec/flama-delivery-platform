@@ -325,19 +325,19 @@ async function requestJson(
 }
 
 /**
- * The skill assignment is not part of the agent representation: Paperclip
- * serves `GET /api/agents/me` from the agent row plus its chain of command and
- * access state, and exposes `desiredSkills` only on
- * `GET /api/agents/{id}/skills`. Requiring the field here made the identity
- * check unsatisfiable against a live control plane — the runtime fetches the
- * assignment separately and folds it in, so the governance attestation still
- * sees a server-sourced list rather than an assumed one.
+ * `GET /api/agents/me` carries no top-level `desiredSkills`, and
+ * `GET /api/agents/{id}/skills` — the route that does — answers 403 to an
+ * agent asking about itself: that route is guarded by
+ * `assertCanReadConfigurations`, which is board-scoped. Reading the assignment
+ * from there cost a request and produced `controller_api_rejected` on every
+ * run.
+ *
+ * The assignment is already in the agent representation, nested in the adapter
+ * configuration Paperclip itself syncs skills from, and it survives the
+ * response sanitiser (which redacts secret-shaped key names, not this one). So
+ * it is still server-sourced rather than assumed, and it costs no second call.
  */
-function parseIdentity(
-  value: unknown,
-  runtime: RuntimeIdentity,
-  desiredSkills: readonly string[],
-): ControllerIdentity {
+function parseIdentity(value: unknown, runtime: RuntimeIdentity): ControllerIdentity {
   if (
     !isRecord(value) || value["id"] !== runtime.agentId || value["companyId"] !== runtime.companyId ||
     !isControllerName(value["name"]) || value["role"] !== "devops" || value["adapterType"] !== "process" ||
@@ -345,13 +345,16 @@ function parseIdentity(
     (value["permissions"] !== null && !isRecord(value["permissions"])) ||
     (value["metadata"] !== null && !isRecord(value["metadata"]))
   ) throw new ControllerRuntimeError("controller_identity_invalid");
-  return { ...value, desiredSkills } as unknown as ControllerIdentity;
+  return { ...value, desiredSkills: parseDesiredSkills(value) } as unknown as ControllerIdentity;
 }
 
-/** The `desiredSkills` half of the skill snapshot, and only that half. */
-function parseDesiredSkills(value: unknown): readonly string[] {
-  if (!isRecord(value)) throw new ControllerRuntimeError("controller_identity_invalid");
-  const desiredSkills = value["desiredSkills"];
+/** The skill assignment, read out of `adapterConfig.paperclipSkillSync`. */
+function parseDesiredSkills(value: Record<string, unknown>): readonly string[] {
+  const adapterConfig = value["adapterConfig"];
+  if (!isRecord(adapterConfig)) throw new ControllerRuntimeError("controller_identity_invalid");
+  const skillSync = adapterConfig["paperclipSkillSync"];
+  if (!isRecord(skillSync)) throw new ControllerRuntimeError("controller_identity_invalid");
+  const desiredSkills = skillSync["desiredSkills"];
   if (
     !Array.isArray(desiredSkills) || desiredSkills.length > 100 ||
     !desiredSkills.every((entry) => typeof entry === "string" && entry.length > 0 && entry.length <= 512)
@@ -706,16 +709,10 @@ export async function runControllerRuntime(
   executeTransition: ManagedTransitionExecutor = executeManagedTransition,
 ): Promise<ControllerRuntimeResult> {
   const runtime = runtimeIdentity(environment);
-  const [rawIdentity, rawSkills] = await Promise.all([
-    requestJson(runtime, "GET", "/api/agents/me", fetchImplementation),
-    requestJson(
-      runtime,
-      "GET",
-      `/api/agents/${encodeURIComponent(runtime.agentId)}/skills`,
-      fetchImplementation,
-    ),
-  ]);
-  const identity = parseIdentity(rawIdentity, runtime, parseDesiredSkills(rawSkills));
+  const identity = parseIdentity(
+    await requestJson(runtime, "GET", "/api/agents/me", fetchImplementation),
+    runtime,
+  );
   const controllerContract = validateControllerContract(
     await readJsonContract(
       join(repositoryRoot, "lifecycles", "controllers", `${identity.name}.json`),

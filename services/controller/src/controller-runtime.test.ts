@@ -65,10 +65,11 @@ const githubTransitionDescription =
   }\n\n${String(githubTransitionContract["description"])}`;
 
 /**
- * Deliberately without `desiredSkills`: Paperclip does not put the skill
- * assignment on the agent representation. The previous fixture invented the
- * field, which is why the identity check passed here and could never pass
- * against a live control plane.
+ * The payload `GET /api/agents/me` actually returns: no top-level
+ * `desiredSkills`, and the skill assignment nested in `adapterConfig` under
+ * the namespaced key Paperclip assigns. Copied from a live response rather
+ * than composed, because inventing this fixture is what let two contract
+ * breaks ship green.
  */
 function identity() {
   return {
@@ -79,23 +80,18 @@ function identity() {
     adapterType: "process",
     budgetMonthlyCents: 0,
     status: "running",
+    adapterConfig: {
+      command: "node",
+      args: ["bin/controller/index.js"],
+      cwd: "/home/max/flama-runtime/flama-delivery-platform-v0.2.0",
+      graceSec: 15,
+      timeoutSec: 300,
+      paperclipSkillSync: {
+        desiredSkills: ["maxbec/flama-delivery-platform/flama-paperclip-delivery"],
+      },
+    },
     permissions: { canCreateAgents: false, canCreateSkills: false, canAssignTasks: false },
     metadata: { managedBy: "flama-delivery-platform", topologyVersion: 2 },
-  };
-}
-
-/**
- * The shape `GET /api/agents/{id}/skills` returns for an adapter without skill
- * sync, and the namespaced key Paperclip actually assigns.
- */
-function skillSnapshot() {
-  return {
-    adapterType: "process",
-    supported: false,
-    mode: "unsupported",
-    desiredSkills: ["maxbec/flama-delivery-platform/flama-paperclip-delivery"],
-    entries: [],
-    warnings: ["This adapter does not implement skill sync yet."],
   };
 }
 
@@ -266,7 +262,9 @@ function fetchFor(
       body: typeof init?.body === "string" ? JSON.parse(init.body) as unknown : null,
     });
     if (url.pathname === "/api/agents/me") return jsonResponse(identity());
-    if (url.pathname === `/api/agents/${agentId}/skills`) return jsonResponse(skillSnapshot());
+    // Deliberately not stubbed: Paperclip answers 403 here for an agent asking
+    // about itself, and the runtime must never call it.
+    if (url.pathname === `/api/agents/${agentId}/skills`) return jsonResponse({ error: "Forbidden" }, 403);
     if (url.pathname === `/api/companies/${companyId}`) {
       return jsonResponse({ id: companyId, name: "Private", status: "active" });
     }
@@ -349,25 +347,43 @@ describe("deterministic delivery controller runtime", () => {
   });
 
   /**
-   * The skill assignment comes from the skills endpoint, not from the agent
-   * representation. Asserting the request is made is the point: the previous
-   * fixture put `desiredSkills` on `/api/agents/me`, so this suite proved a
-   * contract Paperclip does not serve and the live controller failed every run
-   * with `controller_identity_invalid`.
+   * `/api/agents/{id}/skills` is board-scoped and answers 403 to an agent
+   * asking about itself, so touching it cost a request and produced
+   * `controller_api_rejected` on every live run. The assignment must come out
+   * of the identity payload instead.
    */
-  it("reads the skill assignment from the skills endpoint rather than the agent", async () => {
+  it("never requests the board-scoped skills route", async () => {
     const observed: ObservedRequest[] = [];
     await runControllerRuntime(environment, process.cwd(), fetchFor([], observed));
 
-    expect(observed.map(({ path, method }) => `${method} ${path}`)).toContain(
-      `GET /api/agents/${agentId}/skills`,
+    expect(observed.map(({ path }) => path).filter((path) => path.endsWith("/skills"))).toEqual([]);
+  });
+
+  it("fails closed when the identity carries no skill assignment", async () => {
+    const withoutAssignment: typeof fetch = async (input, init) => {
+      const url = new URL(typeof input === "string" ? input : String(input));
+      if (url.pathname === "/api/agents/me") {
+        const { adapterConfig: _dropped, ...rest } = identity();
+        return jsonResponse(rest);
+      }
+      return fetchFor([])(input, init);
+    };
+
+    await expect(runControllerRuntime(environment, process.cwd(), withoutAssignment)).rejects.toEqual(
+      expect.objectContaining<Partial<ControllerRuntimeError>>({ code: "controller_identity_invalid" }),
     );
   });
 
   it("fails closed when the skill assignment is not a list of keys", async () => {
     const brokenSkills: typeof fetch = async (input, init) => {
       const url = new URL(typeof input === "string" ? input : String(input));
-      if (url.pathname === `/api/agents/${agentId}/skills`) return jsonResponse({ desiredSkills: "delivery" });
+      if (url.pathname === "/api/agents/me") {
+        const base = identity();
+        return jsonResponse({
+          ...base,
+          adapterConfig: { ...base.adapterConfig, paperclipSkillSync: { desiredSkills: "delivery" } },
+        });
+      }
       return fetchFor([])(input, init);
     };
 
