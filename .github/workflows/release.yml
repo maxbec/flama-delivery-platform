@@ -1,0 +1,47 @@
+name: Release
+
+# Release notes for the delivery platform itself.
+#
+# The platform ships `reusable-release.yml`, but that is supply-chain evidence
+# for *consumer* artifacts — digest, SBOM, checksum, attestation. It is a
+# `workflow_call` library, nothing here invokes it, and it produces neither a
+# tag nor a GitHub Release. `platform-ci.yml` only lints and tests that file.
+# The result: this repository has never cut a tag or a release.
+#
+# That matters more here than in a normal repository. Consumers pin the
+# platform by raw commit SHA (`uses: maxbec/flama-delivery-platform/...@<sha>`),
+# so today an upgrade means reading a diff between two opaque hashes. A tagged
+# release with notes gives every consumer a named point to move to and a
+# readable statement of what changed in the gates they depend on.
+#
+# Actions are pinned to full commit SHAs, as in platform-ci.yml.
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# A half-written release is worse than a queued one, so no cancel-in-progress.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release-please:
+    name: Release Please
+    runs-on: ubuntu-latest
+    permissions:
+      # Writes the release commit, the tag and the GitHub Release.
+      contents: write
+      # Opens and updates the release pull request.
+      pull-requests: write
+    steps:
+      - name: Create or update the release pull request
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          config-file: .release-please-config.json
+          manifest-file: .release-please-manifest.json
+          target-branch: main
