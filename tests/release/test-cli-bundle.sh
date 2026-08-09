@@ -14,7 +14,9 @@ cmp "$FIRST/THIRD_PARTY_LICENSES.txt" "$SECOND/THIRD_PARTY_LICENSES.txt"
 cmp "$FIRST/package.json" "$SECOND/package.json"
 [[ -x "$FIRST/index.js" ]]
 output=$(cd "$ROOT_DIR" && node "$FIRST/index.js" --version)
-[[ "$output" == '{"toolVersion":"0.1.0"}' ]]
+# Derived from the manifest: a pinned version here fails on every release.
+VERSION=$(node -p "require('$ROOT_DIR/package.json').version")
+[[ "$output" == "{\"toolVersion\":\"$VERSION\"}" ]]
 
 (cd "$ROOT_DIR" && node "$FIRST/index.js" preflight \
   --dry-run \

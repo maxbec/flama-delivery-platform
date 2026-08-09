@@ -5,6 +5,11 @@ import { fileURLToPath } from "node:url";
 import { parse as parseYaml } from "yaml";
 import { describe, expect, it } from "vitest";
 import { runCli, type CliIo } from "./cli.js";
+import packageJson from "../../../package.json" with { type: "json" };
+
+/* Derived, not restated: a pinned literal here went stale on the first
+   release and hid that the CLI itself was announcing the wrong version. */
+const toolVersion = packageJson.version;
 
 class MemoryIo implements CliIo {
   stdout = "";
@@ -97,7 +102,7 @@ describe("delivery CLI", () => {
       dryRun: false,
       ok: true,
       schema: "delivery-contract",
-      toolVersion: "0.1.0",
+      toolVersion,
     });
     expect(io.stderr).toBe("");
   });
@@ -112,7 +117,7 @@ describe("delivery CLI", () => {
     expect(JSON.parse(io.stderr)).toEqual({
       error: { code: "unsupported_command" },
       ok: false,
-      toolVersion: "0.1.0",
+      toolVersion,
     });
     expect(io.stderr).not.toContain(sensitiveArgument);
   });
@@ -511,7 +516,7 @@ describe("delivery CLI", () => {
     expect(JSON.parse(io.stderr)).toEqual({
       error: { code: "bootstrap_required" },
       ok: false,
-      toolVersion: "0.1.0",
+      toolVersion,
     });
   });
 
