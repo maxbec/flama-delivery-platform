@@ -392,6 +392,31 @@ describe("deterministic delivery controller runtime", () => {
     );
   });
 
+  /*
+   * The pass is opportunistic: a controller deployed before the credential path
+   * is wired must stay green and say why it did nothing, rather than failing the
+   * run or silently reporting an ordinary idle tick.
+   */
+  it("reports why the preflight pass did not run instead of failing the tick", async () => {
+    const result = await runControllerRuntime(environment, process.cwd(), fetchFor([]));
+
+    expect(result).toMatchObject({ status: "idle" });
+    expect(result).toHaveProperty("preflight");
+    expect((result as { preflight: { skippedReason?: string } }).preflight.skippedReason)
+      .toBe("checkout_cache_unset");
+  });
+
+  it("still declines the pass when a cache exists but no App credential does", async () => {
+    const result = await runControllerRuntime(
+      { ...environment, FLAMA_CHECKOUT_CACHE_DIR: "/tmp/flama-checkout-cache-test" },
+      process.cwd(),
+      fetchFor([]),
+    );
+
+    expect((result as { preflight: { skippedReason?: string } }).preflight.skippedReason)
+      .toBe("app_credentials_absent");
+  });
+
   it("runs only the exact schedule-bound routine issue and emits a digest-only completion", async () => {
     const observed: ObservedRequest[] = [];
     const reconcile = executor("compliant");
