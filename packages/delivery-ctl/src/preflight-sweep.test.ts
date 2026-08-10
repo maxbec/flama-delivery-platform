@@ -46,6 +46,8 @@ interface PullSpec {
   readonly headSha: string;
   readonly isFork?: boolean;
   readonly hasPreflight?: boolean;
+  /** Head predating the delivery profile: no scripts/delivery in its tree. */
+  readonly unadopted?: boolean;
 }
 
 function githubStub(pulls: readonly PullSpec[], created: string[] = []): typeof fetch {
@@ -64,7 +66,14 @@ function githubStub(pulls: readonly PullSpec[], created: string[] = []): typeof 
     if (url.includes("/installation/repositories")) {
       return json({ total_count: 1, repositories: [{ full_name: "maxbec/example", archived: false, disabled: false }] });
     }
-    if (url.includes("/contents/.flama/platform-lock.json")) return json({ name: "platform-lock.json" });
+    // Scope is decided at the head: a pull request opened before the repository
+    // adopted the profile has no entrypoint in its own tree.
+    if (url.includes("/contents/scripts/delivery")) {
+      const ref = url.split("ref=")[1];
+      return pulls.some((pull) => pull.headSha === ref && pull.unadopted)
+        ? json({ message: "Not Found" }, 404)
+        : json({ name: "delivery" });
+    }
     if (url.includes("/pulls?state=open")) {
       return json(pulls.map((pull) => ({
         number: pull.number,
@@ -150,6 +159,31 @@ describe("preflight sweep", () => {
     expect(outcomes).toHaveLength(1);
     expect(outcomes[0]).toMatchObject({ number: 3, status: "failed" });
     expect(typeof outcomes[0]?.code).toBe("string");
+  });
+
+  /*
+   * The first live sweep failed ten heads with delivery_entrypoint_invalid
+   * because scope was checked on the default branch, where the profile exists,
+   * rather than on the head being preflighted, where it did not.
+   */
+  it("ignores heads that predate the delivery profile instead of failing them", async () => {
+    const { headSha } = await upstream();
+    const outcomes = await sweepPreflights({
+      owner: "maxbec",
+      appSlug: "flama-delivery-maxbec",
+      environment,
+      cacheRoot: await cacheRoot(),
+      runnerId: "11111111-1111-4111-8111-111111111111",
+      fetchImplementation: githubStub([
+        { number: 7, headSha: "4".repeat(40), unadopted: true },
+        { number: 8, headSha },
+      ]),
+    });
+
+    // The unadopted head is not reported at all — it was never discoverable.
+    // The adopted one is attempted; whether it then publishes depends on the
+    // fetch, which this suite deliberately does not put on the network.
+    expect(outcomes.map(({ number }) => number)).toEqual([8]);
   });
 
   it("bounds one pass so a backlog cannot hold the controller", async () => {

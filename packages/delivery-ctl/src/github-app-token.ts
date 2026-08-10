@@ -254,16 +254,29 @@ export interface OpenPullRequestHead {
   readonly hasPreflight: boolean;
 }
 
-/** A repository carries `.flama/platform-lock.json` only once it has adopted the profile. */
-async function isPlatformManaged(
+/**
+ * Whether a specific commit can be preflighted.
+ *
+ * Checked at the head rather than at the default branch: a pull request opened
+ * before the repository adopted the delivery profile has no `scripts/delivery`
+ * in its own tree, even though the branch it targets does. Preflight refuses
+ * such a head with `delivery_entrypoint_invalid`, so asking about the default
+ * branch reports work that cannot be done — which is exactly what the first
+ * live sweep did, failing ten heads that were never publishable.
+ *
+ * The entrypoint is the thing preflight actually runs, so it is the thing
+ * asked about.
+ */
+async function headIsPreflightable(
   fetchImplementation: FetchImplementation,
   repository: string,
+  headSha: string,
   token: string,
 ): Promise<boolean> {
   try {
     await requestJson(
       fetchImplementation,
-      `/repos/${repository}/contents/.flama/platform-lock.json`,
+      `/repos/${repository}/contents/scripts/delivery?ref=${headSha}`,
       token,
     );
     return true;
@@ -364,11 +377,6 @@ export async function discoverOpenPullRequests(
     if (!isRecord(entry) || typeof entry["full_name"] !== "string") continue;
     if (entry["archived"] === true || entry["disabled"] === true) continue;
     const fullName = entry["full_name"];
-    // The App is installed on every repository the owner chose, most of which
-    // never adopted the delivery profile. Running preflight against those would
-    // fail on a missing ./scripts/delivery and publish nothing but noise, so
-    // the platform lock decides what is in scope.
-    if (!(await isPlatformManaged(fetchImplementation, fullName, token))) continue;
     const pulls = await requestJson(
       fetchImplementation,
       `/repos/${fullName}/pulls?state=open&per_page=100`,
@@ -381,6 +389,8 @@ export async function discoverOpenPullRequests(
       const base = pull["base"];
       if (!isRecord(head) || !isRecord(base)) continue;
       if (typeof head["sha"] !== "string" || typeof base["sha"] !== "string") continue;
+      // Scope is decided per head, not per repository: see headIsPreflightable.
+      if (!(await headIsPreflightable(fetchImplementation, fullName, head["sha"], token))) continue;
       const headRepository = head["repo"];
       heads.push({
         repository: fullName,
