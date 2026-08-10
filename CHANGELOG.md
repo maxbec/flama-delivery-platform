@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.3.0](https://github.com/maxbec/flama-delivery-platform/compare/v0.2.1...v0.3.0) (2026-08-10)
+
+
+### ✨ Features
+
+* **controller:** publish missing preflights on the idle tick ([1af4ac3](https://github.com/maxbec/flama-delivery-platform/commit/1af4ac31d64eac7636f5f129c44be8d2198a35a1))
+* **controller:** publish missing preflights on the idle tick ([1e4f3ba](https://github.com/maxbec/flama-delivery-platform/commit/1e4f3ba43e386246b794010e1295be0750c4a7fa))
+* **delivery-ctl:** compose the preflight chain into a publishable check ([507bab8](https://github.com/maxbec/flama-delivery-platform/commit/507bab8ebceea5a9b39890d9d8d51b3537c036e2))
+* **delivery-ctl:** compose the preflight chain into a publishable check ([06783ad](https://github.com/maxbec/flama-delivery-platform/commit/06783ad51ffd10814e0d502cbe25fa82f79ee37f))
+* **delivery-ctl:** mint the App installation token preflight publication needs ([4e171a7](https://github.com/maxbec/flama-delivery-platform/commit/4e171a7b18b3d0d8a6aca9856d74f20f009a94b7))
+* **delivery-ctl:** mint the App installation token preflight publication needs ([0ac90d4](https://github.com/maxbec/flama-delivery-platform/commit/0ac90d4e2bef1c588a29d9ef77c3151bdfa87a97))
+* **delivery-ctl:** provide the clean checkout preflight requires ([4d80683](https://github.com/maxbec/flama-delivery-platform/commit/4d80683cd866e7b7d142ea2f32bcd80a7ad4262e))
+* **delivery-ctl:** sweep open heads and publish the preflights they lack ([023c7a5](https://github.com/maxbec/flama-delivery-platform/commit/023c7a5da8cecfdc9bb6fa887a4f497015af6c42))
+* **delivery-ctl:** sweep open heads and publish the preflights they lack ([adcbc11](https://github.com/maxbec/flama-delivery-platform/commit/adcbc114b4df72d41935a850c7a1141b52b2a036))
+
 ## [0.2.1](https://github.com/maxbec/flama-delivery-platform/compare/v0.2.0...v0.2.1) (2026-08-10)
 
 
