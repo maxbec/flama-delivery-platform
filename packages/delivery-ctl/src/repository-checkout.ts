@@ -52,6 +52,14 @@ async function runGit(
   const entries = Object.entries(configuration);
   const environment: Record<string, string> = {
     PATH: process.env["PATH"] ?? "",
+    // git needs HOME even when it reads no user configuration: without it
+    // `worktree add` completes the checkout and still exits non-zero, which
+    // read as checkout_worktree_failed for every head in one repository while
+    // the identical command succeeded by hand. Global config is neutralised
+    // through GIT_CONFIG_GLOBAL instead, which is explicit about the intent.
+    HOME: process.env["HOME"] ?? "",
+    GIT_CONFIG_GLOBAL: "/dev/null",
+    GIT_CONFIG_SYSTEM: "/dev/null",
     GIT_TERMINAL_PROMPT: "0",
     GIT_CONFIG_COUNT: String(entries.length),
   };
