@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.2](https://github.com/maxbec/flama-delivery-platform/compare/v0.3.1...v0.3.2) (2026-08-10)
+
+
+### 🐛 Bug Fixes
+
+* **delivery-ctl:** give git HOME, which worktree add needs to report success ([10db0d2](https://github.com/maxbec/flama-delivery-platform/commit/10db0d28cb2deac9a54bf89c4c8cca8ab12079fa))
+* **delivery-ctl:** give git HOME, which worktree add needs to report success ([2b11bdc](https://github.com/maxbec/flama-delivery-platform/commit/2b11bdcbf7471d73720ed355a9b2acb9b8dc5789))
+
 ## [0.3.1](https://github.com/maxbec/flama-delivery-platform/compare/v0.3.0...v0.3.1) (2026-08-10)
 
 
