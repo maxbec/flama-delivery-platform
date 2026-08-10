@@ -28,6 +28,7 @@ import {
 } from "../../bridge/src/paperclip-publisher.js";
 import type { PaperclipTransitionMessage } from "../../bridge/src/processor.js";
 import { AuthorizedPaperclipPublisher, PaperclipRestTransitionApi } from "./paperclip-transition.js";
+import { sweepPreflights } from "../../../packages/delivery-ctl/src/preflight-sweep.js";
 
 const controllerNames = [
   "maxbec-delivery-controller",
@@ -151,11 +152,20 @@ interface GitHubTransitionRoutineContract {
   };
 }
 
+export interface PreflightPassSummary {
+  readonly attempted: number;
+  readonly published: number;
+  readonly failed: number;
+  /** Present only when the pass could not run at all. */
+  readonly skippedReason?: string;
+}
+
 export type ControllerRuntimeResult =
   | {
     readonly schemaVersion: 1;
     readonly status: "idle";
     readonly contractDigest: string;
+    readonly preflight?: PreflightPassSummary;
   }
   | {
     readonly schemaVersion: 1;
@@ -700,6 +710,75 @@ export const executeManagedTransition: ManagedTransitionExecutor = async (
   }
 };
 
+/**
+ * The owner and App an idle controller publishes preflights for. Closed, so a
+ * controller can never sweep another company's repositories.
+ */
+const preflightBindings: Readonly<
+  Record<ControllerName, { readonly owner: string; readonly appSlug: string }>
+> = {
+  "maxbec-delivery-controller": { owner: "maxbec", appSlug: "flama-delivery-maxbec" },
+  "navigaite-delivery-controller": { owner: "navigaite", appSlug: "flama-delivery-navigaite" },
+  "edilio-delivery-controller": { owner: "edilio-app", appSlug: "flama-delivery-edilio" },
+};
+
+/**
+ * Publishes the preflights open heads are missing, on the idle path.
+ *
+ * Idle is the right moment: an assignment is real work with its own deadline,
+ * while an idle tick is exactly the spare capacity this needs. The pass never
+ * fails the run — an opportunistic sweep that could mark a controller failed
+ * would turn a transient GitHub error into a controller outage — but its
+ * outcome is summarised rather than swallowed, so a pass that publishes nothing
+ * is visible instead of silent.
+ */
+async function runPreflightPass(
+  controller: ControllerName,
+  environment: Environment,
+  runId: string,
+  fetchImplementation: FetchImplementation,
+): Promise<PreflightPassSummary> {
+  const binding = preflightBindings[controller];
+  const cacheRoot = environment["FLAMA_CHECKOUT_CACHE_DIR"];
+  if (cacheRoot === undefined || cacheRoot.length === 0) {
+    return { attempted: 0, published: 0, failed: 0, skippedReason: "checkout_cache_unset" };
+  }
+  // Absent credentials are a deployment state, not a fault: the controller runs
+  // before the Infisical path is wired and must stay green while it does.
+  if (environment[`FLAMA_GITHUB_APP_ID_${binding.owner.toUpperCase().replace("-", "_")}`] === undefined) {
+    return { attempted: 0, published: 0, failed: 0, skippedReason: "app_credentials_absent" };
+  }
+
+  // The controller's injected fetch is deliberately narrower than the global
+  // one; adapt at the boundary rather than widening it everywhere.
+  const sweepFetch: typeof fetch = (input, init) =>
+    fetchImplementation(input instanceof Request ? input.url : input, init);
+
+  try {
+    const outcomes = await sweepPreflights({
+      owner: binding.owner,
+      appSlug: binding.appSlug,
+      environment,
+      cacheRoot,
+      runnerId: runId,
+      fetchImplementation: sweepFetch,
+    });
+    const attempted = outcomes.filter(
+      ({ status }) => status === "published" || status === "preflight_failed" || status === "failed",
+    ).length;
+    return {
+      attempted,
+      published: outcomes.filter(({ status }) => status === "published").length,
+      failed: outcomes.filter(({ status }) => status === "failed").length,
+    };
+  } catch (error) {
+    const code = typeof (error as { code?: unknown }).code === "string"
+      ? (error as { code: string }).code
+      : "preflight_pass_failed";
+    return { attempted: 0, published: 0, failed: 0, skippedReason: code };
+  }
+}
+
 export async function runControllerRuntime(
   environment: Environment,
   repositoryRoot: string,
@@ -742,7 +821,14 @@ export async function runControllerRuntime(
       fetchImplementation,
     );
     if (!Array.isArray(rawAssignments)) throw new ControllerRuntimeError("controller_response_invalid");
-    if (rawAssignments.length === 0) return { schemaVersion: 1, status: "idle", contractDigest };
+    if (rawAssignments.length === 0) {
+      return {
+        schemaVersion: 1,
+        status: "idle",
+        contractDigest,
+        preflight: await runPreflightPass(identity.name, environment, runtime.runId, fetchImplementation),
+      };
+    }
     if (rawAssignments.length !== 1) throw new ControllerRuntimeError("controller_assignment_unsupported");
     rawAssignment = rawAssignments[0];
   }
