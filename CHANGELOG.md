@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/maxbec/flama-delivery-platform/compare/v0.3.0...v0.3.1) (2026-08-10)
+
+
+### 🐛 Bug Fixes
+
+* **delivery-ctl:** decide preflight scope at the head, not the default branch ([0b298a2](https://github.com/maxbec/flama-delivery-platform/commit/0b298a2f82171b9fa090eaadf6220b2d329a421f))
+* **delivery-ctl:** decide preflight scope at the head, not the default branch ([6594fc5](https://github.com/maxbec/flama-delivery-platform/commit/6594fc5c347ee0cd46127778b0674dbaae414f9b))
+
 ## [0.3.0](https://github.com/maxbec/flama-delivery-platform/compare/v0.2.1...v0.3.0) (2026-08-10)
 
 
