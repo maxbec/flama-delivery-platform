@@ -132,8 +132,13 @@ import {
   ReconciliationError,
   type ReconciliationInput,
 } from "./reconcile.js";
+import packageJson from "../../../package.json" with { type: "json" };
 
-const toolVersion = "0.1.0";
+// Read from the manifest rather than restated here. A hand-maintained copy
+// silently goes stale the first time a release bumps the version — it already
+// had: the CLI shipped in v0.2.0 still announced 0.1.0. The bundler inlines
+// this at build time, so the released binary carries no filesystem lookup.
+const toolVersion: string = packageJson.version;
 const maximumInputBytes = 10 * 1024 * 1024;
 
 export interface CliIo {

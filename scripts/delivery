@@ -42,7 +42,7 @@ case "$1" in
     ;;
   smoke|health)
     pnpm build >/dev/null
-    [[ "$(node dist/packages/delivery-ctl/src/main.js --version)" == '{"toolVersion":"0.1.0"}' ]]
+    [[ "$(node dist/packages/delivery-ctl/src/main.js --version)" == "{\"toolVersion\":\"$(node -p "require('$ROOT_DIR/package.json').version")\"}" ]]
     ;;
   *)
     echo 'unsupported delivery command' >&2
