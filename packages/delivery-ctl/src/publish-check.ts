@@ -5,7 +5,7 @@ const checkName = "Paperclip Preflight" as const;
 const maximumResponseBytes = 1024 * 1024;
 const githubApiVersion = "2026-03-10" as const;
 
-type DeliveryController =
+export type DeliveryController =
   | "maxbec-delivery-controller"
   | "navigaite-delivery-controller"
   | "edilio-delivery-controller";
