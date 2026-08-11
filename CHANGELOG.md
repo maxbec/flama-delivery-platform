@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.1](https://github.com/maxbec/flama-delivery-platform/compare/v0.4.0...v0.4.1) (2026-08-11)
+
+
+### 🐛 Bug Fixes
+
+* **delivery-ctl:** configure the remote so a checkout can resolve its upstream ([9eb9fcc](https://github.com/maxbec/flama-delivery-platform/commit/9eb9fcc3b8c5a5eb189b845632f00b0d64e84aa3))
+* **delivery-ctl:** configure the remote so a checkout can resolve its upstream ([e97f6ca](https://github.com/maxbec/flama-delivery-platform/commit/e97f6caa3ac26f272c44a6b0259354040bed66a9))
+
 ## [0.4.0](https://github.com/maxbec/flama-delivery-platform/compare/v0.3.4...v0.4.0) (2026-08-11)
 
 
