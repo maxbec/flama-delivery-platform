@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.4](https://github.com/maxbec/flama-delivery-platform/compare/v0.3.3...v0.3.4) (2026-08-11)
+
+
+### 🐛 Bug Fixes
+
+* **delivery-ctl:** settle a child on drained output, and enforce the ceiling ([37a7953](https://github.com/maxbec/flama-delivery-platform/commit/37a7953fff6cdfe27febadcbde6ad4add47403c5))
+* **delivery-ctl:** settle a child on drained output, and enforce the ceiling ([819ba7b](https://github.com/maxbec/flama-delivery-platform/commit/819ba7b98b05161e301d10dfc37845eb97230078))
+
 ## [0.3.3](https://github.com/maxbec/flama-delivery-platform/compare/v0.3.2...v0.3.3) (2026-08-11)
 
 
