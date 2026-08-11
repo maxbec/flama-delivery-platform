@@ -76,13 +76,26 @@ async function runGit(
       stdio: ["ignore", "pipe", "ignore"],
     });
     let stdout = "";
+    let settled = false;
+    const settle = (result: ProcessResult) => {
+      if (settled) return;
+      settled = true;
+      resolveProcess(result);
+    };
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {
       if (stdout.length <= 1_048_576) stdout += chunk;
     });
-    child.once("error", () => resolveProcess({ exitCode: 127, stdout: "" }));
+    const finish = (code: number | null, signal: NodeJS.Signals | null) =>
+      settle({ exitCode: signal === null && code !== null ? code : 124, stdout });
+    child.once("error", () => settle({ exitCode: 127, stdout: "" }));
+    // `exit` says the process is gone, `close` says its output is drained.
+    // Reading stdout at `exit` can read a truncated commit SHA, which would
+    // surface as a spurious checkout_head_mismatch. The timer covers the case
+    // where a pipe outlives the process and `close` never arrives.
+    child.once("close", finish);
     child.once("exit", (code, signal) => {
-      resolveProcess({ exitCode: signal === null && code !== null ? code : 124, stdout });
+      setTimeout(() => finish(code, signal), 5_000).unref();
     });
   });
 }
