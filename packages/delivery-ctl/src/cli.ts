@@ -1,4 +1,4 @@
-import { randomInt } from "node:crypto";
+import { randomInt, randomUUID } from "node:crypto";
 import { lstat, readFile, stat, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
@@ -33,6 +33,7 @@ import {
   type GitHubPolicyAuditInput,
 } from "./github-policy-audit.js";
 import { PreflightError, runPreflight, type PreflightRunInput } from "./preflight.js";
+import { sweepPreflights } from "./preflight-sweep.js";
 import {
   complianceView,
   GovernanceViewError,
@@ -187,6 +188,7 @@ function isSchemaName(value: string | undefined): value is SchemaName {
     "github-policy-audit-result",
     "preflight-evidence",
     "preflight-run-input",
+    "preflight-sweep-input",
     "preflight-run-result",
     "publish-check-input",
     "publish-check-result",
@@ -349,6 +351,7 @@ export async function runCli(
     command !== "deployment-pr" &&
     command !== "deploy" &&
     command !== "preflight" &&
+    command !== "sweep" &&
     command !== "certify" &&
     command !== "publish-check" &&
     command !== "promote" &&
@@ -1000,6 +1003,73 @@ export async function runCli(
       await writeEvidence(options.output, result);
       io.writeStdout(jsonLine({ command, ok: result.status === "passed", toolVersion, result }));
       return result.status === "passed" ? 0 : 1;
+    }
+
+    /*
+     * The same sweep the controller runs on its idle tick, with a budget that
+     * fits the work rather than the tick.
+     *
+     * A preflight is a clean-checkout build of somebody else's repository: an
+     * install from cold plus the repository's own commands. That is minutes,
+     * and a controller run window is minutes — so on the tick the expensive
+     * repositories were attempted, ran out of budget and deferred forever,
+     * publishing nothing while consuming the tick. Their required checks stay
+     * missing, which is what leaves dependency PRs permanently unmergeable.
+     *
+     * Given its own runner the pass can afford them, and the idle tick keeps
+     * whatever is cheap enough to finish there.
+     */
+    if (command === "sweep") {
+      const validation = validator.validate("preflight-sweep-input", input);
+      if (!validation.ok) {
+        io.writeStdout(jsonLine({ command, ok: false, errors: validation.errors, toolVersion }));
+        return 1;
+      }
+      const sweepInput = input as {
+        readonly owner: "maxbec" | "navigaite" | "edilio-app";
+        readonly appSlug: string;
+        readonly cacheRoot: string;
+        readonly budgetSeconds?: number;
+        readonly maximumPublications?: number;
+      };
+      if (options["dry-run"]) {
+        io.writeStdout(jsonLine({
+          command,
+          dryRun: true,
+          ok: true,
+          toolVersion,
+          result: { status: "planned", owner: sweepInput.owner, appSlug: sweepInput.appSlug },
+        }));
+        return 0;
+      }
+      const outcomes = await sweepPreflights({
+        owner: sweepInput.owner,
+        appSlug: sweepInput.appSlug,
+        environment: process.env,
+        cacheRoot: sweepInput.cacheRoot,
+        runnerId: randomUUID(),
+        ...(sweepInput.budgetSeconds === undefined
+          ? {}
+          : { budgetMilliseconds: sweepInput.budgetSeconds * 1_000 }),
+        ...(sweepInput.maximumPublications === undefined
+          ? {}
+          : { maximumPublications: sweepInput.maximumPublications }),
+      });
+      const counts = outcomes.reduce<Record<string, number>>(
+        (totals, { status }) => ({ ...totals, [status]: (totals[status] ?? 0) + 1 }),
+        {},
+      );
+      // A pass that reached every head it could is a success even when some
+      // preflights failed: a failing preflight is a verdict about a change,
+      // not a fault here. Only an infrastructure failure is this command's.
+      const failed = outcomes.filter(({ status }) => status === "failed");
+      io.writeStdout(jsonLine({
+        command,
+        ok: failed.length === 0,
+        toolVersion,
+        result: { counts, outcomes },
+      }));
+      return failed.length === 0 ? 0 : 1;
     }
 
     if (command === "canary-plan" || command === "canary-audit") {

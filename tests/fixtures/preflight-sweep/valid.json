@@ -1,0 +1,8 @@
+{
+  "schemaVersion": 1,
+  "owner": "maxbec",
+  "appSlug": "flama-delivery-maxbec",
+  "cacheRoot": "/var/tmp/flama-checkouts",
+  "budgetSeconds": 1200,
+  "maximumPublications": 25
+}
