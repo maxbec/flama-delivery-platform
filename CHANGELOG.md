@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.2](https://github.com/maxbec/flama-delivery-platform/compare/v0.4.1...v0.4.2) (2026-08-11)
+
+
+### 🐛 Bug Fixes
+
+* **policy:** wait for the preflight instead of sampling for it once ([72df9f8](https://github.com/maxbec/flama-delivery-platform/commit/72df9f897f9c8fea80f17dc0690bb94dfe14bac9))
+* **policy:** wait for the preflight instead of sampling for it once ([af1e50e](https://github.com/maxbec/flama-delivery-platform/commit/af1e50e34f22d9fc1b241daf351453fb8aafc0de))
+
 ## [0.4.1](https://github.com/maxbec/flama-delivery-platform/compare/v0.4.0...v0.4.1) (2026-08-11)
 
 
