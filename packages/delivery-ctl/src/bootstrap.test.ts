@@ -219,9 +219,74 @@ describe("repository bootstrap", () => {
       input: bootstrapInput(updatedSha),
       dryRun: false,
     });
-    expect(rerun.generated.files.every(({ status }) => status === "unchanged")).toBe(true);
+    // The release manifest reports `preserved` rather than `unchanged`: it is
+    // seeded once and then belongs to release-please, so its content is no
+    // longer compared against what the platform would generate.
+    expect(
+      rerun.generated.files.every(({ path, status }) =>
+        path === ".release-please-manifest.json" ? status === "preserved" : status === "unchanged",
+      ),
+    ).toBe(true);
     expect(rerun.repositoryOwned.every(({ status }) => status === "preserved")).toBe(true);
     expect((await readFile(join(repository.root, "AGENTS.md"), "utf8")).match(/<!-- flama-delivery:start -->/gu)).toHaveLength(1);
+  });
+
+  /*
+   * The Policy Gate requires the platform lock and the delivery contract to
+   * name the same platform version, and regeneration rewrites the lock. Seeding
+   * the contract once meant a migration bumped one and not the other, so the
+   * repository claimed two platform versions at the same time and the gate
+   * rejected it — which is how the first consumer migration failed.
+   */
+  it("carries a changed contract into a repository that already has one", async () => {
+    const repository = await initializeRepository();
+    await bootstrapRepository({
+      repositoryRoot: platformRoot,
+      outputRoot: repository.root,
+      input: bootstrapInput(repository.sha),
+      dryRun: false,
+    });
+
+    // A bootstrap writes files, and the next one refuses a dirty worktree —
+    // exactly as a real migration commits before it migrates again.
+    await git(repository.root, "add", "-A");
+    await git(
+      repository.root, "-c", "commit.gpgsign=false", "-c", "user.name=Test",
+      "-c", "user.email=test@example.invalid", "commit", "-qm", "adopt",
+    );
+    const head = await git(repository.root, "rev-parse", "HEAD");
+    await git(repository.root, "update-ref", "refs/remotes/origin/main", head.trim());
+
+    const migrated = bootstrapInput(head.trim());
+    const input = {
+      ...migrated,
+      contract: { ...migrated.contract, platform: { ...migrated.contract.platform, version: "9.9.9" } },
+      render: { ...migrated.render, platformVersion: "9.9.9" },
+      // What a migration authorises: the lock is generated and changes with the
+      // version. The contract is not on this list — it is repository-owned, and
+      // refreshing it is the behaviour under test.
+      replaceExisting: [".flama/platform-lock.json"],
+    };
+    const rerun = await bootstrapRepository({
+      repositoryRoot: platformRoot,
+      outputRoot: repository.root,
+      input,
+      dryRun: false,
+    });
+
+    expect(rerun.repositoryOwned).toContainEqual({
+      path: ".flama/delivery-contract.json",
+      status: "refreshed",
+    });
+    const contract = JSON.parse(
+      await readFile(join(repository.root, ".flama/delivery-contract.json"), "utf8"),
+    ) as { platform: { version: string } };
+    const lock = JSON.parse(
+      await readFile(join(repository.root, ".flama/platform-lock.json"), "utf8"),
+    ) as { version: string };
+    // The two files the gate compares must agree after a migration.
+    expect(contract.platform.version).toBe("9.9.9");
+    expect(lock.version).toBe(contract.platform.version);
   });
 
   it("never overwrites an existing repository-owned delivery entrypoint", async () => {

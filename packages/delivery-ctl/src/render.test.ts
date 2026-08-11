@@ -95,7 +95,34 @@ describe("template renderer", () => {
     await expect(access(join(outputRoot, ".flama", "commands.json"))).rejects.toThrow();
 
     const rerendered = await renderTemplates({ repositoryRoot, outputRoot, input, dryRun: false });
-    expect(rerendered.files.every(({ status }) => status === "unchanged")).toBe(true);
+    // The release manifest reports `preserved`: seeded once, then owned by
+    // release-please, so it is not compared against generated content.
+    expect(
+      rerendered.files.every(({ path, status }) =>
+        path === ".release-please-manifest.json" ? status === "preserved" : status === "unchanged",
+      ),
+    ).toBe(true);
+  });
+
+  /*
+   * The manifest records what the repository has actually published, including
+   * prereleases the render input cannot express — its `currentVersion` must
+   * match X.Y.Z. Regenerating it rewrote a consumer sitting on 3.3.0-beta back
+   * to 3.3.0, handing release-please a version that repository had already
+   * released. It is seeded once and then belongs to release-please.
+   */
+  it("seeds the release manifest once and never rewrites it afterwards", async () => {
+    const outputRoot = await mkdtemp(join(tmpdir(), "flama-render-manifest-"));
+    await renderTemplates({ repositoryRoot, outputRoot, input, dryRun: false });
+
+    const manifestPath = join(outputRoot, ".release-please-manifest.json");
+    // What release-please would have written after shipping a prerelease.
+    await writeFile(manifestPath, `${JSON.stringify({ ".": "3.3.0-beta" }, null, 2)}\n`, "utf8");
+
+    const rerun = await renderTemplates({ repositoryRoot, outputRoot, input, dryRun: false });
+
+    expect(rerun.files).toContainEqual({ path: ".release-please-manifest.json", status: "preserved" });
+    expect(JSON.parse(await readFile(manifestPath, "utf8"))).toEqual({ ".": "3.3.0-beta" });
   });
 
   it("targets Major dependency updates at dev and omits release files when releases are disabled", async () => {

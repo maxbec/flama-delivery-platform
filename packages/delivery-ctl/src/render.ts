@@ -47,7 +47,7 @@ export interface RenderInput {
   readonly commands: Readonly<Record<"buildable" | "affected" | "full" | "smoke" | "health", readonly string[]>>;
 }
 
-export type RenderStatus = "planned" | "created" | "unchanged" | "replaced";
+export type RenderStatus = "planned" | "created" | "unchanged" | "replaced" | "preserved";
 
 export interface RenderResult {
   readonly schemaVersion: 1;
@@ -73,6 +73,13 @@ interface TargetFile {
   readonly path: string;
   readonly content: string;
   readonly mode: number;
+  /**
+   * Seeded once and then left alone, because the file's content stops being
+   * ours the moment it exists. Never a conflict, never replaceable — not even
+   * with explicit authorization, since the authorization would be granted by
+   * someone who cannot know what the file has since become.
+   */
+  readonly preserveExisting?: boolean;
 }
 
 interface DependabotPolicy {
@@ -340,8 +347,14 @@ async function buildTargets(repositoryRoot: string, input: RenderInput): Promise
       },
       {
         path: ".release-please-manifest.json",
+        // release-please owns this after the first release: it records what the
+        // repository has actually published, including prereleases the render
+        // input cannot express. Regenerating it from `currentVersion` rewrote a
+        // consumer sitting on 3.3.0-beta back to 3.3.0 — offering release-please
+        // a version that repository had already published.
         content: jsonFile({ ".": input.release.currentVersion }),
         mode: 0o644,
+        preserveExisting: true,
       },
     );
   }
@@ -413,7 +426,7 @@ export async function renderTemplates(options: RenderOptions): Promise<RenderRes
   assertVerifyingCommands(options.input.commands);
   const root = await assertSafeOutputRoot(options.outputRoot);
   const targets = await buildTargets(options.repositoryRoot, options.input);
-  const states: Array<{ target: TargetFile; exists: boolean; same: boolean }> = [];
+  const states: Array<{ target: TargetFile; exists: boolean; same: boolean; preserved?: boolean }> = [];
   const conflicts: string[] = [];
 
   for (const target of targets) {
@@ -424,6 +437,11 @@ export async function renderTemplates(options: RenderOptions): Promise<RenderRes
       if (!metadata.isFile() || metadata.isSymbolicLink()) {
         conflicts.push(target.path);
         states.push({ target, exists: true, same: false });
+        continue;
+      }
+      if (target.preserveExisting === true) {
+        // Present is the whole test; its content is no longer ours to compare.
+        states.push({ target, exists: true, same: true, preserved: true });
         continue;
       }
       const same = (await readFile(destination, "utf8")) === target.content;
@@ -463,9 +481,11 @@ export async function renderTemplates(options: RenderOptions): Promise<RenderRes
     schemaVersion: 1,
     profile: options.input.profile,
     platformRef: options.input.platformRef,
-    files: states.map(({ target, exists, same }) => ({
+    files: states.map(({ target, exists, same, preserved }) => ({
       path: target.path,
-      status: !exists
+      status: preserved === true
+        ? "preserved"
+        : !exists
         ? (options.dryRun ? "planned" : "created")
         : same
           ? "unchanged"
