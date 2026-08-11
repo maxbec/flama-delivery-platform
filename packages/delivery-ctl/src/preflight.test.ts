@@ -116,6 +116,53 @@ describe("deterministic preflight", () => {
     expect(result.commands[0]).toMatchObject({ command: "./scripts/delivery buildable", status: "failed" });
   });
 
+  /*
+   * The evidence hashes are finalised when the run settles. A killed command's
+   * pipes drain afterwards, so a late chunk used to reach an already-digested
+   * hash and throw ERR_CRYPTO_HASH_FINALIZED out of an event handler — which
+   * is an uncatchable crash of the controller process, not a failed preflight.
+   * That is how the first pass on 0.3.3 died.
+   */
+  it("survives output that arrives after the command was killed", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flama-preflight-late-output-"));
+    temporaryDirectories.push(root);
+    await mkdir(join(root, "scripts"));
+    // Keeps writing through SIGTERM, so output is still in flight when the
+    // ceiling settles the run, and a grandchild holds the pipe open after the
+    // child itself is gone.
+    await writeFile(
+      join(root, "scripts", "delivery"),
+      [
+        "#!/usr/bin/env node",
+        "const { spawn } = require('node:child_process');",
+        "spawn(process.execPath, ['-e', \"setInterval(() => process.stdout.write('x'.repeat(1024)), 5)\"],",
+        "  { stdio: ['ignore', 'inherit', 'inherit'], detached: true }).unref();",
+        "process.on('SIGTERM', () => {});",
+        "setInterval(() => process.stdout.write('late'), 5);",
+      ].join("\n"),
+      "utf8",
+    );
+    await chmod(join(root, "scripts", "delivery"), 0o755);
+    const git = (args: readonly string[]) => spawnSync("git", [...args], { cwd: root, encoding: "utf8" });
+    git(["init", "-q"]);
+    git(["add", "scripts/delivery"]);
+    git(["-c", "commit.gpgsign=false", "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "fixture"]);
+    const headSha = git(["rev-parse", "HEAD"]).stdout.trim();
+
+    const result = await runPreflight(
+      { schemaVersion: 1, repository: "maxbec/example", headSha, baseSha: headSha, releaseImpact: "none" },
+      root,
+      { commandTimeoutMilliseconds: 250 },
+    );
+
+    // Returning at all is the assertion: the crash took the process down.
+    expect(result.status).toBe("failed");
+    expect(result.commands[0]?.evidenceDigest).toMatch(/^sha256:[0-9a-f]{64}$/u);
+    // Settling waits for the pipes rather than reading mid-flight, but never
+    // longer than the drain grace, since the grandchild holds them open.
+    expect(result.commands[0]?.durationMilliseconds).toBeLessThan(20_000);
+  }, 30_000);
+
   it("rejects a dirty or SHA-mismatched worktree before executing", async () => {
     const { root, headSha } = await repositoryWithDeliveryScript();
     await writeFile(join(root, "untracked.txt"), "dirty", "utf8");

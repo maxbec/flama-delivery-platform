@@ -52,6 +52,27 @@ interface ProcessResult {
   readonly stdout: string;
 }
 
+/**
+ * How long to wait after `exit` for the child's pipes to close.
+ *
+ * `exit` fires when the process is gone, `close` when its output has actually
+ * been drained — reading a result at `exit` can therefore read a truncated one.
+ * Waiting for `close` alone is not safe either: a grandchild inheriting the
+ * pipes keeps them open after the child is dead, and a killed delivery command
+ * is exactly when that happens, so `close` might never arrive.
+ */
+const outputDrainMilliseconds = 5_000;
+
+/**
+ * How long a command gets to exit on its own after SIGTERM before SIGKILL.
+ *
+ * SIGTERM is a request, and a delivery command is arbitrary code that may
+ * ignore it — a test runner installing a handler, or a shell that never
+ * forwards it. Without escalation the ceiling enforces nothing and the pass
+ * waits forever on a process that already refused to stop.
+ */
+const terminationGraceMilliseconds = 10_000;
+
 async function runSmallProcess(command: string, args: readonly string[], cwd: string): Promise<ProcessResult> {
   return new Promise((resolveProcess) => {
     const child = spawn(command, [...args], {
@@ -61,13 +82,22 @@ async function runSmallProcess(command: string, args: readonly string[], cwd: st
       stdio: ["ignore", "pipe", "ignore"],
     });
     let stdout = "";
+    let settled = false;
+    const settle = (result: ProcessResult) => {
+      if (settled) return;
+      settled = true;
+      resolveProcess(result);
+    };
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk: string) => {
       if (stdout.length <= 1_048_576) stdout += chunk;
     });
-    child.once("error", () => resolveProcess({ exitCode: 127, stdout: "" }));
+    const finish = (code: number | null, signal: NodeJS.Signals | null) =>
+      settle({ exitCode: signal === null && code !== null ? code : 124, stdout });
+    child.once("error", () => settle({ exitCode: 127, stdout: "" }));
+    child.once("close", finish);
     child.once("exit", (code, signal) => {
-      resolveProcess({ exitCode: signal === null && code !== null ? code : 124, stdout });
+      setTimeout(() => finish(code, signal), outputDrainMilliseconds).unref();
     });
   });
 }
@@ -89,6 +119,11 @@ async function runDeliveryCommand(
   const stderrHash = createHash("sha256");
   let outputBytes = 0;
   let outputLimitExceeded = false;
+  // The hashes are finalised once the run settles, and a chunk arriving after
+  // that would throw ERR_CRYPTO_HASH_FINALIZED out of an event handler — an
+  // uncatchable crash of the whole controller, not a failed preflight. Output
+  // after settling is normal here: a killed command's pipes drain afterwards.
+  let outputClosed = false;
   const exitCode = await new Promise<number>((resolveProcess) => {
     const child = spawn(entrypoint, [argument], {
       cwd,
@@ -96,25 +131,42 @@ async function runDeliveryCommand(
       shell: false,
       stdio: ["ignore", "pipe", "pipe"],
     });
-    const timeout = setTimeout(() => child.kill("SIGTERM"), timeoutMilliseconds);
+    let escalation: NodeJS.Timeout | undefined;
+    const terminate = () => {
+      child.kill("SIGTERM");
+      escalation ??= setTimeout(() => child.kill("SIGKILL"), terminationGraceMilliseconds).unref();
+    };
+    const timeout = setTimeout(terminate, timeoutMilliseconds);
+    let settled = false;
+    const settle = (code: number) => {
+      if (settled) return;
+      settled = true;
+      outputClosed = true;
+      clearTimeout(timeout);
+      if (escalation !== undefined) clearTimeout(escalation);
+      resolveProcess(code);
+    };
     const consume = (streamId: number, chunk: Buffer) => {
+      if (outputClosed) return;
       (streamId === 1 ? stdoutHash : stderrHash).update(chunk);
       outputBytes += chunk.byteLength;
       if (outputBytes > 50 * 1_024 * 1_024 && !outputLimitExceeded) {
         outputLimitExceeded = true;
-        child.kill("SIGTERM");
+        terminate();
       }
     };
     child.stdout.on("data", (chunk: Buffer) => consume(1, chunk));
     child.stderr.on("data", (chunk: Buffer) => consume(2, chunk));
-    child.once("error", () => {
-      clearTimeout(timeout);
-      resolveProcess(127);
-    });
+    child.once("error", () => settle(127));
+    const finish = (code: number | null, signal: NodeJS.Signals | null) => {
+      if (outputLimitExceeded) settle(125);
+      else settle(signal === null && code !== null ? Math.min(255, Math.max(0, code)) : 124);
+    };
+    // `close` carries the drained output the evidence digest is taken over;
+    // the timer is the escape hatch for pipes a grandchild holds open.
+    child.once("close", finish);
     child.once("exit", (code, signal) => {
-      clearTimeout(timeout);
-      if (outputLimitExceeded) resolveProcess(125);
-      else resolveProcess(signal === null && code !== null ? Math.min(255, Math.max(0, code)) : 124);
+      setTimeout(() => finish(code, signal), outputDrainMilliseconds).unref();
     });
   });
   const evidenceHash = createHash("sha256");
