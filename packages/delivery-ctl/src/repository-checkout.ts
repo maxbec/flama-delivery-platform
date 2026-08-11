@@ -155,9 +155,25 @@ export async function prepareCheckout(input: PrepareCheckoutInput): Promise<Prep
   }
 
   const remote = input.remoteUrl ?? `https://github.com/${input.repository}.git`;
+  // The remote is configured rather than fetched from by URL. Refs alone are
+  // not enough for the tools a delivery command runs: they ask git which
+  // remote they are on and then look under `refs/remotes/<name>/`. With no
+  // configured remote that name is empty, so a lookup lands on
+  // `refs/remotes//main` and fails even though `refs/remotes/origin/main` is
+  // right there. That is what failed every platzl-finder head — `trunk check`
+  // refused with "Unable to detect an upstream commit on this branch", and the
+  // same commands pass in an ordinary clone.
+  //
+  // The URL carries no credential; the token stays in the environment.
+  const configured = await runGit(["remote", "set-url", "origin", remote], mirror);
+  if (configured.exitCode !== 0) {
+    const added = await runGit(["remote", "add", "origin", remote], mirror);
+    if (added.exitCode !== 0) throw new RepositoryCheckoutError("checkout_fetch_failed");
+  }
+
   const fetched = await runGit(
     [
-      "fetch", "--quiet", "--no-tags", "--prune", "--force", remote,
+      "fetch", "--quiet", "--no-tags", "--prune", "--force", "origin",
       "+refs/heads/*:refs/remotes/origin/*",
       "+refs/pull/*/head:refs/remotes/pull/*",
     ],
@@ -165,6 +181,11 @@ export async function prepareCheckout(input: PrepareCheckoutInput): Promise<Prep
     authorizationConfiguration(input.token),
   );
   if (fetched.exitCode !== 0) throw new RepositoryCheckoutError("checkout_fetch_failed");
+
+  // And the remote's default branch has to be resolvable, since that is what
+  // "upstream" means to those tools. Not fatal on its own: a repository whose
+  // commands never ask still deserves its preflight.
+  await runGit(["remote", "set-head", "origin", "--auto"], mirror, authorizationConfiguration(input.token));
 
   const present = await runGit(["cat-file", "-e", `${input.headSha}^{commit}`], mirror);
   if (present.exitCode !== 0) throw new RepositoryCheckoutError("checkout_head_mismatch");
