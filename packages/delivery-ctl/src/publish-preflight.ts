@@ -62,6 +62,8 @@ export interface PublishPreflightInput {
   /** Carries the App credentials; supplied by `infisical run`. */
   readonly environment: Environment;
   readonly runnerId: string;
+  /** Ceiling for each delivery command; defaults to the CI-sized one. */
+  readonly commandTimeoutMilliseconds?: number;
   readonly fetchImplementation?: FetchImplementation;
   readonly now?: () => Date;
 }
@@ -140,6 +142,9 @@ export async function publishPreflight(
       releaseImpact: input.releaseImpact,
     },
     input.checkoutDirectory,
+    input.commandTimeoutMilliseconds === undefined
+      ? {}
+      : { commandTimeoutMilliseconds: input.commandTimeoutMilliseconds },
   );
 
   if (run.status !== "passed") {

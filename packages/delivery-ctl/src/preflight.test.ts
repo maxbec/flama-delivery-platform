@@ -79,6 +79,43 @@ describe("deterministic preflight", () => {
     expect(result.commands[1]).toMatchObject({ command: "./scripts/delivery affected", status: "failed", exitCode: 1 });
   });
 
+  /*
+   * The ceiling is sized for a CI job. The sweep runs inside a much shorter
+   * window, and a command that ignores the caller's ceiling holds the pass
+   * until its own — which is how one repository installing dependencies from
+   * cold ran the controller past its run timeout.
+   */
+  it("stops a delivery command at the caller's ceiling and fails the run", async () => {
+    const root = await mkdtemp(join(tmpdir(), "flama-preflight-timeout-"));
+    temporaryDirectories.push(root);
+    await mkdir(join(root, "scripts"));
+    // Ignores SIGTERM's default disposition only insofar as it never exits on
+    // its own: the run must end because the ceiling ended it.
+    await writeFile(
+      join(root, "scripts", "delivery"),
+      "#!/usr/bin/env node\nsetInterval(() => {}, 1000);\n",
+      "utf8",
+    );
+    await chmod(join(root, "scripts", "delivery"), 0o755);
+    const git = (args: readonly string[]) => spawnSync("git", [...args], { cwd: root, encoding: "utf8" });
+    git(["init", "-q"]);
+    git(["add", "scripts/delivery"]);
+    git(["-c", "commit.gpgsign=false", "-c", "user.name=Test", "-c", "user.email=test@example.invalid", "commit", "-qm", "fixture"]);
+    const headSha = git(["rev-parse", "HEAD"]).stdout.trim();
+
+    const result = await runPreflight(
+      { schemaVersion: 1, repository: "maxbec/example", headSha, baseSha: headSha, releaseImpact: "none" },
+      root,
+      { commandTimeoutMilliseconds: 250 },
+    );
+
+    // Killed, so unfinished, so failed — an unfinished command has shown
+    // nothing, and `affected` is never reached.
+    expect(result.status).toBe("failed");
+    expect(result.commands).toHaveLength(1);
+    expect(result.commands[0]).toMatchObject({ command: "./scripts/delivery buildable", status: "failed" });
+  });
+
   it("rejects a dirty or SHA-mismatched worktree before executing", async () => {
     const { root, headSha } = await repositoryWithDeliveryScript();
     await writeFile(join(root, "untracked.txt"), "dirty", "utf8");

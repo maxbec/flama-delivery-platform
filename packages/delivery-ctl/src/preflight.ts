@@ -72,10 +72,17 @@ async function runSmallProcess(command: string, args: readonly string[], cwd: st
   });
 }
 
+/**
+ * A delivery command is a CI job's worth of work — the ceiling is sized for
+ * one, and a caller that has less time than that says so.
+ */
+const defaultCommandTimeoutMilliseconds = 20 * 60 * 1_000;
+
 async function runDeliveryCommand(
   entrypoint: string,
   argument: "buildable" | "affected",
   cwd: string,
+  timeoutMilliseconds: number,
 ): Promise<PreflightCommandResult> {
   const started = Date.now();
   const stdoutHash = createHash("sha256");
@@ -89,7 +96,7 @@ async function runDeliveryCommand(
       shell: false,
       stdio: ["ignore", "pipe", "pipe"],
     });
-    const timeout = setTimeout(() => child.kill("SIGTERM"), 20 * 60 * 1_000);
+    const timeout = setTimeout(() => child.kill("SIGTERM"), timeoutMilliseconds);
     const consume = (streamId: number, chunk: Buffer) => {
       (streamId === 1 ? stdoutHash : stderrHash).update(chunk);
       outputBytes += chunk.byteLength;
@@ -133,9 +140,20 @@ function validateInput(input: PreflightRunInput): void {
   ) throw new PreflightError("input_invalid");
 }
 
+export interface RunPreflightOptions {
+  /**
+   * Ceiling for each delivery command. A caller running inside a shorter
+   * window than a CI job passes its own; a command killed here fails the
+   * preflight, which is the correct verdict — an unfinished command has not
+   * demonstrated anything.
+   */
+  readonly commandTimeoutMilliseconds?: number;
+}
+
 export async function runPreflight(
   input: PreflightRunInput,
   workingDirectory: string,
+  options: RunPreflightOptions = {},
 ): Promise<PreflightRunResult> {
   validateInput(input);
   const root = await realpath(resolve(workingDirectory));
@@ -170,12 +188,13 @@ export async function runPreflight(
     throw new PreflightError("delivery_entrypoint_invalid");
   }
 
+  const commandTimeout = options.commandTimeoutMilliseconds ?? defaultCommandTimeoutMilliseconds;
   const startedAt = new Date().toISOString();
   const commands: PreflightCommandResult[] = [];
-  const buildable = await runDeliveryCommand(entrypoint, "buildable", root);
+  const buildable = await runDeliveryCommand(entrypoint, "buildable", root, commandTimeout);
   commands.push(buildable);
   if (buildable.status === "passed") {
-    commands.push(await runDeliveryCommand(entrypoint, "affected", root));
+    commands.push(await runDeliveryCommand(entrypoint, "affected", root, commandTimeout));
   }
   const status = commands.length === 2 && commands.every((command) => command.status === "passed")
     ? "passed"

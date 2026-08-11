@@ -36,12 +36,20 @@ const defaultMaximumPublications = 10;
  * whose checkouts genuinely succeeded ran past the controller's timeout and
  * was killed, losing the work it had already done.
  *
- * A head already in flight is never interrupted: cutting one off mid-preflight
- * would waste the whole clone and could leave a check half-published. The
- * budget decides whether to start another, so a pass overruns by at most one
- * head and the rest are reported as deferred.
+ * The budget both decides whether to start another head and caps the delivery
+ * commands of the head it does start, so the pass cannot be held by a single
+ * repository. Without that cap the bound is nominal: preflight's own ceiling
+ * is sized for a CI job at twenty minutes per command, and one head that
+ * installs its dependencies from cold spends longer than the whole window.
  */
 const defaultBudgetMilliseconds = 180_000;
+
+/**
+ * A head is never given less than this. A command killed almost immediately
+ * would publish a failure that says more about the budget than about the
+ * change, so a pass that cannot afford a fair attempt defers instead.
+ */
+const minimumCommandMilliseconds = 30_000;
 
 export interface SweepPreflightsInput {
   readonly owner: string;
@@ -107,7 +115,8 @@ export async function sweepPreflights(
     // Both bounds report what they left behind. A head dropped silently is
     // indistinguishable from a head that was never eligible, which would read
     // as full coverage the pass did not have.
-    if (published >= limit || now().getTime() >= deadline) {
+    const remaining = deadline - now().getTime();
+    if (published >= limit || remaining < minimumCommandMilliseconds) {
       outcomes.push({ ...identity, status: "deferred" });
       continue;
     }
@@ -137,6 +146,12 @@ export async function sweepPreflights(
         // the change, and claiming one here would put it in signed evidence.
         releaseImpact: "none",
         checkoutDirectory: checkout.path,
+        // Spend what is left rather than preflight's CI-sized ceiling: the
+        // clone has already cost part of the budget.
+        commandTimeoutMilliseconds: Math.max(
+          minimumCommandMilliseconds,
+          deadline - now().getTime(),
+        ),
         environment: input.environment,
         runnerId: input.runnerId,
         fetchImplementation,
