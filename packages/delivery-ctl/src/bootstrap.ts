@@ -92,7 +92,14 @@ export interface BootstrapInput {
   readonly render: RenderInput;
 }
 
-export type BootstrapOwnedStatus = "planned" | "created" | "append_planned" | "appended" | "preserved";
+export type BootstrapOwnedStatus =
+  | "planned"
+  | "created"
+  | "append_planned"
+  | "appended"
+  | "preserved"
+  | "refresh_planned"
+  | "refreshed";
 
 export interface BootstrapResult {
   readonly schemaVersion: 1;
@@ -119,6 +126,12 @@ interface OwnedTarget {
   readonly mode: number;
   readonly appendToExisting?: true;
   /**
+   * Rewritten on every run rather than seeded once, because the file *is* the
+   * input restated — leaving a stale copy in place makes the repository state
+   * two different things at once.
+   */
+  readonly refreshFromInput?: true;
+  /**
    * Written before the block when the file does not exist yet. A markdown file
    * whose first line is not a top-level heading fails markdownlint MD041, and a
    * second one fails MD025 — so the title belongs to the created file, never to
@@ -139,6 +152,7 @@ interface OwnedState {
   readonly target: OwnedTarget;
   readonly exists: boolean;
   readonly append: boolean;
+  readonly refresh?: boolean;
   readonly originalContent?: string;
 }
 
@@ -364,6 +378,12 @@ async function ownedTargets(
       path: ".flama/delivery-contract.json",
       content: jsonFile(input.contract),
       mode: 0o644,
+      // The contract names the platform version, and the Policy Gate requires
+      // it to agree with the lock — which regeneration does rewrite. Seeding
+      // this once meant a migration bumped the lock to the new version while
+      // the contract still claimed the old one, and the gate rejected the
+      // repository for claiming both at the same time. Correctly.
+      refreshFromInput: true as const,
     },
     {
       path: ".flama/run-command.mjs",
@@ -419,7 +439,10 @@ async function planOwnedTargets(
         throw new BootstrapError("bootstrap_repository_state_unavailable");
       }
       if (target.appendToExisting !== true) {
-        states.push({ target, exists: true, append: false });
+        const refresh =
+          target.refreshFromInput === true &&
+          (await readFile(destination, "utf8")) !== target.content;
+        states.push({ target, exists: true, append: false, refresh });
         continue;
       }
       if (metadata.size > maximumAgentsBytes) {
@@ -517,12 +540,19 @@ async function applyOwnedTargets(root: string, states: readonly OwnedState[]): P
         flag: "wx",
         mode: state.target.mode,
       });
+    } else if (state.refresh === true) {
+      await writeFile(destination, state.target.content, {
+        encoding: "utf8",
+        flag: "w",
+        mode: state.target.mode,
+      });
     }
   }
 }
 
 function ownedStatus(state: OwnedState, dryRun: boolean): BootstrapOwnedStatus {
   if (state.append) return dryRun ? "append_planned" : "appended";
+  if (state.refresh === true) return dryRun ? "refresh_planned" : "refreshed";
   if (state.exists) return "preserved";
   return dryRun ? "planned" : "created";
 }
