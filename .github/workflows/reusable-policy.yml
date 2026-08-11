@@ -23,6 +23,14 @@ on:
         description: Flama branch profile
         required: true
         type: string
+      preflight-wait-seconds:
+        description: >-
+          How long to wait for the preflight to be published before failing.
+          Default spans a full controller sweep interval, so a head pushed
+          immediately after one pass still meets the next.
+        required: false
+        default: 2100
+        type: number
 
 permissions:
   checks: read
@@ -36,7 +44,9 @@ jobs:
   policy:
     name: Flama Policy Gate
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    # Long enough to outlast the wait above rather than cutting it short, which
+    # would reintroduce the same red-on-absence verdict by another route.
+    timeout-minutes: 45
     steps:
       - name: Validate exact SHA input
         env:
@@ -95,28 +105,69 @@ jobs:
             "$FLAMA_PLATFORM_SHA" \
             "$FLAMA_APP_SLUG" >/dev/null
 
-      - name: Verify exact app-authored Paperclip Preflight check
+      # The preflight is published by a controller that sweeps on its own
+      # schedule, so it does not exist the moment a head is pushed. Sampling
+      # once therefore failed the gate on absence and never looked again: the
+      # check would land minutes later and the verdict stayed red until somebody
+      # re-ran the job by hand. Measured on one pull request, the gate ran at
+      # 14:55:15 and the preflight landed at 14:58:00.
+      #
+      # Waiting is the honest reading of "not published yet" — it is not the
+      # same answer as "published and failed", which is decided immediately
+      # below, because no amount of waiting turns a failure into a pass.
+      - name: Await exact app-authored Paperclip Preflight check
         if: ${{ steps.change.outputs.mode == 'code' }}
         env:
           FLAMA_APP_SLUG: ${{ inputs.paperclip-app-slug }}
           FLAMA_HEAD_SHA: ${{ inputs.head-sha }}
+          FLAMA_WAIT_SECONDS: ${{ inputs.preflight-wait-seconds }}
           GH_TOKEN: ${{ github.token }}
         run: |
           response=$(mktemp "$RUNNER_TEMP/flama-checks-XXXXXX.json")
           trap 'rm -f "$response"' EXIT
-          gh api \
-            -H 'Accept: application/vnd.github+json' \
-            -H 'X-GitHub-Api-Version: 2026-03-10' \
-            "/repos/$GITHUB_REPOSITORY/commits/$FLAMA_HEAD_SHA/check-runs?check_name=Paperclip%20Preflight&filter=all&per_page=100" \
-            >"$response" 2>/dev/null
-          jq -e \
-            --arg app "$FLAMA_APP_SLUG" \
-            --arg sha "$FLAMA_HEAD_SHA" \
-            '[.check_runs[] | select(
-              .name == "Paperclip Preflight" and
-              .head_sha == $sha and
-              .status == "completed" and
-              .conclusion == "success" and
-              .app.slug == $app and
-              (.external_id | test("^paperclip-preflight:sha256:[0-9a-f]{64}$"))
-            )] | length == 1' "$response" >/dev/null
+          deadline=$(( SECONDS + FLAMA_WAIT_SECONDS ))
+
+          while :; do
+            gh api \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2026-03-10' \
+              "/repos/$GITHUB_REPOSITORY/commits/$FLAMA_HEAD_SHA/check-runs?check_name=Paperclip%20Preflight&filter=all&per_page=100" \
+              >"$response" 2>/dev/null
+
+            if jq -e \
+              --arg app "$FLAMA_APP_SLUG" \
+              --arg sha "$FLAMA_HEAD_SHA" \
+              '[.check_runs[] | select(
+                .name == "Paperclip Preflight" and
+                .head_sha == $sha and
+                .status == "completed" and
+                .conclusion == "success" and
+                .app.slug == $app and
+                (.external_id | test("^paperclip-preflight:sha256:[0-9a-f]{64}$"))
+              )] | length == 1' "$response" >/dev/null; then
+              exit 0
+            fi
+
+            # A completed check from the right app that did not succeed is a
+            # verdict, not a gap. Fail now rather than hold a runner open for
+            # an answer that has already arrived.
+            if jq -e \
+              --arg app "$FLAMA_APP_SLUG" \
+              --arg sha "$FLAMA_HEAD_SHA" \
+              '[.check_runs[] | select(
+                .name == "Paperclip Preflight" and
+                .head_sha == $sha and
+                .status == "completed" and
+                .conclusion != "success" and
+                .app.slug == $app
+              )] | length > 0' "$response" >/dev/null; then
+              echo "Paperclip Preflight completed without success for $FLAMA_HEAD_SHA" >&2
+              exit 1
+            fi
+
+            if (( SECONDS >= deadline )); then
+              echo "no app-authored Paperclip Preflight for $FLAMA_HEAD_SHA within ${FLAMA_WAIT_SECONDS}s" >&2
+              exit 1
+            fi
+            sleep 30
+          done
