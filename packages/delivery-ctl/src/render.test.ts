@@ -99,7 +99,9 @@ describe("template renderer", () => {
     // release-please, so it is not compared against generated content.
     expect(
       rerendered.files.every(({ path, status }) =>
-        path === ".release-please-manifest.json" ? status === "preserved" : status === "unchanged",
+        [".release-please-manifest.json", ".release-please-config.json"].includes(path)
+          ? status === "preserved"
+          : status === "unchanged",
       ),
     ).toBe(true);
   });
@@ -123,6 +125,30 @@ describe("template renderer", () => {
 
     expect(rerun.files).toContainEqual({ path: ".release-please-manifest.json", status: "preserved" });
     expect(JSON.parse(await readFile(manifestPath, "utf8"))).toEqual({ ".": "3.3.0-beta" });
+  });
+
+  /*
+   * Release notes are a product decision. One consumer had tuned
+   * changelog-sections and bootstrap-sha in this file; regenerating it would
+   * have replaced all of that with the default and silently undone the thing
+   * those releases were configured to produce.
+   */
+  it("seeds the release config once and keeps consumer tuning afterwards", async () => {
+    const outputRoot = await mkdtemp(join(tmpdir(), "flama-render-config-"));
+    await renderTemplates({ repositoryRoot, outputRoot, input, dryRun: false });
+
+    const configPath = join(outputRoot, ".release-please-config.json");
+    const tuned = {
+      "bootstrap-sha": "0".repeat(40),
+      "changelog-sections": [{ type: "feat", section: "✨ Features", hidden: false }],
+      packages: { ".": { "release-type": "node" } },
+    };
+    await writeFile(configPath, `${JSON.stringify(tuned, null, 2)}\n`, "utf8");
+
+    const rerun = await renderTemplates({ repositoryRoot, outputRoot, input, dryRun: false });
+
+    expect(rerun.files).toContainEqual({ path: ".release-please-config.json", status: "preserved" });
+    expect(JSON.parse(await readFile(configPath, "utf8"))).toEqual(tuned);
   });
 
   it("targets Major dependency updates at dev and omits release files when releases are disabled", async () => {
