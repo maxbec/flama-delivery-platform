@@ -1,0 +1,95 @@
+name: Reusable Auto Merge
+
+# Arms GitHub's auto-merge on a pull request that only needs its checks to
+# finish, so a green change lands without anyone pressing the button.
+#
+# It arms; it never merges. Every required check, and the branch-up-to-date
+# rule, is still enforced by GitHub at the moment of merge — this only removes
+# the human from a decision that was already made by the gates.
+#
+# Release pull requests are excluded on purpose: cutting a version is the one
+# call that stays a person's. So is anything targeting the release branch,
+# which is how a promotion reaches production.
+
+on:
+  workflow_call:
+    inputs:
+      profile:
+        description: Flama branch profile
+        required: true
+        type: string
+      release-branch:
+        description: >-
+          Branch that publishes releases. Pull requests targeting it are never
+          armed, because that is the promotion a person decides.
+        required: false
+        default: main
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: auto-merge-${{ github.repository }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  arm:
+    name: Flama Auto Merge
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Decide whether this pull request may arm
+        id: decide
+        env:
+          FLAMA_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          FLAMA_DRAFT: ${{ github.event.pull_request.draft }}
+          FLAMA_HEAD_REF: ${{ github.event.pull_request.head.ref }}
+          FLAMA_PROFILE: ${{ inputs.profile }}
+          FLAMA_RELEASE_BRANCH: ${{ inputs.release-branch }}
+        run: |
+          arm=true
+          reason=eligible
+
+          # release-please owns this branch prefix. Its pull request is the
+          # decision to cut a version, which is not a decision a gate makes.
+          case "$FLAMA_HEAD_REF" in
+            release-please--*) arm=false; reason=release_pull_request ;;
+          esac
+
+          # On the two-branch profile the release branch is reached only by a
+          # promotion, and a promotion is deliberate. On a single-branch profile
+          # that same branch is ordinary work, so the rule would stop everything.
+          if [[ "$arm" == true && "$FLAMA_PROFILE" == major && "$FLAMA_BASE_REF" == "$FLAMA_RELEASE_BRANCH" ]]; then
+            arm=false
+            reason=promotion
+          fi
+
+          # A draft is unfinished by its author's own statement.
+          if [[ "$arm" == true && "$FLAMA_DRAFT" == true ]]; then
+            arm=false
+            reason=draft
+          fi
+
+          echo "arm=$arm" >> "$GITHUB_OUTPUT"
+          echo "$reason"
+
+      - name: Arm auto-merge
+        if: ${{ steps.decide.outputs.arm == 'true' }}
+        env:
+          FLAMA_PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Already armed is the expected steady state, not a failure: this runs
+          # again on every synchronize. Anything else is reported.
+          if gh pr merge "$FLAMA_PR_URL" --squash --auto 2>"$RUNNER_TEMP/arm.err"; then
+            exit 0
+          fi
+          if grep -qi 'already enabled\|auto merge is already' "$RUNNER_TEMP/arm.err"; then
+            exit 0
+          fi
+          cat "$RUNNER_TEMP/arm.err" >&2
+          exit 1
