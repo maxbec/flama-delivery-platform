@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0](https://github.com/maxbec/flama-delivery-platform/compare/v0.3.4...v0.4.0) (2026-08-11)
+
+
+### ✨ Features
+
+* **delivery-ctl:** expose the preflight sweep as its own command ([5dc1544](https://github.com/maxbec/flama-delivery-platform/commit/5dc1544a6aa5243240fb0f23e2fcc33b2a60fb69))
+* **delivery-ctl:** expose the preflight sweep as its own command ([c20ddfb](https://github.com/maxbec/flama-delivery-platform/commit/c20ddfbb280c079650a9e138a46159f6dd93cd51))
+
 ## [0.3.4](https://github.com/maxbec/flama-delivery-platform/compare/v0.3.3...v0.3.4) (2026-08-11)
 
 
