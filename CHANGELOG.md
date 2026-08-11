@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.1](https://github.com/maxbec/flama-delivery-platform/compare/v0.5.0...v0.5.1) (2026-08-11)
+
+
+### 🐛 Bug Fixes
+
+* **bootstrap:** keep a migration from corrupting the repositories it migrates ([d4e2163](https://github.com/maxbec/flama-delivery-platform/commit/d4e21635b35c2579dde914f741ae563323c13973))
+* **bootstrap:** keep a migration from corrupting the repositories it migrates ([7726ee9](https://github.com/maxbec/flama-delivery-platform/commit/7726ee9011e2492f85db64f74798a7868e533329))
+
 ## [0.5.0](https://github.com/maxbec/flama-delivery-platform/compare/v0.4.2...v0.5.0) (2026-08-11)
 
 
