@@ -70,6 +70,38 @@ describe("repository checkout", () => {
     await checkout.release();
   });
 
+  /*
+   * Refs are not enough. A delivery command's tooling asks git which remote it
+   * is on and then looks under `refs/remotes/<name>/`; with no configured
+   * remote that name is empty, the lookup lands on `refs/remotes//main`, and
+   * it fails while `refs/remotes/origin/main` sits right there. Every
+   * platzl-finder head failed this way — `trunk check` reporting "Unable to
+   * detect an upstream commit on this branch" — and the identical command
+   * passes in an ordinary clone.
+   */
+  it("leaves the worktree able to resolve its upstream", async () => {
+    const { url, first } = await upstream();
+    const checkout = await prepareCheckout({
+      repository: "maxbec/example",
+      headSha: first,
+      cacheRoot: await cacheRoot(),
+      token: "unused-for-a-local-remote",
+      remoteUrl: url,
+    });
+
+    const resolved = (args: readonly string[]) =>
+      spawnSync("git", [...args], { cwd: checkout.path, encoding: "utf8" });
+
+    // The name the tooling reads back, and the ref it then builds from it.
+    expect(resolved(["remote"]).stdout.trim()).toBe("origin");
+    expect(resolved(["rev-parse", "--verify", "refs/remotes/origin/main"]).status).toBe(0);
+    // The default branch, which is what "upstream" resolves to when the head
+    // is detached and carries no branch of its own.
+    expect(resolved(["rev-parse", "--verify", "refs/remotes/origin/HEAD"]).status).toBe(0);
+
+    await checkout.release();
+  });
+
   it("gives each head its own worktree so two runs cannot share a tree", async () => {
     const { url, first, second } = await upstream();
     const root = await cacheRoot();
