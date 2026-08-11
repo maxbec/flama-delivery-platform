@@ -187,7 +187,6 @@ describe("preflight sweep", () => {
   });
 
   it("bounds one pass so a backlog cannot hold the controller", async () => {
-    const { headSha } = await upstream();
     const outcomes = await sweepPreflights({
       owner: "maxbec",
       appSlug: "flama-delivery-maxbec",
@@ -202,7 +201,40 @@ describe("preflight sweep", () => {
       ]),
     });
 
-    // Only the bound is attempted; the remainder waits for the next pass.
-    expect(outcomes).toHaveLength(1);
+    // Only the bound is attempted, and the remainder is reported rather than
+    // dropped: an unreported head reads as one that was never eligible.
+    expect(outcomes.map(({ number, status }) => `${number}:${status}`)).toEqual([
+      "4:failed",
+      "5:deferred",
+      "6:deferred",
+    ]);
+  });
+
+  /*
+   * Counting heads bounds nothing in wall-clock — the cost of a head is the
+   * repository's own delivery commands. The first pass whose checkouts really
+   * succeeded ran past the controller's run timeout and was killed with its
+   * accounting lost, so the pass has to stop on its own clock.
+   */
+  it("stops starting heads once the time budget is spent", async () => {
+    const { headSha } = await upstream();
+    // Time only advances when the sweep reads it, so the budget is spent by
+    // construction rather than by making the suite wait.
+    let reading = 0;
+    const outcomes = await sweepPreflights({
+      owner: "maxbec",
+      appSlug: "flama-delivery-maxbec",
+      environment,
+      cacheRoot: await cacheRoot(),
+      runnerId: "11111111-1111-4111-8111-111111111111",
+      budgetMilliseconds: 1,
+      now: () => new Date(Date.UTC(2026, 0, 1) + (reading += 1) * 1_000),
+      fetchImplementation: githubStub([{ number: 9, headSha }, { number: 10, headSha: "5".repeat(40) }]),
+    });
+
+    // Neither head is attempted: the budget was already spent when the first
+    // was considered, and a spent budget defers rather than fails.
+    expect(outcomes.every(({ status }) => status === "deferred")).toBe(true);
+    expect(outcomes).toHaveLength(2);
   });
 });

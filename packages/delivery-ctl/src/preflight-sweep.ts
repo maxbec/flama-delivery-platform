@@ -27,6 +27,22 @@ type FetchImplementation = typeof fetch;
  */
 const defaultMaximumPublications = 10;
 
+/**
+ * The other half of the bound, and the one that actually binds. A head's cost
+ * is the repository's own delivery commands, which the sweep neither knows nor
+ * controls: ten cheap heads finish in a minute and ten expensive ones do not
+ * finish at all. Counting heads therefore bounds nothing in wall-clock, which
+ * is the dimension the caller's run window is measured in — the first pass
+ * whose checkouts genuinely succeeded ran past the controller's timeout and
+ * was killed, losing the work it had already done.
+ *
+ * A head already in flight is never interrupted: cutting one off mid-preflight
+ * would waste the whole clone and could leave a check half-published. The
+ * budget decides whether to start another, so a pass overruns by at most one
+ * head and the rest are reported as deferred.
+ */
+const defaultBudgetMilliseconds = 180_000;
+
 export interface SweepPreflightsInput {
   readonly owner: string;
   readonly appSlug: string;
@@ -34,6 +50,8 @@ export interface SweepPreflightsInput {
   readonly cacheRoot: string;
   readonly runnerId: string;
   readonly maximumPublications?: number;
+  /** Wall-clock the pass may spend starting heads. */
+  readonly budgetMilliseconds?: number;
   readonly fetchImplementation?: FetchImplementation;
   readonly now?: () => Date;
 }
@@ -42,7 +60,14 @@ export interface SweepOutcome {
   readonly repository: string;
   readonly number: number;
   readonly headSha: string;
-  readonly status: "published" | "preflight_failed" | "skipped_fork" | "already_published" | "failed";
+  readonly status:
+    | "published"
+    | "preflight_failed"
+    | "skipped_fork"
+    | "already_published"
+    | "failed"
+    /** Eligible, not reached within this pass's bounds; the next pass takes it. */
+    | "deferred";
   /** An error code for a failure, never a message: messages carry context. */
   readonly code?: string;
 }
@@ -53,6 +78,7 @@ export async function sweepPreflights(
   const fetchImplementation = input.fetchImplementation ?? fetch;
   const now = input.now ?? (() => new Date());
   const limit = input.maximumPublications ?? defaultMaximumPublications;
+  const deadline = now().getTime() + (input.budgetMilliseconds ?? defaultBudgetMilliseconds);
 
   const heads = await discoverOpenPullRequests(
     input.owner,
@@ -78,7 +104,13 @@ export async function sweepPreflights(
       outcomes.push({ ...identity, status: "skipped_fork" });
       continue;
     }
-    if (published >= limit) continue;
+    // Both bounds report what they left behind. A head dropped silently is
+    // indistinguishable from a head that was never eligible, which would read
+    // as full coverage the pass did not have.
+    if (published >= limit || now().getTime() >= deadline) {
+      outcomes.push({ ...identity, status: "deferred" });
+      continue;
+    }
     published += 1;
 
     let checkout: Awaited<ReturnType<typeof prepareCheckout>> | undefined;

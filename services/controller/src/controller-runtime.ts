@@ -156,6 +156,8 @@ export interface PreflightPassSummary {
   readonly attempted: number;
   readonly published: number;
   readonly failed: number;
+  /** Eligible heads this pass did not reach; the next pass starts with them. */
+  readonly deferred: number;
   /** Present only when the pass could not run at all. */
   readonly skippedReason?: string;
 }
@@ -722,6 +724,16 @@ const preflightBindings: Readonly<
   "edilio-delivery-controller": { owner: "edilio-app", appSlug: "flama-delivery-edilio" },
 };
 
+const emptyPass = { attempted: 0, published: 0, failed: 0, deferred: 0 } as const;
+
+/**
+ * What the sweep may spend starting heads, well inside the run window the
+ * controller is given. The idle tick is spare capacity, not an open-ended job:
+ * a pass killed by its caller loses the accounting of everything it did, so it
+ * has to stop on its own terms and leave the rest to the next tick.
+ */
+const preflightBudgetMilliseconds = 120_000;
+
 /**
  * Publishes the preflights open heads are missing, on the idle path.
  *
@@ -741,12 +753,12 @@ async function runPreflightPass(
   const binding = preflightBindings[controller];
   const cacheRoot = environment["FLAMA_CHECKOUT_CACHE_DIR"];
   if (cacheRoot === undefined || cacheRoot.length === 0) {
-    return { attempted: 0, published: 0, failed: 0, skippedReason: "checkout_cache_unset" };
+    return { ...emptyPass, skippedReason: "checkout_cache_unset" };
   }
   // Absent credentials are a deployment state, not a fault: the controller runs
   // before the Infisical path is wired and must stay green while it does.
   if (environment[`FLAMA_GITHUB_APP_ID_${binding.owner.toUpperCase().replace("-", "_")}`] === undefined) {
-    return { attempted: 0, published: 0, failed: 0, skippedReason: "app_credentials_absent" };
+    return { ...emptyPass, skippedReason: "app_credentials_absent" };
   }
 
   // The controller's injected fetch is deliberately narrower than the global
@@ -761,6 +773,7 @@ async function runPreflightPass(
       environment,
       cacheRoot,
       runnerId: runId,
+      budgetMilliseconds: preflightBudgetMilliseconds,
       fetchImplementation: sweepFetch,
     });
     const attempted = outcomes.filter(
@@ -770,12 +783,13 @@ async function runPreflightPass(
       attempted,
       published: outcomes.filter(({ status }) => status === "published").length,
       failed: outcomes.filter(({ status }) => status === "failed").length,
+      deferred: outcomes.filter(({ status }) => status === "deferred").length,
     };
   } catch (error) {
     const code = typeof (error as { code?: unknown }).code === "string"
       ? (error as { code: string }).code
       : "preflight_pass_failed";
-    return { attempted: 0, published: 0, failed: 0, skippedReason: code };
+    return { ...emptyPass, skippedReason: code };
   }
 }
 
