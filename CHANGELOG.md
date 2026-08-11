@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.0](https://github.com/maxbec/flama-delivery-platform/compare/v0.4.2...v0.5.0) (2026-08-11)
+
+
+### ✨ Features
+
+* **policy:** merge a green pull request without waiting for a person ([428744f](https://github.com/maxbec/flama-delivery-platform/commit/428744f4c4ba58b884d5ca90ac1ff8a4ae6eed1e))
+* **policy:** merge a green pull request without waiting for a person ([862f7f5](https://github.com/maxbec/flama-delivery-platform/commit/862f7f53bfa6978e715d591ad826b1f20d6f5a8f))
+
 ## [0.4.2](https://github.com/maxbec/flama-delivery-platform/compare/v0.4.1...v0.4.2) (2026-08-11)
 
 
