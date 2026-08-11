@@ -33,6 +33,12 @@ grep -Fqx '    name: Flama Policy Gate' "$POLICY"
 grep -Fqx '  checks: read' "$POLICY"
 grep -Fq 'consumer-policy-gate.mjs' "$POLICY"
 grep -Fq 'check_name=Paperclip%20Preflight' "$POLICY"
+# A gate that samples once fails on a preflight that has not been published
+# yet and never looks again, so the verdict stays red until someone re-runs it.
+# It must wait for absence and decide immediately on a completed failure.
+grep -Fq 'inputs.preflight-wait-seconds' "$POLICY"
+grep -Fq 'sleep 30' "$POLICY"
+grep -Fq '.conclusion != "success"' "$POLICY"
 grep -Fq "if: \${{ steps.change.outputs.mode == 'code' }}" "$POLICY"
 grep -Fqx '          fetch-depth: 0' "$POLICY"
 if grep -Eq './scripts/delivery (buildable|affected|full)' "$POLICY"; then
