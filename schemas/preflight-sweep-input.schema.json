@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://flama.navigaite.de/schemas/preflight-sweep-input.schema.json",
+  "title": "Preflight sweep input",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "owner", "appSlug", "cacheRoot"],
+  "properties": {
+    "schemaVersion": { "const": 1 },
+    "owner": {
+      "description": "GitHub account whose App installation is swept.",
+      "enum": ["maxbec", "navigaite", "edilio-app"]
+    },
+    "appSlug": {
+      "description": "Slug of the App authoring the checks; heads carrying a check from another author are not treated as published.",
+      "type": "string",
+      "pattern": "^[a-z0-9-]{1,64}$"
+    },
+    "cacheRoot": {
+      "description": "Directory holding the per-repository mirrors and worktrees.",
+      "type": "string",
+      "minLength": 1
+    },
+    "budgetSeconds": {
+      "description": "Wall-clock the pass may spend starting heads. A dedicated runner affords far more than a controller's idle tick.",
+      "type": "integer",
+      "minimum": 30,
+      "maximum": 7200
+    },
+    "maximumPublications": {
+      "description": "Upper bound on heads started in one pass, independent of the time budget.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 200
+    }
+  }
+}

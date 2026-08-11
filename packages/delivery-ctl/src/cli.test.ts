@@ -86,6 +86,12 @@ const policyRepairInputPath = fileURLToPath(
 const governanceResultPath = fileURLToPath(
   new URL("../../../tests/fixtures/governance/result.json", import.meta.url),
 );
+const sweepInputPath = fileURLToPath(
+  new URL("../../../tests/fixtures/preflight-sweep/valid.json", import.meta.url),
+);
+const sweepInvalidOwnerPath = fileURLToPath(
+  new URL("../../../tests/fixtures/preflight-sweep/invalid-owner.json", import.meta.url),
+);
 
 describe("delivery CLI", () => {
   it("returns versioned JSON validation output", async () => {
@@ -105,6 +111,50 @@ describe("delivery CLI", () => {
       toolVersion,
     });
     expect(io.stderr).toBe("");
+  });
+
+  /*
+   * The sweep exists as a command because a controller idle tick cannot afford
+   * a clean-checkout build of somebody else's repository. Repositories whose
+   * preflight costs minutes were attempted on every tick, deferred every time
+   * and never published — leaving a required check missing, which is what makes
+   * their dependency PRs unmergeable.
+   */
+  it("plans a sweep without touching GitHub or the checkout cache", async () => {
+    const io = new MemoryIo();
+
+    const exitCode = await runCli(
+      ["sweep", "--input", sweepInputPath, "--dry-run"],
+      io,
+      repositoryRoot,
+    );
+
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(io.stdout)).toEqual({
+      command: "sweep",
+      dryRun: true,
+      ok: true,
+      toolVersion,
+      result: { status: "planned", owner: "maxbec", appSlug: "flama-delivery-maxbec" },
+    });
+    expect(io.stderr).toBe("");
+  });
+
+  it("refuses a sweep for an owner outside the platform", async () => {
+    const io = new MemoryIo();
+
+    const exitCode = await runCli(
+      ["sweep", "--input", sweepInvalidOwnerPath, "--dry-run"],
+      io,
+      repositoryRoot,
+    );
+
+    // Owner decides which App credential is used and which installation is
+    // swept, so an unbound owner must fail closed rather than default.
+    expect(exitCode).toBe(1);
+    const output = JSON.parse(io.stdout) as { ok: boolean; errors?: unknown };
+    expect(output.ok).toBe(false);
+    expect(output.errors).toBeDefined();
   });
 
   it("reports unsupported commands without reflecting arguments", async () => {

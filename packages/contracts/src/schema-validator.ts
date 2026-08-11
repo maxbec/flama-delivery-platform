@@ -34,6 +34,7 @@ const schemaFiles = {
   "github-policy-posture": "github-policy-posture.schema.json",
   "preflight-evidence": "preflight-evidence.schema.json",
   "preflight-run-input": "preflight-run-input.schema.json",
+  "preflight-sweep-input": "preflight-sweep-input.schema.json",
   "preflight-run-result": "preflight-run-result.schema.json",
   "publish-check-input": "publish-check-input.schema.json",
   "publish-check-result": "publish-check-result.schema.json",
