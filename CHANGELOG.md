@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.3.3](https://github.com/maxbec/flama-delivery-platform/compare/v0.3.2...v0.3.3) (2026-08-11)
+
+
+### 🐛 Bug Fixes
+
+* **delivery-ctl:** bound a preflight pass by wall-clock, not head count ([7b609d4](https://github.com/maxbec/flama-delivery-platform/commit/7b609d407395305eeb41f869fc2bccd35e58443d))
+* **delivery-ctl:** bound a preflight pass by wall-clock, not head count ([b82005d](https://github.com/maxbec/flama-delivery-platform/commit/b82005dba86f45def8aa48728145a6662da465e1))
+* **delivery-ctl:** cap a head's delivery commands at the pass's remaining budget ([532bff8](https://github.com/maxbec/flama-delivery-platform/commit/532bff876bc3e07caa15cd8136c10174f6b22b6d))
+
 ## [0.3.2](https://github.com/maxbec/flama-delivery-platform/compare/v0.3.1...v0.3.2) (2026-08-10)
 
 
