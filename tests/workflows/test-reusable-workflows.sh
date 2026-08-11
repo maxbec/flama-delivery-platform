@@ -46,4 +46,21 @@ grep -Fq "if: \${{ steps.change.outputs.mode == 'deployment' }}" "$FINAL"
 grep -Fq -- '--schema deployment-manifest' "$FINAL"
 grep -Fqx '          fetch-depth: 0' "$FINAL"
 
+# Arming auto-merge removes the human from a decision the gates already made,
+# so it must never remove the human from cutting a release, promoting to the
+# release branch, or finishing a draft. It arms only; GitHub still enforces
+# every required check at merge time.
+AUTO_MERGE="$ROOT_DIR/.github/workflows/reusable-auto-merge.yml"
+[[ -f "$AUTO_MERGE" ]] || { echo "missing reusable auto-merge workflow" >&2; exit 1; }
+grep -Fqx '    name: Flama Auto Merge' "$AUTO_MERGE"
+grep -Fq -- '--squash --auto' "$AUTO_MERGE"
+grep -Fq 'release-please--*' "$AUTO_MERGE"
+grep -Fq 'reason=promotion' "$AUTO_MERGE"
+grep -Fq 'reason=draft' "$AUTO_MERGE"
+grep -Fqx '      pull-requests: write' "$AUTO_MERGE"
+if grep -Eq 'pull_request_target|--admin|--force' "$AUTO_MERGE"; then
+  echo "auto-merge workflow bypasses branch protection or trusts an untrusted event" >&2
+  exit 1
+fi
+
 echo "reusable workflow policy tests passed"

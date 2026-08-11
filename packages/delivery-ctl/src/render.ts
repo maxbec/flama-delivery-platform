@@ -315,6 +315,13 @@ async function buildTargets(repositoryRoot: string, input: RenderInput): Promise
       ),
       mode: 0o644,
     },
+    {
+      path: ".github/workflows/flama-auto-merge.yml",
+      content: replacePlatformRef(
+        await readTemplate(join(profile, ".github", "workflows", "flama-auto-merge.yml.tmpl")),
+      ),
+      mode: 0o644,
+    },
   ];
 
   if (input.release.enabled) {

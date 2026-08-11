@@ -35,7 +35,7 @@ describe("template renderer", () => {
     const outputRoot = await mkdtemp(join(tmpdir(), "flama-render-"));
     const dryRun = await renderTemplates({ repositoryRoot, outputRoot, input, dryRun: true });
 
-    expect(dryRun.files).toHaveLength(10);
+    expect(dryRun.files).toHaveLength(11);
     expect(dryRun.files.every(({ status }) => status === "planned")).toBe(true);
     await expect(access(join(outputRoot, ".github", "dependabot.yml"))).rejects.toThrow();
 
@@ -46,6 +46,13 @@ describe("template renderer", () => {
     expect(policy).toContain("checks: read");
     expect(policy).toContain(input.paperclip.appSlug);
     expect(policy).not.toContain("__FLAMA_");
+    // A green change should land without anyone pressing the button; only a
+    // release stays a person's call.
+    const autoMerge = await readFile(join(outputRoot, ".github/workflows/flama-auto-merge.yml"), "utf8");
+    expect(autoMerge).toContain(`@${input.platformRef}`);
+    expect(autoMerge).toContain("profile: fast");
+    expect(autoMerge).toContain("release-branch: main");
+    expect(autoMerge).not.toContain("__FLAMA_");
     const final = await readFile(join(outputRoot, ".github/workflows/flama-final.yml"), "utf8");
     expect(final).toContain("pull_request:");
     expect(final).not.toContain("push:");
@@ -105,7 +112,7 @@ describe("template renderer", () => {
       dryRun: false,
     });
 
-    expect(rendered.files).toHaveLength(8);
+    expect(rendered.files).toHaveLength(9);
     const dependabot = parseYaml(
       await readFile(join(outputRoot, ".github/dependabot.yml"), "utf8"),
     ) as { updates: Array<Record<string, unknown>> };

@@ -176,7 +176,7 @@ describe("repository bootstrap", () => {
       dryRun: true,
     });
     expect(planned.status).toBe("planned");
-    expect(planned.generated.files).toHaveLength(10);
+    expect(planned.generated.files).toHaveLength(11);
     expect(planned.generated.files.every(({ status }) => status === "planned")).toBe(true);
     expect(planned.repositoryOwned).toContainEqual({ path: "AGENTS.md", status: "append_planned" });
     await expect(access(join(repository.root, ".flama/platform-lock.json"))).rejects.toThrow();
