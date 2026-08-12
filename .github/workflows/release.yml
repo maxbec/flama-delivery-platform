@@ -1,21 +1,5 @@
 name: Release
 
-# Release notes for the delivery platform itself.
-#
-# The platform ships `reusable-release.yml`, but that is supply-chain evidence
-# for *consumer* artifacts — digest, SBOM, checksum, attestation. It is a
-# `workflow_call` library, nothing here invokes it, and it produces neither a
-# tag nor a GitHub Release. `platform-ci.yml` only lints and tests that file.
-# The result: this repository has never cut a tag or a release.
-#
-# That matters more here than in a normal repository. Consumers pin the
-# platform by raw commit SHA (`uses: maxbec/flama-delivery-platform/...@<sha>`),
-# so today an upgrade means reading a diff between two opaque hashes. A tagged
-# release with notes gives every consumer a named point to move to and a
-# readable statement of what changed in the gates they depend on.
-#
-# Actions are pinned to full commit SHAs, as in platform-ci.yml.
-
 on:
   push:
     branches: [main]
@@ -23,7 +7,8 @@ on:
 permissions:
   contents: read
 
-# A half-written release is worse than a queued one, so no cancel-in-progress.
+# A half-written release is worse than a queued one. A failed publisher removes
+# only the draft it created; a published immutable release is never mutated.
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
@@ -32,12 +17,13 @@ jobs:
   release-please:
     name: Release Please
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     permissions:
-      # Writes the release commit, the tag and the GitHub Release.
       contents: write
-      # Opens and updates the release pull request.
       pull-requests: write
     steps:
+      # skip-github-release in the manifest configuration makes this PR-only.
+      # The trusted publisher below owns the tag and GitHub Release.
       - name: Create or update the release pull request
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
@@ -45,3 +31,325 @@ jobs:
           config-file: .release-please-config.json
           manifest-file: .release-please-manifest.json
           target-branch: main
+
+  prepare-release:
+    name: Prepare Platform Release
+    needs: release-please
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    outputs:
+      should-publish: ${{ steps.plan.outputs.should-publish }}
+      version: ${{ steps.plan.outputs.version }}
+      tag: ${{ steps.plan.outputs.tag }}
+      release-sha: ${{ steps.plan.outputs.release-sha }}
+      artifact-file: ${{ steps.package.outputs.artifact-file }}
+      sbom-file: ${{ steps.package.outputs.sbom-file }}
+      checksum-file: ${{ steps.package.outputs.checksum-file }}
+    steps:
+      - name: Check out the exact source commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Determine whether this commit carries a new version
+        id: plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FLAMA_RELEASE_SHA: ${{ github.sha }}
+          FLAMA_REF_PROTECTED: ${{ github.ref_protected }}
+        run: |
+          version=$(node -p "require('./package.json').version")
+          manifest_version=$(node -p "require('./.release-please-manifest.json')['.']")
+          [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          [[ "$version" == "$manifest_version" ]]
+          tag="v$version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "release-sha=$FLAMA_RELEASE_SHA" >> "$GITHUB_OUTPUT"
+
+          if gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/${GITHUB_REPOSITORY}/releases/tags/$tag" >/dev/null 2>&1; then
+            echo "should-publish=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/${GITHUB_REPOSITORY}/git/ref/tags/$tag" >/dev/null 2>&1; then
+            echo "::error::Tag $tag exists without a GitHub Release"
+            exit 1
+          fi
+          [[ "$FLAMA_REF_PROTECTED" == "true" ]]
+          [[ "$FLAMA_RELEASE_SHA" == "$GITHUB_SHA" ]]
+          echo "should-publish=true" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Node.js
+        if: steps.plan.outputs.should-publish == 'true'
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+
+      - name: Install locked dependencies
+        if: steps.plan.outputs.should-publish == 'true'
+        run: |
+          corepack enable
+          pnpm install --frozen-lockfile
+
+      - name: Build and reproduce the release package
+        if: steps.plan.outputs.should-publish == 'true'
+        run: |
+          ./scripts/delivery buildable
+          node scripts/build-platform-release.mjs --output-dir release-a
+          node scripts/build-platform-release.mjs --output-dir release-b
+          diff -qr release-a release-b
+
+      - name: Normalize release assets and notes
+        if: steps.plan.outputs.should-publish == 'true'
+        id: package
+        env:
+          FLAMA_VERSION: ${{ steps.plan.outputs.version }}
+        run: |
+          artifact_file="flama-delivery-platform-v${FLAMA_VERSION}.tar.gz"
+          sbom_file="flama-delivery-platform-v${FLAMA_VERSION}.sbom.spdx.json"
+          checksum_file="$artifact_file.sha256"
+          mkdir release-bundle release-metadata
+          cp -- "release-a/$artifact_file" "release-bundle/$artifact_file"
+          cp -- "release-a/$sbom_file" "release-bundle/$sbom_file"
+          cp -- "release-a/$checksum_file" "release-bundle/$checksum_file"
+          (
+            cd release-bundle
+            sha256sum -c "$checksum_file" --status
+          )
+          awk -v version="$FLAMA_VERSION" '
+            BEGIN { heading = "## [" version "]" }
+            index($0, heading) == 1 { capture = 1 }
+            capture && /^## \[/ && index($0, heading) != 1 { exit }
+            capture { print }
+          ' CHANGELOG.md > release-metadata/release-notes.md
+          grep -Fq "## [$FLAMA_VERSION]" release-metadata/release-notes.md
+          echo "artifact-file=$artifact_file" >> "$GITHUB_OUTPUT"
+          echo "sbom-file=$sbom_file" >> "$GITHUB_OUTPUT"
+          echo "checksum-file=$checksum_file" >> "$GITHUB_OUTPUT"
+
+      - name: Transfer immutable release assets
+        if: steps.plan.outputs.should-publish == 'true'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: platform-release-assets-${{ github.sha }}
+          path: release-bundle/
+          if-no-files-found: error
+          compression-level: 0
+          overwrite: false
+          include-hidden-files: false
+
+      - name: Transfer release notes
+        if: steps.plan.outputs.should-publish == 'true'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6
+        with:
+          name: platform-release-notes-${{ github.sha }}
+          path: release-metadata/release-notes.md
+          if-no-files-found: error
+          compression-level: 0
+          overwrite: false
+          include-hidden-files: false
+
+  publish-release:
+    name: Publish Immutable Platform Release
+    needs: prepare-release
+    if: needs.prepare-release.outputs.should-publish == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: platform-release
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - name: Download normalized release assets
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: platform-release-assets-${{ needs.prepare-release.outputs.release-sha }}
+          path: release-bundle
+
+      - name: Download release notes
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: platform-release-notes-${{ needs.prepare-release.outputs.release-sha }}
+          path: release-metadata
+
+      - name: Reverify transferred release inputs
+        env:
+          FLAMA_ARTIFACT_FILE: ${{ needs.prepare-release.outputs.artifact-file }}
+          FLAMA_CHECKSUM_FILE: ${{ needs.prepare-release.outputs.checksum-file }}
+          FLAMA_RELEASE_SHA: ${{ needs.prepare-release.outputs.release-sha }}
+          FLAMA_SBOM_FILE: ${{ needs.prepare-release.outputs.sbom-file }}
+        run: |
+          [[ "$FLAMA_RELEASE_SHA" == "$GITHUB_SHA" ]]
+          [[ $(find release-bundle -mindepth 1 -maxdepth 1 -type f | wc -l) -eq 3 ]]
+          [[ $(find release-bundle -mindepth 1 -maxdepth 1 ! -type f | wc -l) -eq 0 ]]
+          for file in "$FLAMA_ARTIFACT_FILE" "$FLAMA_SBOM_FILE" "$FLAMA_CHECKSUM_FILE"; do
+            [[ "$file" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$ ]]
+            [[ -f "release-bundle/$file" ]]
+            [[ ! -L "release-bundle/$file" ]]
+          done
+          [[ -f release-metadata/release-notes.md ]]
+          [[ ! -L release-metadata/release-notes.md ]]
+          (
+            cd release-bundle
+            sha256sum -c "$FLAMA_CHECKSUM_FILE" --status
+          )
+          jq -e '.spdxVersion == "SPDX-2.3"' "release-bundle/$FLAMA_SBOM_FILE" >/dev/null
+
+      - name: Require complete Infisical OIDC configuration
+        env:
+          FLAMA_INFISICAL_DOMAIN: ${{ vars.INFISICAL_DOMAIN }}
+          FLAMA_INFISICAL_ENV_SLUG: ${{ vars.INFISICAL_ENV_SLUG }}
+          FLAMA_INFISICAL_IDENTITY_ID: ${{ vars.INFISICAL_IDENTITY_ID }}
+          FLAMA_INFISICAL_PROJECT_SLUG: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          FLAMA_INFISICAL_SECRET_PATH: ${{ vars.INFISICAL_SECRET_PATH }}
+        run: |
+          for name in DOMAIN ENV_SLUG IDENTITY_ID PROJECT_SLUG SECRET_PATH; do
+            variable="FLAMA_INFISICAL_$name"
+            [[ -n "${!variable}" ]] || { echo "::error::Missing repository variable INFISICAL_$name"; exit 1; }
+          done
+          [[ "$FLAMA_INFISICAL_DOMAIN" =~ ^https://[^/]+$ ]]
+          [[ "$FLAMA_INFISICAL_SECRET_PATH" =~ ^/[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*$ ]]
+
+      - name: Load the scoped release App credentials from Infisical
+        uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
+        with:
+          method: oidc
+          identity-id: ${{ vars.INFISICAL_IDENTITY_ID }}
+          domain: ${{ vars.INFISICAL_DOMAIN }}
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          env-slug: ${{ vars.INFISICAL_ENV_SLUG }}
+          secret-path: ${{ vars.INFISICAL_SECRET_PATH }}
+          include-imports: false
+          recursive: false
+
+      - name: Mint a repository-scoped release App token
+        id: release-app
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ env.FLAMA_RELEASE_GITHUB_APP_ID }}
+          private-key: ${{ env.FLAMA_RELEASE_GITHUB_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: flama-delivery-platform
+          permission-administration: read
+          permission-contents: write
+
+      - name: Require repository release immutability
+        env:
+          GH_TOKEN: ${{ steps.release-app.outputs.token }}
+        run: |
+          enabled=$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/${GITHUB_REPOSITORY}/immutable-releases" --jq '.enabled')
+          [[ "$enabled" == "true" ]]
+
+      - name: Create draft release
+        id: draft
+        env:
+          FLAMA_RELEASE_SHA: ${{ needs.prepare-release.outputs.release-sha }}
+          FLAMA_TAG: ${{ needs.prepare-release.outputs.tag }}
+          GH_TOKEN: ${{ steps.release-app.outputs.token }}
+        run: |
+          if gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/${GITHUB_REPOSITORY}/releases/tags/$FLAMA_TAG" >/dev/null 2>&1; then
+            echo "::error::A release already exists for $FLAMA_TAG"
+            exit 1
+          fi
+          if gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/${GITHUB_REPOSITORY}/git/ref/tags/$FLAMA_TAG" >/dev/null 2>&1; then
+            echo "::error::Tag $FLAMA_TAG already exists"
+            exit 1
+          fi
+          gh release create "$FLAMA_TAG" \
+            --repo "$GITHUB_REPOSITORY" \
+            --draft \
+            --target "$FLAMA_RELEASE_SHA" \
+            --title "$FLAMA_TAG" \
+            --notes-file release-metadata/release-notes.md
+          release_id=$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/${GITHUB_REPOSITORY}/releases/tags/$FLAMA_TAG" --jq '.id')
+          [[ "$release_id" =~ ^[0-9]+$ ]]
+          echo "release-id=$release_id" >> "$GITHUB_OUTPUT"
+
+      - name: Attach all assets to the draft
+        env:
+          FLAMA_ARTIFACT_FILE: ${{ needs.prepare-release.outputs.artifact-file }}
+          FLAMA_CHECKSUM_FILE: ${{ needs.prepare-release.outputs.checksum-file }}
+          FLAMA_SBOM_FILE: ${{ needs.prepare-release.outputs.sbom-file }}
+          FLAMA_TAG: ${{ needs.prepare-release.outputs.tag }}
+          GH_TOKEN: ${{ steps.release-app.outputs.token }}
+        run: |
+          gh release upload "$FLAMA_TAG" \
+            "release-bundle/$FLAMA_ARTIFACT_FILE" \
+            "release-bundle/$FLAMA_CHECKSUM_FILE" \
+            "release-bundle/$FLAMA_SBOM_FILE" \
+            --repo "$GITHUB_REPOSITORY"
+
+      - name: Attest platform release assets
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: release-bundle/*
+
+      - name: Publish immutable release
+        env:
+          FLAMA_ARTIFACT_FILE: ${{ needs.prepare-release.outputs.artifact-file }}
+          FLAMA_CHECKSUM_FILE: ${{ needs.prepare-release.outputs.checksum-file }}
+          FLAMA_RELEASE_ID: ${{ steps.draft.outputs.release-id }}
+          FLAMA_SBOM_FILE: ${{ needs.prepare-release.outputs.sbom-file }}
+          GH_TOKEN: ${{ steps.release-app.outputs.token }}
+        run: |
+          release_json=$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/${GITHUB_REPOSITORY}/releases/$FLAMA_RELEASE_ID")
+          [[ $(jq -r '.draft' <<< "$release_json") == "true" ]]
+          [[ $(jq -r '.assets | length' <<< "$release_json") -eq 3 ]]
+          for file in "$FLAMA_ARTIFACT_FILE" "$FLAMA_CHECKSUM_FILE" "$FLAMA_SBOM_FILE"; do
+            local_digest="sha256:$(sha256sum "release-bundle/$file" | cut -d' ' -f1)"
+            remote_digest=$(jq -r --arg file "$file" '.assets[] | select(.name == $file) | .digest' <<< "$release_json")
+            [[ "$remote_digest" == "$local_digest" ]]
+          done
+          gh api --method PATCH -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/${GITHUB_REPOSITORY}/releases/$FLAMA_RELEASE_ID" \
+            -F draft:='false' >/dev/null
+
+      - name: Verify immutable release and attestations
+        env:
+          FLAMA_ARTIFACT_FILE: ${{ needs.prepare-release.outputs.artifact-file }}
+          FLAMA_CHECKSUM_FILE: ${{ needs.prepare-release.outputs.checksum-file }}
+          FLAMA_RELEASE_SHA: ${{ needs.prepare-release.outputs.release-sha }}
+          FLAMA_SBOM_FILE: ${{ needs.prepare-release.outputs.sbom-file }}
+          FLAMA_TAG: ${{ needs.prepare-release.outputs.tag }}
+          GH_TOKEN: ${{ steps.release-app.outputs.token }}
+        run: |
+          immutable=false
+          for _attempt in {1..12}; do
+            immutable=$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+              "repos/${GITHUB_REPOSITORY}/releases/tags/$FLAMA_TAG" --jq '.immutable')
+            [[ "$immutable" == "true" ]] && break
+            sleep 5
+          done
+          [[ "$immutable" == "true" ]]
+          tag_sha=$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/${GITHUB_REPOSITORY}/commits/$FLAMA_TAG" --jq '.sha')
+          [[ "$tag_sha" == "$FLAMA_RELEASE_SHA" ]]
+          gh release verify "$FLAMA_TAG" --repo "$GITHUB_REPOSITORY" --format json >/dev/null
+          for file in "$FLAMA_ARTIFACT_FILE" "$FLAMA_CHECKSUM_FILE" "$FLAMA_SBOM_FILE"; do
+            gh release verify-asset "$FLAMA_TAG" "release-bundle/$file" \
+              --repo "$GITHUB_REPOSITORY" --format json >/dev/null
+          done
+
+      - name: Remove an incomplete draft created by this run
+        if: failure() && steps.draft.outputs.release-id != ''
+        env:
+          FLAMA_RELEASE_ID: ${{ steps.draft.outputs.release-id }}
+          GH_TOKEN: ${{ steps.release-app.outputs.token }}
+        run: |
+          is_draft=$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/${GITHUB_REPOSITORY}/releases/$FLAMA_RELEASE_ID" --jq '.draft')
+          if [[ "$is_draft" == "true" ]]; then
+            gh api --method DELETE -H 'X-GitHub-Api-Version: 2026-03-10' \
+              "repos/${GITHUB_REPOSITORY}/releases/$FLAMA_RELEASE_ID"
+          fi

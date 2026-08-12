@@ -28,16 +28,37 @@ manifest with per-file digests. Its file order, ownership, timestamps, gzip
 header, SBOM timestamp, and manifest timestamp derive from the signed Git
 commit, so independent builds are byte-identical.
 
-Publishing is intentionally not enabled yet. The final trusted workflow must:
+Publishing is performed by `.github/workflows/release.yml` after a Release
+Please pull request is merged. Release Please owns only the version/changelog
+pull request; `skip-github-release` deliberately leaves tag and release creation
+to the trusted publisher. The publisher:
 
-1. Let Release Please determine the version from the release-impact/conventional
+1. Lets Release Please determine the version from the release-impact/conventional
    commit history.
-2. Authenticate as the scoped release GitHub App through Infisical OIDC, not a
+2. Authenticates as the scoped release GitHub App through Infisical OIDC, not a
    long-lived repository PAT.
-3. Build and verify the deterministic archive from the exact protected SHA.
-4. Create a draft release, attach the archive/checksum/SBOM, attest the artifact
-   and SBOM, and only then publish it.
-5. Require repository release immutability so the published tag and assets lock.
+3. Builds the archive twice and verifies byte-for-byte reproducibility from the
+   exact protected SHA in an unprivileged job.
+4. Creates a draft release, attaches the archive/checksum/SBOM, attests all
+   three assets, and only then publishes it.
+5. Requires repository release immutability so the published tag and assets
+   lock.
+
+The `platform-release` GitHub environment and Infisical OIDC identity must be
+bound to `repo:maxbec/flama-delivery-platform:environment:platform-release`.
+Configure these non-secret repository variables:
+
+- `INFISICAL_IDENTITY_ID`
+- `INFISICAL_DOMAIN`
+- `INFISICAL_PROJECT_SLUG`
+- `INFISICAL_ENV_SLUG`
+- `INFISICAL_SECRET_PATH`
+
+The exact Infisical path must contain only
+`FLAMA_RELEASE_GITHUB_APP_ID` and
+`FLAMA_RELEASE_GITHUB_APP_PRIVATE_KEY`. The App installation is limited to this
+repository with Contents write and Administration read permissions. The latter
+is used only to fail closed unless release immutability is enabled.
 
 Do not publish first and attach assets afterward: GitHub's immutable-release
 model locks the tag and assets when the draft is published.

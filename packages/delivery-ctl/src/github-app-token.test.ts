@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import {
   GitHubAppTokenError,
+  hasGitHubAppCredentials,
   mintInstallationToken,
   type MintInstallationTokenInput,
 } from "./github-app-token.js";
@@ -73,6 +74,17 @@ function run(overrides: Partial<MintInstallationTokenInput> = {}, fetchImplement
 }
 
 describe("github app installation token", () => {
+  it("resolves the hyphenated Edilio owner to its closed credential suffix", () => {
+    expect(hasGitHubAppCredentials({
+      FLAMA_GITHUB_APP_ID_EDILIO: "150130478",
+      FLAMA_GITHUB_APP_PRIVATE_KEY_EDILIO: privateKey,
+    }, "edilio-app")).toBe(true);
+    expect(hasGitHubAppCredentials({
+      FLAMA_GITHUB_APP_ID_EDILIO_APP: "150130478",
+      FLAMA_GITHUB_APP_PRIVATE_KEY_EDILIO_APP: privateKey,
+    }, "edilio-app")).toBe(false);
+  });
+
   it("scopes the token to the single repository and to checks write", async () => {
     const recorded: Recorded[] = [];
     const token = await run({}, stub({}, recorded));

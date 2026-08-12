@@ -17,6 +17,23 @@ for profile in fast major; do
   done
 done
 
+# A reusable workflow cannot elevate above the permissions its caller grants.
+# The auto-merge job writes the pull request state, so both generated callers
+# must carry the same ceiling or GitHub rejects the workflow before any job is
+# scheduled (reported only as startup_failure).
+for profile in fast major; do
+  template="$ROOT_DIR/templates/$profile/.github/workflows/flama-auto-merge.yml.tmpl"
+  [[ -f "$template" ]] || { echo "missing auto-merge workflow template" >&2; exit 1; }
+  grep -Fqx 'permissions:' "$template"
+  grep -Fqx '  contents: write' "$template"
+  grep -Fqx '  pull-requests: write' "$template"
+  grep -Fq '@__FLAMA_PLATFORM_REF__' "$template"
+  if grep -Eq 'pull_request_target|id-token:|secrets:|secrets: inherit' "$template"; then
+    echo "auto-merge workflow template violates the pull-request trust boundary" >&2
+    exit 1
+  fi
+done
+
 deploy_template="$ROOT_DIR/templates/common/.github/workflows/flama-deploy.yml.tmpl"
 grep -Fq '@__FLAMA_PLATFORM_REF__' "$deploy_template"
 grep -Fqx '      platform-sha: __FLAMA_PLATFORM_REF__' "$deploy_template"

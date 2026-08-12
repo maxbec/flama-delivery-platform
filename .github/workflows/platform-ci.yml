@@ -69,6 +69,7 @@ jobs:
           bash -n tests/paperclip/test-paperclip-foundation.sh
           bash -n tests/security/test-public-repository-audit.sh
           bash -n tests/workflows/test-platform-ci.sh
+          bash -n tests/workflows/test-platform-release.sh
           bash -n tests/workflows/test-reusable-workflows.sh
           bash -n tests/workflows/test-reusable-release.sh
           bash -n tests/workflows/test-reusable-deploy.sh
@@ -107,6 +108,7 @@ jobs:
       - name: Test workflow trust policy
         run: |
           bash tests/workflows/test-platform-ci.sh
+          bash tests/workflows/test-platform-release.sh
           bash tests/workflows/test-reusable-workflows.sh
           bash tests/workflows/test-reusable-release.sh
           bash tests/workflows/test-reusable-deploy.sh

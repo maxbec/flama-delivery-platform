@@ -29,6 +29,7 @@ import {
 import type { PaperclipTransitionMessage } from "../../bridge/src/processor.js";
 import { AuthorizedPaperclipPublisher, PaperclipRestTransitionApi } from "./paperclip-transition.js";
 import { sweepPreflights } from "../../../packages/delivery-ctl/src/preflight-sweep.js";
+import { hasGitHubAppCredentials } from "../../../packages/delivery-ctl/src/github-app-token.js";
 
 const controllerNames = [
   "maxbec-delivery-controller",
@@ -757,7 +758,7 @@ async function runPreflightPass(
   }
   // Absent credentials are a deployment state, not a fault: the controller runs
   // before the Infisical path is wired and must stay green while it does.
-  if (environment[`FLAMA_GITHUB_APP_ID_${binding.owner.toUpperCase().replace("-", "_")}`] === undefined) {
+  if (!hasGitHubAppCredentials(environment, binding.owner)) {
     return { ...emptyPass, skippedReason: "app_credentials_absent" };
   }
 
