@@ -224,7 +224,9 @@ describe("repository bootstrap", () => {
     // longer compared against what the platform would generate.
     expect(
       rerun.generated.files.every(({ path, status }) =>
-        path === ".release-please-manifest.json" ? status === "preserved" : status === "unchanged",
+        [".release-please-manifest.json", ".release-please-config.json"].includes(path)
+          ? status === "preserved"
+          : status === "unchanged",
       ),
     ).toBe(true);
     expect(rerun.repositoryOwned.every(({ status }) => status === "preserved")).toBe(true);

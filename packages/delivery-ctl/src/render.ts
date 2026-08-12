@@ -335,6 +335,10 @@ async function buildTargets(repositoryRoot: string, input: RenderInput): Promise
     targets.push(
       {
         path: ".release-please-config.json",
+        // Seeded, then the consumer's. Release notes are a product decision:
+        // one repository had tuned changelog-sections and bootstrap-sha here,
+        // and regenerating would have replaced all of it with the default —
+        // silently undoing the thing those releases were configured to do.
         content: jsonFile({
           packages: {
             ".": {
@@ -344,6 +348,7 @@ async function buildTargets(repositoryRoot: string, input: RenderInput): Promise
           },
         }),
         mode: 0o644,
+        preserveExisting: true,
       },
       {
         path: ".release-please-manifest.json",
