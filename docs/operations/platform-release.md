@@ -35,8 +35,8 @@ to the trusted publisher. The publisher:
 
 1. Lets Release Please determine the version from the release-impact/conventional
    commit history.
-2. Authenticates as the scoped release GitHub App through Infisical OIDC, not a
-   long-lived repository PAT.
+2. Authenticates as the existing owner-matched `flama-delivery-maxbec` GitHub
+   App through Infisical OIDC, not a long-lived repository PAT or a fourth App.
 3. Builds the archive twice and verifies byte-for-byte reproducibility from the
    exact protected SHA in an unprivileged job.
 4. Creates a draft release, attaches the archive/checksum/SBOM, attests all
@@ -54,11 +54,12 @@ Configure these non-secret repository variables:
 - `INFISICAL_ENV_SLUG`
 - `INFISICAL_SECRET_PATH`
 
-The exact Infisical path must contain only
-`FLAMA_RELEASE_GITHUB_APP_ID` and
-`FLAMA_RELEASE_GITHUB_APP_PRIVATE_KEY`. The App installation is limited to this
-repository with Contents write and Administration read permissions. The latter
-is used only to fail closed unless release immutability is enabled.
+Set `INFISICAL_SECRET_PATH` to the existing `/github-apps/maxbec` mapping. It
+contains `FLAMA_GITHUB_APP_ID_MAXBEC` and
+`FLAMA_GITHUB_APP_PRIVATE_KEY_MAXBEC`; do not duplicate those values under
+release-specific aliases. The workflow mints a token narrowed to
+`maxbec/flama-delivery-platform` with Contents write and Administration read.
+The latter is used only to fail closed unless release immutability is enabled.
 
 Do not publish first and attach assets afterward: GitHub's immutable-release
 model locks the tag and assets when the draft is published.
