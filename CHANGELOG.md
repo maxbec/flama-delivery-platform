@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.5.2](https://github.com/maxbec/flama-delivery-platform/compare/v0.5.1...v0.5.2) (2026-08-12)
+
+
+### 🐛 Bug Fixes
+
+* **contracts:** let the bootstrap result describe what bootstrap now produces ([cb253f1](https://github.com/maxbec/flama-delivery-platform/commit/cb253f131e338d0d9ed61324586a4813f60343c2))
+* **render:** keep consumer release configuration through a migration ([572168f](https://github.com/maxbec/flama-delivery-platform/commit/572168fd4443292341181366e440060293787182))
+* **render:** keep consumer release configuration through a migration ([3d99590](https://github.com/maxbec/flama-delivery-platform/commit/3d9959054245b7aa328c789469d5644288ea736f))
+
 ## [0.5.1](https://github.com/maxbec/flama-delivery-platform/compare/v0.5.0...v0.5.1) (2026-08-11)
 
 
