@@ -77,6 +77,7 @@
                   ".github/workflows/flama-branch-guard.yml",
                   ".github/workflows/flama-deploy.yml",
                   ".github/workflows/flama-final.yml",
+                  ".github/workflows/flama-auto-merge.yml",
                   ".github/workflows/flama-policy.yml",
                   ".github/workflows/flama-push-guard.yml",
                   ".release-please-config.json",
@@ -88,7 +89,8 @@
                   "planned",
                   "created",
                   "unchanged",
-                  "replaced"
+                  "replaced",
+                  "preserved"
                 ]
               }
             }
@@ -137,7 +139,9 @@
               "created",
               "append_planned",
               "appended",
-              "preserved"
+              "preserved",
+              "refresh_planned",
+              "refreshed"
             ]
           }
         }
