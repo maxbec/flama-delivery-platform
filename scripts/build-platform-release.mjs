@@ -8,6 +8,7 @@ import {
   cp,
   mkdir,
   mkdtemp,
+  open,
   readFile,
   readdir,
   rm,
@@ -21,20 +22,33 @@ import { fileURLToPath } from "node:url";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
 async function run(command, args, options = {}) {
-  return new Promise((resolveRun, rejectRun) => {
-    const child = spawn(command, args, {
-      cwd: root,
-      env: process.env,
-      stdio: options.capture ? ["ignore", "pipe", "inherit"] : "inherit",
+  const captureRoot = options.capture
+    ? await mkdtemp(join(tmpdir(), "flama-release-command-output-"))
+    : undefined;
+  const capturePath = captureRoot === undefined ? undefined : join(captureRoot, "stdout");
+  const captureHandle = capturePath === undefined ? undefined : await open(capturePath, "wx", 0o600);
+  try {
+    await new Promise((resolveRun, rejectRun) => {
+      const child = spawn(command, args, {
+        cwd: root,
+        env: process.env,
+        // Node 26 can lose buffered stdout when a short-lived Node child writes
+        // to a pipe. A private regular file gives deterministic capture for
+        // pnpm's JSON output as well as git's scalar output.
+        stdio: captureHandle === undefined ? "inherit" : ["ignore", captureHandle.fd, "inherit"],
+      });
+      child.once("error", rejectRun);
+      child.once("exit", (code, signal) => {
+        if (signal !== null || code !== 0) rejectRun(new Error(`${command} failed`));
+        else resolveRun();
+      });
     });
-    let stdout = "";
-    if (options.capture) child.stdout.setEncoding("utf8").on("data", (chunk) => (stdout += chunk));
-    child.once("error", rejectRun);
-    child.once("exit", (code, signal) => {
-      if (signal !== null || code !== 0) rejectRun(new Error(`${command} failed`));
-      else resolveRun(stdout.trim());
-    });
-  });
+    if (capturePath === undefined) return "";
+    return (await readFile(capturePath, "utf8")).trim();
+  } finally {
+    await captureHandle?.close().catch(() => undefined);
+    if (captureRoot !== undefined) await rm(captureRoot, { recursive: true, force: true });
+  }
 }
 
 async function sha256(path) {

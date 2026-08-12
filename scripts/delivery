@@ -24,6 +24,7 @@ case "$1" in
     bash tests/paperclip/test-paperclip-foundation.sh
     bash tests/security/test-public-repository-audit.sh
     bash tests/workflows/test-platform-ci.sh
+    bash tests/workflows/test-platform-release.sh
     bash tests/workflows/test-reusable-workflows.sh
     bash tests/workflows/test-reusable-release.sh
     bash tests/workflows/test-reusable-deploy.sh

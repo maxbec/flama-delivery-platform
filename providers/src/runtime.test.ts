@@ -71,7 +71,7 @@ describe("system command runner", () => {
   it("passes deployment values through the environment, never the argument list", async () => {
     const result = await new SystemCommandRunner().run(
       "node",
-      ["-e", "process.stdout.write(process.env.FLAMA_IMAGE ?? 'absent')"],
+      ["-e", "require('node:fs').writeSync(1, process.env.FLAMA_IMAGE ?? 'absent')"],
       { FLAMA_IMAGE: "ghcr.io/maxbec/api@sha256:deadbeef" },
     );
 
@@ -83,7 +83,7 @@ describe("system command runner", () => {
     try {
       const result = await new SystemCommandRunner().run(
         "node",
-        ["-e", "process.stdout.write(process.env.FLAMA_RUNTIME_TEST_LEAK ?? 'absent')"],
+        ["-e", "require('node:fs').writeSync(1, process.env.FLAMA_RUNTIME_TEST_LEAK ?? 'absent')"],
       );
 
       expect(result.stdout).toBe("absent");

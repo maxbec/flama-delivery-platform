@@ -84,19 +84,32 @@ interface AppCredentials {
   readonly privateKey: string;
 }
 
-function readCredentials(environment: Environment, owner: string): AppCredentials {
+function credentialValues(environment: Environment, owner: string): AppCredentials | undefined {
   const suffix = credentialSuffixByOwner[owner];
-  if (suffix === undefined) throw new GitHubAppTokenError("app_credentials_unavailable");
+  if (suffix === undefined) return undefined;
 
   const appId = environment[`FLAMA_GITHUB_APP_ID_${suffix}`];
   const privateKey = environment[`FLAMA_GITHUB_APP_PRIVATE_KEY_${suffix}`];
   if (
     appId === undefined || !/^[0-9]{1,20}$/u.test(appId) ||
     privateKey === undefined || !privateKey.includes("PRIVATE KEY")
-  ) {
-    throw new GitHubAppTokenError("app_credentials_unavailable");
-  }
+  ) return undefined;
   return { appId, privateKey };
+}
+
+/**
+ * Reports whether the exact owner-scoped App credential pair is available.
+ * Consumers use this instead of deriving environment suffixes from owner text:
+ * `edilio-app` deliberately maps to `EDILIO`, not `EDILIO_APP`.
+ */
+export function hasGitHubAppCredentials(environment: Environment, owner: string): boolean {
+  return credentialValues(environment, owner) !== undefined;
+}
+
+function readCredentials(environment: Environment, owner: string): AppCredentials {
+  const credentials = credentialValues(environment, owner);
+  if (credentials === undefined) throw new GitHubAppTokenError("app_credentials_unavailable");
+  return credentials;
 }
 
 function base64Url(value: unknown): string {
