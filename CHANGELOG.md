@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.3](https://github.com/maxbec/flama-delivery-platform/compare/v0.5.2...v0.5.3) (2026-08-12)
+
+
+### 🐛 Bug Fixes
+
+* complete delivery trust loop ([f128cf6](https://github.com/maxbec/flama-delivery-platform/commit/f128cf6759c38f777c9bce4ead930b027b405d72))
+* complete delivery trust loop ([91cb950](https://github.com/maxbec/flama-delivery-platform/commit/91cb95051eaf1b816a3e4a0177dda9b14370873d))
+
 ## [0.5.2](https://github.com/maxbec/flama-delivery-platform/compare/v0.5.1...v0.5.2) (2026-08-12)
 
 
