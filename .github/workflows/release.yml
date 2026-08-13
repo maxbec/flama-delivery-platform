@@ -227,6 +227,33 @@ jobs:
             [[ -n "${!variable}" ]] || { echo "::error::Missing secret CF_ACCESS_$name"; exit 1; }
           done
 
+      # TEMPORARY DIAGNOSTIC -- remove once the Infisical identity binding is
+      # confirmed. Infisical compares the token's sub against its bound subject
+      # with exact string equality before attempting any glob match, and it never
+      # logs the value it received, so a rejection tells us nothing about which
+      # side is wrong. This mints a token the same way Infisical/secrets-action
+      # does (same endpoint, no explicit audience, therefore the same default
+      # aud) and reports only the sub and aud claims. The token is never printed
+      # and the step always exits 0, so it cannot affect the release outcome.
+      - name: Report the OIDC claims GitHub actually mints
+        run: |
+          token=$(curl -sS \
+            -H "Authorization: bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "$ACTIONS_ID_TOKEN_REQUEST_URL" | jq -r '.value')
+          if [[ -z "$token" || "$token" == "null" ]]; then
+            echo "::error::oidc probe: could not mint an identity token"
+            exit 0
+          fi
+          payload=$(cut -d. -f2 <<< "$token" | tr '_-' '/+')
+          case $(( ${#payload} % 4 )) in
+            2) payload="$payload==" ;;
+            3) payload="$payload=" ;;
+          esac
+          claims=$(base64 -d <<< "$payload" 2>/dev/null)
+          echo "::error::oidc sub=[$(jq -r '.sub // "MISSING"' <<< "$claims")]"
+          echo "::error::oidc aud=[$(jq -r '.aud // "MISSING"' <<< "$claims")]"
+          exit 0
+
       - name: Load the Maxbec delivery App credentials from Infisical
         uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
         with:
