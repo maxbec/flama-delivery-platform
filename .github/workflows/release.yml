@@ -268,9 +268,16 @@ jobs:
           FLAMA_TAG: ${{ needs.prepare-release.outputs.tag }}
           GH_TOKEN: ${{ steps.release-app.outputs.token }}
         run: |
-          if gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
-            "repos/${GITHUB_REPOSITORY}/releases/tags/$FLAMA_TAG" >/dev/null 2>&1; then
-            echo "::error::A release already exists for $FLAMA_TAG"
+          # A draft release carries no tag, so /releases/tags/{tag} cannot see
+          # it -- that endpoint resolves published releases only. Enumerate and
+          # match on tag_name instead, which covers drafts and published
+          # releases alike; asking by tag would silently miss a draft stranded
+          # by an earlier attempt and then create a second one beside it.
+          existing=$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            --jq "[.[] | select(.tag_name == \"$FLAMA_TAG\")] | length")
+          if [[ "$existing" != "0" ]]; then
+            echo "::error::A release or draft already exists for $FLAMA_TAG"
             exit 1
           fi
           if gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
@@ -278,14 +285,19 @@ jobs:
             echo "::error::Tag $FLAMA_TAG already exists"
             exit 1
           fi
-          gh release create "$FLAMA_TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --draft \
-            --target "$FLAMA_RELEASE_SHA" \
-            --title "$FLAMA_TAG" \
-            --notes-file release-metadata/release-notes.md
-          release_id=$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
-            "repos/${GITHUB_REPOSITORY}/releases/tags/$FLAMA_TAG" --jq '.id')
+          # Create through the API rather than `gh release create`, so the id
+          # comes back from the same call. Recovering it afterwards by tag is
+          # impossible for a draft, and without the id the failure-path cleanup
+          # below cannot run either.
+          release_id=$(gh api --method POST -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/${GITHUB_REPOSITORY}/releases" \
+            -f tag_name="$FLAMA_TAG" \
+            -f target_commitish="$FLAMA_RELEASE_SHA" \
+            -f name="$FLAMA_TAG" \
+            -f body="$(cat release-metadata/release-notes.md)" \
+            -F draft=true \
+            -F prerelease=false \
+            --jq '.id')
           [[ "$release_id" =~ ^[0-9]+$ ]]
           echo "release-id=$release_id" >> "$GITHUB_OUTPUT"
 
@@ -293,15 +305,19 @@ jobs:
         env:
           FLAMA_ARTIFACT_FILE: ${{ needs.prepare-release.outputs.artifact-file }}
           FLAMA_CHECKSUM_FILE: ${{ needs.prepare-release.outputs.checksum-file }}
+          FLAMA_RELEASE_ID: ${{ steps.draft.outputs.release-id }}
           FLAMA_SBOM_FILE: ${{ needs.prepare-release.outputs.sbom-file }}
-          FLAMA_TAG: ${{ needs.prepare-release.outputs.tag }}
           GH_TOKEN: ${{ steps.release-app.outputs.token }}
         run: |
-          gh release upload "$FLAMA_TAG" \
-            "release-bundle/$FLAMA_ARTIFACT_FILE" \
-            "release-bundle/$FLAMA_CHECKSUM_FILE" \
-            "release-bundle/$FLAMA_SBOM_FILE" \
-            --repo "$GITHUB_REPOSITORY"
+          # Upload by release id for the same reason the draft is created by id:
+          # the tag does not exist until the release is published.
+          for file in "$FLAMA_ARTIFACT_FILE" "$FLAMA_CHECKSUM_FILE" "$FLAMA_SBOM_FILE"; do
+            gh api --method POST \
+              -H 'X-GitHub-Api-Version: 2026-03-10' \
+              -H 'Content-Type: application/octet-stream' \
+              "https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${FLAMA_RELEASE_ID}/assets?name=${file}" \
+              --input "release-bundle/$file" >/dev/null
+          done
 
       - name: Attest platform release assets
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
