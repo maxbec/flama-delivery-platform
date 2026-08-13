@@ -341,9 +341,15 @@ jobs:
             remote_digest=$(jq -r --arg file "$file" '.assets[] | select(.name == $file) | .digest' <<< "$release_json")
             [[ "$remote_digest" == "$local_digest" ]]
           done
-          gh api --method PATCH -H 'X-GitHub-Api-Version: 2026-03-10' \
+          # `gh api` splits a field on its first `=`, so the httpie-style
+          # `-F draft:='false'` sends a field named `draft:`, leaves the release
+          # a draft, and still returns 200 -- a green step that published
+          # nothing. Assert the flag actually cleared rather than trusting it.
+          published_draft=$(gh api --method PATCH -H 'X-GitHub-Api-Version: 2026-03-10' \
             "repos/${GITHUB_REPOSITORY}/releases/$FLAMA_RELEASE_ID" \
-            -F draft:='false' >/dev/null
+            -F draft=false \
+            --jq '.draft')
+          [[ "$published_draft" == "false" ]]
 
       - name: Verify immutable release and attestations
         env:
