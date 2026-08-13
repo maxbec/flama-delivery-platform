@@ -68,8 +68,9 @@ retains the major safety and phase boundaries.
 - Platform release packaging produces reproducible self-contained CLI,
   bridge, company-controller, and governance executables, SPDX 2.3 SBOM,
   third-party licenses, per-file manifest, and SHA-256 checksum.
-  Publication remains disabled until the scoped release App is available through
-  the approved Infisical/OIDC path.
+  Publication remains disabled until the existing owner-matched Maxbec App is
+  available through the approved Infisical/OIDC path with its release
+  permissions effective.
 - Phase 3 now has a metadata-only Infisical policy audit covering exact OIDC
   claims, non-shared least-privilege identities, public-PR isolation, trusted-job
   separation, scoped Secret Syncs, direct-destination exceptions, and rotation

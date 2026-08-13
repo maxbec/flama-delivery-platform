@@ -14,6 +14,8 @@ grep -Fqx '      id-token: write' "$WORKFLOW"
 grep -Fqx '      attestations: write' "$WORKFLOW"
 grep -Fq 'Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995' "$WORKFLOW"
 grep -Fq 'actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1' "$WORKFLOW"
+grep -Fq 'app-id: ${{ env.FLAMA_GITHUB_APP_ID_MAXBEC }}' "$WORKFLOW"
+grep -Fq 'private-key: ${{ env.FLAMA_GITHUB_APP_PRIVATE_KEY_MAXBEC }}' "$WORKFLOW"
 grep -Fq 'permission-contents: write' "$WORKFLOW"
 grep -Fq 'repositories: flama-delivery-platform' "$WORKFLOW"
 grep -Fq 'actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a' "$WORKFLOW"
@@ -42,6 +44,10 @@ publish_line=$(grep -n 'name: Publish immutable release' "$WORKFLOW" | cut -d: -
 
 if grep -Eq 'pull_request_target|continue-on-error:|secrets: inherit|skip-token-revoke: true|--clobber' "$WORKFLOW"; then
   echo "platform release workflow contains a forbidden trust or mutability pattern" >&2
+  exit 1
+fi
+if grep -Eq 'FLAMA_RELEASE_GITHUB_APP_(ID|PRIVATE_KEY)' "$WORKFLOW"; then
+  echo "platform release workflow must reuse the owner-matched Maxbec App credentials" >&2
   exit 1
 fi
 while IFS= read -r action_ref; do

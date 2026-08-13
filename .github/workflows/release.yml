@@ -208,6 +208,8 @@ jobs:
           FLAMA_INFISICAL_IDENTITY_ID: ${{ vars.INFISICAL_IDENTITY_ID }}
           FLAMA_INFISICAL_PROJECT_SLUG: ${{ vars.INFISICAL_PROJECT_SLUG }}
           FLAMA_INFISICAL_SECRET_PATH: ${{ vars.INFISICAL_SECRET_PATH }}
+          FLAMA_CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          FLAMA_CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
         run: |
           for name in DOMAIN ENV_SLUG IDENTITY_ID PROJECT_SLUG SECRET_PATH; do
             variable="FLAMA_INFISICAL_$name"
@@ -215,8 +217,17 @@ jobs:
           done
           [[ "$FLAMA_INFISICAL_DOMAIN" =~ ^https://[^/]+$ ]]
           [[ "$FLAMA_INFISICAL_SECRET_PATH" =~ ^/[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*$ ]]
+          # Infisical is published through a Cloudflare Tunnel behind Cloudflare
+          # Access. The Access application "[NVGT] Infisical" protects both
+          # /api/v1/auth/* and /api/v3/secrets/* with a non-identity service
+          # token policy, so every request the action makes must carry the
+          # service token headers or Access answers 403 before Infisical sees it.
+          for name in CLIENT_ID CLIENT_SECRET; do
+            variable="FLAMA_CF_ACCESS_$name"
+            [[ -n "${!variable}" ]] || { echo "::error::Missing secret CF_ACCESS_$name"; exit 1; }
+          done
 
-      - name: Load the scoped release App credentials from Infisical
+      - name: Load the Maxbec delivery App credentials from Infisical
         uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
         with:
           method: oidc
@@ -227,13 +238,16 @@ jobs:
           secret-path: ${{ vars.INFISICAL_SECRET_PATH }}
           include-imports: false
           recursive: false
+          extra-headers: |
+            CF-Access-Client-Id: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+            CF-Access-Client-Secret: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
 
-      - name: Mint a repository-scoped release App token
+      - name: Mint a repository-scoped Maxbec App token
         id: release-app
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ env.FLAMA_RELEASE_GITHUB_APP_ID }}
-          private-key: ${{ env.FLAMA_RELEASE_GITHUB_APP_PRIVATE_KEY }}
+          app-id: ${{ env.FLAMA_GITHUB_APP_ID_MAXBEC }}
+          private-key: ${{ env.FLAMA_GITHUB_APP_PRIVATE_KEY_MAXBEC }}
           owner: ${{ github.repository_owner }}
           repositories: flama-delivery-platform
           permission-administration: read
