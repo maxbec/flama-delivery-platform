@@ -19,13 +19,12 @@ grep -Fq 'private-key: ${{ env.FLAMA_GITHUB_APP_PRIVATE_KEY_MAXBEC }}' "$WORKFLO
 grep -Fq 'permission-contents: write' "$WORKFLOW"
 grep -Fq 'repositories: flama-delivery-platform' "$WORKFLOW"
 grep -Fq 'actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a' "$WORKFLOW"
-# The release is created as a draft through the REST API rather than
-# `gh release create --draft`: a draft carries no tag, so creating it with the
-# CLI leaves no way to recover its id afterwards. The requirement is the same,
-# only the spelling of the mechanism changed -- see the companion assertion
-# below that it is published with draft:='false'.
+# The release is created as a draft and published by clearing that flag. Both
+# assertions must use `gh api` field syntax: a field is split on its first `=`,
+# so `-F draft:='false'` sends a field named `draft:`, leaves the release a
+# draft, and still returns 200 -- a green step that published nothing.
 grep -Fq -- '-F draft=true' "$WORKFLOW"
-grep -Fq -- "-F draft:='false'" "$WORKFLOW"
+grep -Fq -- '-F draft=false' "$WORKFLOW"
 grep -Fq 'repos/${GITHUB_REPOSITORY}/immutable-releases' "$WORKFLOW"
 grep -Fq '[[ "$FLAMA_REF_PROTECTED" == "true" ]]' "$WORKFLOW"
 grep -Fq '[[ "$FLAMA_RELEASE_SHA" == "$GITHUB_SHA" ]]' "$WORKFLOW"
