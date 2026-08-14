@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.4](https://github.com/maxbec/flama-delivery-platform/compare/v0.5.3...v0.5.4) (2026-08-14)
+
+
+### 🐛 Bug Fixes
+
+* **auto-merge:** arm with the workflow App token so merges trigger push workflows ([#38](https://github.com/maxbec/flama-delivery-platform/issues/38)) ([6594ee0](https://github.com/maxbec/flama-delivery-platform/commit/6594ee0b12a0653a2b0560da04a3b28de7b57674))
+
 ## [0.5.3](https://github.com/maxbec/flama-delivery-platform/compare/v0.5.2...v0.5.3) (2026-08-12)
 
 
