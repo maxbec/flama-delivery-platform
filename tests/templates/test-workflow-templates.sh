@@ -21,6 +21,13 @@ done
 # The auto-merge job writes the pull request state, so both generated callers
 # must carry the same ceiling or GitHub rejects the workflow before any job is
 # scheduled (reported only as startup_failure).
+#
+# The auto-merge caller is the one pull-request workflow allowed to forward
+# secrets, and only the named App credential pair: the App identity is what
+# makes the eventual merge push start push workflows, which a merge recorded
+# as github-actions[bot] never does. The exception is safe because the called
+# workflow runs pinned platform code and never checks out the change under
+# review. `secrets: inherit`, or any other secret name, stays forbidden.
 for profile in fast major; do
   template="$ROOT_DIR/templates/$profile/.github/workflows/flama-auto-merge.yml.tmpl"
   [[ -f "$template" ]] || { echo "missing auto-merge workflow template" >&2; exit 1; }
@@ -28,8 +35,15 @@ for profile in fast major; do
   grep -Fqx '  contents: write' "$template"
   grep -Fqx '  pull-requests: write' "$template"
   grep -Fq '@__FLAMA_PLATFORM_REF__' "$template"
-  if grep -Eq 'pull_request_target|id-token:|secrets:|secrets: inherit' "$template"; then
+  grep -Fqx '    secrets:' "$template"
+  grep -Fqx '      WORKFLOW_APP_ID: ${{ secrets.WORKFLOW_APP_ID }}' "$template"
+  grep -Fqx '      WORKFLOW_APP_PRIVATE_KEY: ${{ secrets.WORKFLOW_APP_PRIVATE_KEY }}' "$template"
+  if grep -Eq 'pull_request_target|id-token:|secrets: inherit' "$template"; then
     echo "auto-merge workflow template violates the pull-request trust boundary" >&2
+    exit 1
+  fi
+  if grep -Eo 'secrets\.[A-Za-z0-9_]+' "$template" | grep -Evq '^secrets\.WORKFLOW_APP_(ID|PRIVATE_KEY)$'; then
+    echo "auto-merge workflow template forwards a secret outside the App credential pair" >&2
     exit 1
   fi
 done

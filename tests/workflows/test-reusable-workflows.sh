@@ -68,5 +68,29 @@ if grep -Eq 'pull_request_target|--admin|--force' "$AUTO_MERGE"; then
   echo "auto-merge workflow bypasses branch protection or trusts an untrusted event" >&2
   exit 1
 fi
+while IFS= read -r action_ref; do
+  [[ "$action_ref" =~ ^[0-9a-f]{40}$ ]] || {
+    echo "auto-merge workflow action is not pinned to a full SHA" >&2
+    exit 1
+  }
+done < <(sed -nE 's/^[[:space:]]*uses:[[:space:]]+[^@]+@([^[:space:]#]+).*/\1/p' "$AUTO_MERGE")
+
+# The identity that arms is the identity that merges, and a merge recorded as
+# github-actions[bot] never starts push workflows on the base branch — the
+# release and deploy runs after a self-merged pull request silently vanish.
+# The workflow must therefore accept the optional App credential pair, mint an
+# installation token from it, and use that token to arm; without the pair it
+# falls back to the default token. The credential is safe here only because no
+# step checks out or executes pull-request code, so that must stay true.
+grep -Fqx '      WORKFLOW_APP_ID:' "$AUTO_MERGE"
+grep -Fqx '      WORKFLOW_APP_PRIVATE_KEY:' "$AUTO_MERGE"
+[[ $(grep -Fcx '        required: false' "$AUTO_MERGE") -ge 2 ]]
+grep -Fq 'actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1' "$AUTO_MERGE"
+grep -Fq 'steps.app-token.outputs.token || github.token' "$AUTO_MERGE"
+grep -Fq 'WORKFLOW_APP_ID and WORKFLOW_APP_PRIVATE_KEY must be provided together' "$AUTO_MERGE"
+if grep -Eq 'secrets: inherit|actions/checkout|continue-on-error:' "$AUTO_MERGE"; then
+  echo "auto-merge workflow widens the credential surface it is allowed" >&2
+  exit 1
+fi
 
 echo "reusable workflow policy tests passed"

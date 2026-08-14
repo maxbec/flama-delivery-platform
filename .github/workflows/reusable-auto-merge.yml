@@ -10,6 +10,15 @@ name: Reusable Auto Merge
 # Release pull requests are excluded on purpose: cutting a version is the one
 # call that stays a person's. So is anything targeting the release branch,
 # which is how a promotion reaches production.
+#
+# The identity that arms is the identity that merges, and that identity decides
+# whether the merge is seen. A merge performed by the default workflow token is
+# recorded as github-actions[bot], and pushes by that actor never start push
+# workflows — GitHub's recursion guard — so the release and deploy runs that
+# should follow a self-merged pull request silently do not happen. Arming with
+# a GitHub App installation token makes the App the merging actor, and its
+# merge push starts them. The App credentials are optional: a caller without
+# them keeps the default token together with its documented limitation.
 
 on:
   workflow_call:
@@ -25,6 +34,18 @@ on:
         required: false
         default: main
         type: string
+    secrets:
+      WORKFLOW_APP_ID:
+        description: >-
+          GitHub App id used to arm auto-merge, so the eventual merge is
+          attributed to the App and its push to the base branch starts push
+          workflows. Optional; the default workflow token is used when absent.
+        required: false
+      WORKFLOW_APP_PRIVATE_KEY:
+        description: >-
+          Private key of the same GitHub App. Optional, but must be provided
+          together with WORKFLOW_APP_ID.
+        required: false
 
 permissions:
   contents: read
@@ -45,12 +66,26 @@ jobs:
       - name: Decide whether this pull request may arm
         id: decide
         env:
+          FLAMA_APP_ID: ${{ secrets.WORKFLOW_APP_ID }}
+          FLAMA_APP_PRIVATE_KEY: ${{ secrets.WORKFLOW_APP_PRIVATE_KEY }}
           FLAMA_BASE_REF: ${{ github.event.pull_request.base.ref }}
           FLAMA_DRAFT: ${{ github.event.pull_request.draft }}
           FLAMA_HEAD_REF: ${{ github.event.pull_request.head.ref }}
           FLAMA_PROFILE: ${{ inputs.profile }}
           FLAMA_RELEASE_BRANCH: ${{ inputs.release-branch }}
         run: |
+          # A half-configured credential would silently fall back to the
+          # default token, reintroducing the invisible-merge problem while
+          # looking configured. Refuse it instead.
+          app=false
+          if [[ -n "$FLAMA_APP_ID" && -n "$FLAMA_APP_PRIVATE_KEY" ]]; then
+            app=true
+          elif [[ -n "$FLAMA_APP_ID" || -n "$FLAMA_APP_PRIVATE_KEY" ]]; then
+            echo '::error::WORKFLOW_APP_ID and WORKFLOW_APP_PRIVATE_KEY must be provided together'
+            exit 1
+          fi
+          echo "app=$app" >> "$GITHUB_OUTPUT"
+
           arm=true
           reason=eligible
 
@@ -77,11 +112,26 @@ jobs:
           echo "arm=$arm" >> "$GITHUB_OUTPUT"
           echo "$reason"
 
+      # No step in this job checks out or executes pull-request code, so the
+      # credential is never exposed to the change under review. The token is
+      # narrowed to this repository and to the two permissions arming needs.
+      - name: Mint the App installation token that will own the merge
+        id: app-token
+        if: ${{ steps.decide.outputs.arm == 'true' && steps.decide.outputs.app == 'true' }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.WORKFLOW_APP_ID }}
+          private-key: ${{ secrets.WORKFLOW_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
       - name: Arm auto-merge
         if: ${{ steps.decide.outputs.arm == 'true' }}
         env:
           FLAMA_PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
         run: |
           # Already armed is the expected steady state, not a failure: this runs
           # again on every synchronize. Anything else is reported.
