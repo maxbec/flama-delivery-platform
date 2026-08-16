@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.5](https://github.com/maxbec/flama-delivery-platform/compare/v0.5.4...v0.5.5) (2026-08-16)
+
+
+### 🐛 Bug Fixes
+
+* **branch-guard:** allow promote/* heads into main on the major profile ([#40](https://github.com/maxbec/flama-delivery-platform/issues/40)) ([3afa212](https://github.com/maxbec/flama-delivery-platform/commit/3afa21216839587656de28d861080935c85d90a4))
+
 ## [0.5.4](https://github.com/maxbec/flama-delivery-platform/compare/v0.5.3...v0.5.4) (2026-08-14)
 
 
