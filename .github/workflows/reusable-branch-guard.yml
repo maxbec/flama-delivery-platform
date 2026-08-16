@@ -38,6 +38,7 @@ jobs:
               ;;
             major:main)
               [[ "$FLAMA_HEAD_REF" == "dev" ||
+                 "$FLAMA_HEAD_REF" == promote/* ||
                  "$FLAMA_HEAD_REF" == hotfix/* ||
                  "$FLAMA_HEAD_REF" == deploy/* ||
                  "$FLAMA_HEAD_REF" == release-please--* ]]
