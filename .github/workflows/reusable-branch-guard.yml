@@ -11,6 +11,14 @@ on:
         description: Flama branch profile
         required: true
         type: string
+      runner-labels:
+        description: >-
+          JSON array of runs-on labels, e.g. '["self-hosted","mainz-homelab"]'.
+          Defaults to the billed GitHub-hosted runner so public and foreign
+          consumers keep running unchanged.
+        required: false
+        default: '["ubuntu-latest"]'
+        type: string
 
 permissions:
   contents: read
@@ -18,7 +26,7 @@ permissions:
 jobs:
   guard:
     name: Flama Branch Guard
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runner-labels) }}
     timeout-minutes: 2
     steps:
       - name: Validate pull-request branch boundary

@@ -34,6 +34,14 @@ on:
         required: false
         default: main
         type: string
+      runner-labels:
+        description: >-
+          JSON array of runs-on labels, e.g. '["self-hosted","mainz-homelab"]'.
+          Defaults to the billed GitHub-hosted runner so public and foreign
+          consumers keep running unchanged.
+        required: false
+        default: '["ubuntu-latest"]'
+        type: string
     secrets:
       WORKFLOW_APP_ID:
         description: >-
@@ -57,7 +65,7 @@ concurrency:
 jobs:
   arm:
     name: Flama Auto Merge
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runner-labels) }}
     timeout-minutes: 5
     permissions:
       contents: write

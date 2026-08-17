@@ -13,3 +13,4 @@ jobs:
     with:
       head-sha: ${{ github.event.pull_request.head.sha }}
       profile: major
+      runner-labels: ${{ vars.PIPELINE_RUNNER || '["ubuntu-latest"]' }}

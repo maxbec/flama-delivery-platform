@@ -31,6 +31,14 @@ on:
         required: false
         default: 2100
         type: number
+      runner-labels:
+        description: >-
+          JSON array of runs-on labels, e.g. '["self-hosted","mainz-homelab"]'.
+          Defaults to the billed GitHub-hosted runner so public and foreign
+          consumers keep running unchanged.
+        required: false
+        default: '["ubuntu-latest"]'
+        type: string
 
 permissions:
   checks: read
@@ -43,7 +51,7 @@ concurrency:
 jobs:
   policy:
     name: Flama Policy Gate
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runner-labels) }}
     # Long enough to outlast the wait above rather than cutting it short, which
     # would reintroduce the same red-on-absence verdict by another route.
     timeout-minutes: 45
