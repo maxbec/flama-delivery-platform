@@ -15,6 +15,14 @@ on:
         description: Exact platform commit used by generated callers
         required: true
         type: string
+      runner-labels:
+        description: >-
+          JSON array of runs-on labels, e.g. '["self-hosted","mainz-homelab"]'.
+          Defaults to the billed GitHub-hosted runner so public and foreign
+          consumers keep running unchanged.
+        required: false
+        default: '["ubuntu-latest"]'
+        type: string
 
 permissions:
   contents: read
@@ -26,7 +34,7 @@ concurrency:
 jobs:
   final:
     name: Flama Final Gate
-    runs-on: ubuntu-latest
+    runs-on: ${{ fromJSON(inputs.runner-labels) }}
     timeout-minutes: 20
     steps:
       - name: Validate exact SHA inputs

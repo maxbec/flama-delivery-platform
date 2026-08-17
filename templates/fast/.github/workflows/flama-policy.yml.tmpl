@@ -17,3 +17,4 @@ jobs:
       paperclip-app-slug: __FLAMA_PAPERCLIP_APP_SLUG__
       platform-sha: __FLAMA_PLATFORM_REF__
       profile: fast
+      runner-labels: ${{ vars.PIPELINE_RUNNER || '["ubuntu-latest"]' }}
