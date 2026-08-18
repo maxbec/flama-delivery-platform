@@ -107,6 +107,7 @@ jobs:
       - name: Validate deployment manifest without application tests
         if: ${{ steps.change.outputs.mode == 'deployment' }}
         run: |
+          command -v corepack >/dev/null 2>&1 || npm install -g corepack
           corepack enable
           pnpm --dir platform install --frozen-lockfile
           pnpm --dir platform build
