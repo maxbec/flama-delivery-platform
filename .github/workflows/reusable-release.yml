@@ -79,6 +79,11 @@ jobs:
           ref: ${{ inputs.head-sha }}
           persist-credentials: false
 
+      - name: Set up the Node.js version the repository declares
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+
       - name: Enable the package manager the repository declares
         run: corepack enable
 
