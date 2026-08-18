@@ -86,7 +86,14 @@ grep -Fqx '      WORKFLOW_APP_ID:' "$AUTO_MERGE"
 grep -Fqx '      WORKFLOW_APP_PRIVATE_KEY:' "$AUTO_MERGE"
 [[ $(grep -Fcx '        required: false' "$AUTO_MERGE") -ge 2 ]]
 grep -Fq 'actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1' "$AUTO_MERGE"
-grep -Fq 'steps.app-token.outputs.token || github.token' "$AUTO_MERGE"
+# Two token steps exist because a head that rewrites .github/workflows/** needs
+# workflows:write and an ordinary one must not get it. Whichever was minted,
+# github.token stays the last resort — assert the whole chain rather than a
+# fragment of it, so dropping a term cannot pass unnoticed.
+grep -Fq 'steps.app-token.outputs.token || steps.app-token-workflows.outputs.token || github.token' "$AUTO_MERGE"
+# The narrow token must stay narrow: only the workflows-capable step may ask
+# for that permission, and it must ask for it exactly once.
+[[ $(grep -Fc '          permission-workflows: write' "$AUTO_MERGE") -eq 1 ]]
 grep -Fq 'WORKFLOW_APP_ID and WORKFLOW_APP_PRIVATE_KEY must be provided together' "$AUTO_MERGE"
 if grep -Eq 'secrets: inherit|actions/checkout|continue-on-error:' "$AUTO_MERGE"; then
   echo "auto-merge workflow widens the credential surface it is allowed" >&2
