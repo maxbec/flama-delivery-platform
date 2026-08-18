@@ -80,7 +80,9 @@ jobs:
 
       - name: Enable the package manager the repository declares
         if: ${{ steps.change.outputs.mode == 'code' }}
-        run: corepack enable
+        run: |
+          command -v corepack >/dev/null 2>&1 || npm install -g corepack
+          corepack enable
 
       - name: Run authoritative full verification
         if: ${{ steps.change.outputs.mode == 'code' }}
@@ -105,6 +107,7 @@ jobs:
       - name: Validate deployment manifest without application tests
         if: ${{ steps.change.outputs.mode == 'deployment' }}
         run: |
+          command -v corepack >/dev/null 2>&1 || npm install -g corepack
           corepack enable
           pnpm --dir platform install --frozen-lockfile
           pnpm --dir platform build
