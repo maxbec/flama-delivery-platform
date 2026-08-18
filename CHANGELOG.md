@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.5.6](https://github.com/maxbec/flama-delivery-platform/compare/v0.5.5...v0.5.6) (2026-08-18)
+
+
+### 🐛 Bug Fixes
+
+* **auto-merge:** request workflows:write for heads that touch CI ([#47](https://github.com/maxbec/flama-delivery-platform/issues/47)) ([5bf5a79](https://github.com/maxbec/flama-delivery-platform/commit/5bf5a792e19e16b550d68f38e2dab104708ad6a9))
+* **final:** set up consumer Node.js before corepack in code mode ([#43](https://github.com/maxbec/flama-delivery-platform/issues/43)) ([fa5f949](https://github.com/maxbec/flama-delivery-platform/commit/fa5f949e2a7c7bef68d80f9a100659ea3628e28f))
+* **gates:** guard deployment-mode corepack enable on self-hosted runner ([#46](https://github.com/maxbec/flama-delivery-platform/issues/46)) ([5764805](https://github.com/maxbec/flama-delivery-platform/commit/5764805c7c847c910bc6527a800e01a399644589))
+* **gates:** install corepack if missing before enabling it ([#44](https://github.com/maxbec/flama-delivery-platform/issues/44)) ([53b075a](https://github.com/maxbec/flama-delivery-platform/commit/53b075a03cd967a75cddf1ed3319114fa799efa5))
+* **gates:** make runs-on a runner-labels input, default ubuntu-latest ([#42](https://github.com/maxbec/flama-delivery-platform/issues/42)) ([2fe4b46](https://github.com/maxbec/flama-delivery-platform/commit/2fe4b4650dd8535c138116bfa94cbe818cc17bdd))
+* **release:** let fix commits cut a patch release on 0.x ([#48](https://github.com/maxbec/flama-delivery-platform/issues/48)) ([8fd727b](https://github.com/maxbec/flama-delivery-platform/commit/8fd727b238c5e09e08792b923cd62d28df392944))
+* **release:** Node aus .nvmrc pinnen vor corepack enable (PRI-871) ([#45](https://github.com/maxbec/flama-delivery-platform/issues/45)) ([f0b12b9](https://github.com/maxbec/flama-delivery-platform/commit/f0b12b9a96c53ac807460d6017d9336d831f9504))
+
 ## [0.5.5](https://github.com/maxbec/flama-delivery-platform/compare/v0.5.4...v0.5.5) (2026-08-16)
 
 
