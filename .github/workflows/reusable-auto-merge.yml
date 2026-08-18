@@ -120,12 +120,38 @@ jobs:
           echo "arm=$arm" >> "$GITHUB_OUTPUT"
           echo "$reason"
 
+      # Merging a pull request that touches .github/workflows/** writes those
+      # files, and GitHub refuses that to an App token without the `workflows`
+      # permission:
+      #
+      #   refusing to allow a GitHub App to create or update workflow
+      #   `.github/workflows/ci.yml` without `workflows` permission
+      #
+      # Dependabot bumps of action versions are exactly this shape, so they
+      # could never self-merge. The permission is requested only for the heads
+      # that need it rather than on every merge, so an ordinary code change
+      # still gets a token that cannot rewrite CI.
+      - name: Note whether the head touches workflow files
+        id: workflows
+        if: ${{ steps.decide.outputs.arm == 'true' && steps.decide.outputs.app == 'true' }}
+        env:
+          FLAMA_PR_NUMBER: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api --paginate \
+            "repos/$GITHUB_REPOSITORY/pulls/$FLAMA_PR_NUMBER/files" \
+            --jq '.[].filename' | grep -q '^\.github/workflows/'; then
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+          fi
+
       # No step in this job checks out or executes pull-request code, so the
       # credential is never exposed to the change under review. The token is
-      # narrowed to this repository and to the two permissions arming needs.
+      # narrowed to this repository and to the permissions arming needs.
       - name: Mint the App installation token that will own the merge
         id: app-token
-        if: ${{ steps.decide.outputs.arm == 'true' && steps.decide.outputs.app == 'true' }}
+        if: ${{ steps.decide.outputs.arm == 'true' && steps.decide.outputs.app == 'true' && steps.workflows.outputs.needed == 'false' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.WORKFLOW_APP_ID }}
@@ -135,11 +161,24 @@ jobs:
           permission-contents: write
           permission-pull-requests: write
 
+      - name: Mint the App installation token for a head that rewrites CI
+        id: app-token-workflows
+        if: ${{ steps.decide.outputs.arm == 'true' && steps.decide.outputs.app == 'true' && steps.workflows.outputs.needed == 'true' }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.WORKFLOW_APP_ID }}
+          private-key: ${{ secrets.WORKFLOW_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write
+
       - name: Arm auto-merge
         if: ${{ steps.decide.outputs.arm == 'true' }}
         env:
           FLAMA_PR_URL: ${{ github.event.pull_request.html_url }}
-          GH_TOKEN: ${{ steps.app-token.outputs.token || github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || steps.app-token-workflows.outputs.token || github.token }}
         run: |
           # Already armed is the expected steady state, not a failure: this runs
           # again on every synchronize. Anything else is reported.
