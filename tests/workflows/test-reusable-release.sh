@@ -16,6 +16,14 @@ grep -Fq '[[ "$FLAMA_EVENT_NAME" != "pull_request" ]]' "$WORKFLOW"
 grep -Fq '[[ "$FLAMA_REF_PROTECTED" == "true" ]]' "$WORKFLOW"
 grep -Fq '[[ "$FLAMA_HEAD_SHA" == "${GITHUB_SHA}" ]]' "$WORKFLOW"
 grep -Fq 'actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1' "$WORKFLOW"
+grep -Fq 'actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38' "$WORKFLOW"
+grep -Fqx '          node-version-file: .nvmrc' "$WORKFLOW"
+# corepack resolves the package manager against whatever node happens to be on
+# PATH, so the version has to be pinned from the commit before it runs. Without
+# this the release package depends on the runner image: ubuntu-latest ships a
+# node, a self-hosted label need not.
+[[ $(grep -Fn 'node-version-file: .nvmrc' "$WORKFLOW" | cut -d: -f1) \
+  -lt $(grep -Fn 'run: corepack enable' "$WORKFLOW" | cut -d: -f1) ]]
 grep -Fq 'actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a' "$WORKFLOW"
 grep -Fq 'actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f' "$WORKFLOW"
 grep -Fq 'actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c' "$WORKFLOW"
