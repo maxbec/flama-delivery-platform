@@ -30,6 +30,19 @@ grep -Fq '[[ "$FLAMA_REF_PROTECTED" == "true" ]]' "$WORKFLOW"
 grep -Fq '[[ "$FLAMA_RELEASE_SHA" == "$GITHUB_SHA" ]]' "$WORKFLOW"
 grep -Fq 'sha256sum -c "$FLAMA_CHECKSUM_FILE" --status' "$WORKFLOW"
 
+# The release pull request must be authored by the App, never by GITHUB_TOKEN.
+# GitHub suppresses workflow runs on GITHUB_TOKEN-authored pull requests, so a
+# release pull request opened that way is born unmergeable: Foundation Gate
+# never reports. Assert the token wiring rather than the absence of a string,
+# because the fallback would read as green while shipping the old behaviour.
+release_pr_section=$(sed -n '/^  release-please:/,/^  prepare-release:/p' "$WORKFLOW")
+grep -Fq 'token: ${{ steps.release-pr-app.outputs.token }}' <<< "$release_pr_section"
+grep -Fq 'permission-pull-requests: write' <<< "$release_pr_section"
+if grep -Fq 'secrets.GITHUB_TOKEN' <<< "$release_pr_section"; then
+  echo "release pull request must not be authored by GITHUB_TOKEN" >&2
+  exit 1
+fi
+
 prepare_section=$(sed -n '/^  prepare-release:/,/^  publish-release:/p' "$WORKFLOW")
 if grep -Eq 'id-token: write|attestations: write|contents: write|Infisical/secrets-action|create-github-app-token' <<< "$prepare_section"; then
   echo "release preparation must not receive publishing identity" >&2
