@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.5.7](https://github.com/maxbec/flama-delivery-platform/compare/v0.5.6...v0.5.7) (2026-08-19)
+
+
+### 🐛 Bug Fixes
+
+* **final:** skip consumer .nvmrc setup-node step when file absent ([#51](https://github.com/maxbec/flama-delivery-platform/issues/51)) ([d2b9ec4](https://github.com/maxbec/flama-delivery-platform/commit/d2b9ec436b69fcd7306fcaf01310a984b3971c4a))
+* **policy:** bind the platform lock version to the tag at the pinned ref (PRI-890) ([#54](https://github.com/maxbec/flama-delivery-platform/issues/54)) ([afa15b8](https://github.com/maxbec/flama-delivery-platform/commit/afa15b87dcda04e821efb35f227d5f6c310c1512))
+* **release:** author the release pull request with the Maxbec App token ([#55](https://github.com/maxbec/flama-delivery-platform/issues/55)) ([87a9115](https://github.com/maxbec/flama-delivery-platform/commit/87a9115b06539b4273c45a3d0bb4418bcca7758c))
+* **release:** auto-relabel merged release PR and fix reviver credentials (PRI-894) ([#53](https://github.com/maxbec/flama-delivery-platform/issues/53)) ([7ec7b93](https://github.com/maxbec/flama-delivery-platform/commit/7ec7b9344ba65f8b4ae745df559fe9bb1e3522de))
+* **release:** give the release pull request job its Cloudflare Access secrets ([#56](https://github.com/maxbec/flama-delivery-platform/issues/56)) ([70ba739](https://github.com/maxbec/flama-delivery-platform/commit/70ba739b2f06d326c49e3227f4fdd47ee44067f8))
+
 ## [0.5.6](https://github.com/maxbec/flama-delivery-platform/compare/v0.5.5...v0.5.6) (2026-08-18)
 
 
