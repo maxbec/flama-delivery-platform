@@ -18,9 +18,16 @@ jobs:
     name: Release Please
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # CF_ACCESS_CLIENT_ID and CF_ACCESS_CLIENT_SECRET exist only in this environment -- the repository
+    # itself holds no secrets. Without this line both resolve to the empty string
+    # and Cloudflare Access answers 403 before Infisical ever sees the request,
+    # which reads as an Infisical failure and is not one. The environment gates
+    # on protected branches only, so it adds no approval step.
+    environment: platform-release
     permissions:
-      # id-token is what Infisical authenticates with; contents and
-      # pull-requests remain for the fallback path GitHub grants the job itself.
+      # id-token is what Infisical authenticates with. contents and
+      # pull-requests stay because release-please writes the branch and the
+      # pull request through the App token minted below.
       contents: write
       id-token: write
       pull-requests: write
