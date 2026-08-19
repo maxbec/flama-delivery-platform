@@ -15,10 +15,13 @@ name: 🔎 Release PR checks
 # merge into `main`. (It replaces the auto-merge half of the former
 # release-automerge.yaml in maxbec/pipeline.)
 #
-# The job is skipped unless WORKFLOW_APP_ID is present, because reviving with
-# GITHUB_TOKEN would produce another GITHUB_TOKEN-authored event and be
-# suppressed in exactly the same way. Without the App credentials this workflow
-# is inert rather than red.
+# The App credentials come from Infisical, the same way publish-release in
+# release.yml loads them — this repo has no repository-level WORKFLOW_APP_ID
+# secret (maxbec is a user account, not an org, and repo secrets here are
+# empty by design; only the platform-release environment carries the CF
+# Access service-token secrets this action needs). The job is gated on the
+# repository variable that config actually requires, so it is inert rather
+# than red on a fork or a repo that hasn't wired Infisical up yet.
 
 on:
   push:
@@ -28,6 +31,7 @@ on:
 permissions:
   contents: read
   pull-requests: write
+  id-token: write
 
 concurrency:
   group: release-pr-checks-${{ github.repository }}
@@ -36,16 +40,53 @@ concurrency:
 jobs:
   revive:
     name: Re-fire suppressed checks on the release PR
-    if: ${{ vars.RELEASE_PR_REVIVER_ENABLED == 'true' }}
+    if: ${{ vars.INFISICAL_IDENTITY_ID != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    environment: platform-release
     steps:
+      - name: Require complete Infisical OIDC configuration
+        env:
+          FLAMA_INFISICAL_DOMAIN: ${{ vars.INFISICAL_DOMAIN }}
+          FLAMA_INFISICAL_ENV_SLUG: ${{ vars.INFISICAL_ENV_SLUG }}
+          FLAMA_INFISICAL_IDENTITY_ID: ${{ vars.INFISICAL_IDENTITY_ID }}
+          FLAMA_INFISICAL_PROJECT_SLUG: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          FLAMA_INFISICAL_SECRET_PATH: ${{ vars.INFISICAL_SECRET_PATH }}
+          FLAMA_CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+          FLAMA_CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+        run: |
+          for name in DOMAIN ENV_SLUG IDENTITY_ID PROJECT_SLUG SECRET_PATH; do
+            variable="FLAMA_INFISICAL_$name"
+            [[ -n "${!variable}" ]] || { echo "::error::Missing repository variable INFISICAL_$name"; exit 1; }
+          done
+          [[ "$FLAMA_INFISICAL_DOMAIN" =~ ^https://[^/]+$ ]]
+          [[ "$FLAMA_INFISICAL_SECRET_PATH" =~ ^/[A-Za-z0-9_-]+(/[A-Za-z0-9_-]+)*$ ]]
+          for name in CLIENT_ID CLIENT_SECRET; do
+            variable="FLAMA_CF_ACCESS_$name"
+            [[ -n "${!variable}" ]] || { echo "::error::Missing secret CF_ACCESS_$name"; exit 1; }
+          done
+
+      - name: Load the Maxbec delivery App credentials from Infisical
+        uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
+        with:
+          method: oidc
+          identity-id: ${{ vars.INFISICAL_IDENTITY_ID }}
+          domain: ${{ vars.INFISICAL_DOMAIN }}
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          env-slug: ${{ vars.INFISICAL_ENV_SLUG }}
+          secret-path: ${{ vars.INFISICAL_SECRET_PATH }}
+          include-imports: false
+          recursive: false
+          extra-headers: |
+            CF-Access-Client-Id: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+            CF-Access-Client-Secret: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
       - name: 🔑 Mint GitHub App token
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.WORKFLOW_APP_ID }}
-          private-key: ${{ secrets.WORKFLOW_APP_PRIVATE_KEY }}
+          app-id: ${{ env.FLAMA_GITHUB_APP_ID_MAXBEC }}
+          private-key: ${{ env.FLAMA_GITHUB_APP_PRIVATE_KEY_MAXBEC }}
 
       - name: 🔎 Re-fire checks on the stable release PR
         env:

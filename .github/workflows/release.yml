@@ -165,6 +165,7 @@ jobs:
       contents: read
       id-token: write
       attestations: write
+      pull-requests: write
     steps:
       - name: Download normalized release assets
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -388,4 +389,35 @@ jobs:
           if [[ "$is_draft" == "true" ]]; then
             gh api --method DELETE -H 'X-GitHub-Api-Version: 2026-03-10' \
               "repos/${GITHUB_REPOSITORY}/releases/$FLAMA_RELEASE_ID"
+          fi
+
+      # skip-github-release makes release-please PR-only: it never tags and
+      # never flips the merged PR's label to `autorelease: tagged`, so every
+      # subsequent push reads the merged PR as still-open and cuts nothing
+      # ("Release skipped from strategy config"). This job is the only place
+      # that actually creates the tag, so it is the only place that can know
+      # the label is now safe to flip. github.token (not the Maxbec App token)
+      # is used deliberately: this is an API call this job makes about itself,
+      # not a push that needs to start another workflow run.
+      - name: Relabel the release PR the tag was just cut from
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FLAMA_RELEASE_SHA: ${{ needs.prepare-release.outputs.release-sha }}
+        run: |
+          set -euo pipefail
+          pr_number=$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/${GITHUB_REPOSITORY}/commits/${FLAMA_RELEASE_SHA}/pulls" \
+            --jq '[.[] | select(.head.ref | startswith("release-please--")) | select(.merged_at != null)][0].number // empty')
+          if [[ -z "$pr_number" ]]; then
+            echo "::notice::Release commit is not a release-please merge — nothing to relabel."
+            exit 0
+          fi
+          labels=$(gh pr view "$pr_number" --repo "${GITHUB_REPOSITORY}" --json labels --jq '[.labels[].name][]')
+          if grep -Fqx 'autorelease: pending' <<< "$labels"; then
+            gh pr edit "$pr_number" --repo "${GITHUB_REPOSITORY}" \
+              --remove-label 'autorelease: pending' --add-label 'autorelease: tagged'
+            echo "::notice::Relabeled release PR #$pr_number: autorelease: pending -> tagged"
+          else
+            echo "::notice::Release PR #$pr_number already correctly labeled."
           fi
