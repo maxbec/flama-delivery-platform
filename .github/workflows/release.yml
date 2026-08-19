@@ -19,15 +19,56 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
+      # id-token is what Infisical authenticates with; contents and
+      # pull-requests remain for the fallback path GitHub grants the job itself.
       contents: write
+      id-token: write
       pull-requests: write
     steps:
+      # A release pull request authored by GITHUB_TOKEN emits no workflow runs:
+      # GitHub suppresses them to break recursion, and additionally holds the
+      # run at action_required. Foundation Gate then never reports and the pull
+      # request is permanently unmergeable -- this is how every release since
+      # v0.5.5 stalled, and why release-pr-checks.yaml exists to revive it. An
+      # App-authored pull request is not suppressed, so mint the same Maxbec App
+      # credentials the publisher below already uses.
+      #
+      # These steps are deliberately not best-effort. The publisher cannot cut a
+      # release without Infisical either, so failing here moves an existing
+      # dependency earlier and makes it loud instead of opening a pull request
+      # that is born unmergeable.
+      - name: Load the Maxbec delivery App credentials from Infisical
+        uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
+        with:
+          method: oidc
+          identity-id: ${{ vars.INFISICAL_IDENTITY_ID }}
+          domain: ${{ vars.INFISICAL_DOMAIN }}
+          project-slug: ${{ vars.INFISICAL_PROJECT_SLUG }}
+          env-slug: ${{ vars.INFISICAL_ENV_SLUG }}
+          secret-path: ${{ vars.INFISICAL_SECRET_PATH }}
+          include-imports: false
+          recursive: false
+          extra-headers: |
+            CF-Access-Client-Id: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+            CF-Access-Client-Secret: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      - name: Mint a repository-scoped Maxbec App token
+        id: release-pr-app
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ env.FLAMA_GITHUB_APP_ID_MAXBEC }}
+          private-key: ${{ env.FLAMA_GITHUB_APP_PRIVATE_KEY_MAXBEC }}
+          owner: ${{ github.repository_owner }}
+          repositories: flama-delivery-platform
+          permission-contents: write
+          permission-pull-requests: write
+
       # skip-github-release in the manifest configuration makes this PR-only.
       # The trusted publisher below owns the tag and GitHub Release.
       - name: Create or update the release pull request
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.release-pr-app.outputs.token }}
           config-file: .release-please-config.json
           manifest-file: .release-please-manifest.json
           target-branch: main
