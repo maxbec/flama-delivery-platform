@@ -32,6 +32,13 @@ done
 grep -Fqx '    name: Flama Policy Gate' "$POLICY"
 grep -Fqx '  checks: read' "$POLICY"
 grep -Fq 'consumer-policy-gate.mjs' "$POLICY"
+# The platform lock's semver was unverified free text: the gate compared it to
+# the contract and the ref to its own input, and never asked whether the version
+# is the tag at that commit. It can only answer that if the caller reads the tag
+# from the platform repository and hands it over.
+grep -Fq 'git ls-remote --tags https://github.com/maxbec/flama-delivery-platform.git' "$POLICY"
+grep -Fq 'FLAMA_PLATFORM_TAG_VERSION: ${{ steps.platform-tag.outputs.version }}' "$POLICY"
+grep -Fq '"$FLAMA_PLATFORM_TAG_VERSION" >/dev/null' "$POLICY"
 grep -Fq 'check_name=Paperclip%20Preflight' "$POLICY"
 # A gate that samples once fails on a preflight that has not been published
 # yet and never looks again, so the verdict stays red until someone re-runs it.

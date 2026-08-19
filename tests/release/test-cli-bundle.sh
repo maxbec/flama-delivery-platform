@@ -79,9 +79,30 @@ node "$ROOT_DIR/scripts/consumer-policy-gate.mjs" \
   fast \
   aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
   flama-maxbec-delivery \
+  0.1.0 \
   > "$FIRST/consumer-policy.json"
 jq -e '.ok == true and .profile == "fast" and .baseRef == "main"' \
   "$FIRST/consumer-policy.json" >/dev/null
+
+# The lock's semver was never tied to the commit it names, so a pin to an
+# untagged commit passed under the label of a release. The release tag that
+# actually points at the pinned commit is supplied by the caller; a version that
+# disagrees with it, and the empty string that means no tag points there at all,
+# must both be refused.
+for tag_version in 0.1.1 ''; do
+  if node "$ROOT_DIR/scripts/consumer-policy-gate.mjs" \
+    "$bootstrap_repo" \
+    main \
+    fast \
+    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
+    flama-maxbec-delivery \
+    "$tag_version" \
+    >/dev/null 2>&1; then
+    echo 'consumer policy accepted a platform version that is not the tag at the pinned commit' >&2
+    exit 1
+  fi
+done
+
 jq '.secrets.unexpected = "redacted-placeholder"' \
   "$bootstrap_repo/.flama/delivery-contract.json" > "$FIRST/tampered-contract.json"
 mv "$FIRST/tampered-contract.json" "$bootstrap_repo/.flama/delivery-contract.json"
@@ -91,6 +112,7 @@ if node "$ROOT_DIR/scripts/consumer-policy-gate.mjs" \
   fast \
   aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa \
   flama-maxbec-delivery \
+  0.1.0 \
   >/dev/null 2>&1; then
   echo 'consumer policy accepted an unknown secret field' >&2
   exit 1
