@@ -72,11 +72,27 @@ jobs:
             echo 'mode=code' >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Set up consumer Node.js
+      - name: Detect consumer Node version file
+        id: nvmrc
         if: ${{ steps.change.outputs.mode == 'code' }}
+        run: |
+          if [[ -f consumer/.nvmrc ]]; then
+            echo 'found=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'found=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up consumer Node.js (from .nvmrc)
+        if: ${{ steps.change.outputs.mode == 'code' && steps.nvmrc.outputs.found == 'true' }}
         uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version-file: consumer/.nvmrc
+
+      - name: Set up consumer Node.js (default)
+        if: ${{ steps.change.outputs.mode == 'code' && steps.nvmrc.outputs.found == 'false' }}
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: '22'
 
       - name: Enable the package manager the repository declares
         if: ${{ steps.change.outputs.mode == 'code' }}
