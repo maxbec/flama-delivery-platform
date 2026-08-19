@@ -38,6 +38,10 @@ grep -Fq 'sha256sum -c "$FLAMA_CHECKSUM_FILE" --status' "$WORKFLOW"
 release_pr_section=$(sed -n '/^  release-please:/,/^  prepare-release:/p' "$WORKFLOW")
 grep -Fq 'token: ${{ steps.release-pr-app.outputs.token }}' <<< "$release_pr_section"
 grep -Fq 'permission-pull-requests: write' <<< "$release_pr_section"
+# The Cloudflare Access secrets live only in the platform-release environment;
+# the repository holds none. Without the environment they resolve to empty and
+# Access answers 403, which misreads as an Infisical outage.
+grep -Fq 'environment: platform-release' <<< "$release_pr_section"
 if grep -Fq 'secrets.GITHUB_TOKEN' <<< "$release_pr_section"; then
   echo "release pull request must not be authored by GITHUB_TOKEN" >&2
   exit 1
