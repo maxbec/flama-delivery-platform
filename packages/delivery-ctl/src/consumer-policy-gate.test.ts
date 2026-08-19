@@ -3,7 +3,15 @@ import { describe, expect, it } from "vitest";
 // The gate is a standalone script the consumer workflows run from the pinned
 // platform SHA, so it is imported here rather than reimplemented. It ships as
 // plain JavaScript with no declarations, which is what the assertion below is.
-const gate: { assertContract: (contract: unknown, profile: string) => void } =
+const gate: {
+  assertContract: (contract: unknown, profile: string) => void;
+  assertPlatformLock: (
+    lock: unknown,
+    contract: unknown,
+    platformSha: string,
+    platformTagVersion: string,
+  ) => void;
+} =
   // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
   await import(/* @vite-ignore */ "../../../scripts/consumer-policy-gate.mjs" as string);
 
@@ -55,6 +63,50 @@ describe("consumer policy gate — secret binding", () => {
     ).toThrow();
     expect(() =>
       gate.assertContract({ ...contract, secrets: { ...contract.secrets, source: "vault" } }, "major"),
+    ).toThrow();
+  });
+});
+
+describe("consumer policy gate — platform provenance", () => {
+  const platformSha = "a".repeat(40);
+  const lock = {
+    schemaVersion: 1,
+    repository: "maxbec/flama-delivery-platform",
+    version: contract.platform.version,
+    ref: platformSha,
+  };
+
+  it("accepts a lock whose version is the release tag at the pinned commit", () => {
+    expect(() =>
+      gate.assertPlatformLock(lock, contract, platformSha, contract.platform.version),
+    ).not.toThrow();
+  });
+
+  it("refuses a version that is not the tag at the pinned commit", () => {
+    // The gate checked only that the lock agreed with the contract and that the
+    // ref agreed with the workflow input. Both hold here, and the semver still
+    // names a release the pinned commit is not: eight consumers shipped exactly
+    // this shape through every gate.
+    expect(() => gate.assertPlatformLock(lock, contract, platformSha, "0.2.0")).toThrow();
+  });
+
+  it("refuses a pin to a commit that carries no release tag at all", () => {
+    // The empty string is how the caller reports "no release tag points here",
+    // which is the untagged pin that used to pass under a release label.
+    expect(() => gate.assertPlatformLock(lock, contract, platformSha, "")).toThrow();
+  });
+
+  it("still refuses a lock that disagrees with the contract or the workflow input", () => {
+    expect(() =>
+      gate.assertPlatformLock({ ...lock, version: "0.2.0" }, contract, platformSha, "0.2.0"),
+    ).toThrow();
+    expect(() =>
+      gate.assertPlatformLock(
+        { ...lock, ref: "b".repeat(40) },
+        contract,
+        platformSha,
+        contract.platform.version,
+      ),
     ).toThrow();
   });
 });

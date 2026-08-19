@@ -86,6 +86,42 @@ jobs:
           path: consumer
           persist-credentials: false
 
+      # A consumer's platform lock carries a semver label and a commit, and until
+      # now nothing tied the two together — the gate only checked that the label
+      # matched the contract and the commit matched the workflow input, so the
+      # label was unverified free text and a pin to an untagged commit passed
+      # under the name of a release. The one fact that binds them is which
+      # release tag actually points at the pinned commit, and it is read here
+      # from the platform repository rather than from the consumer, so an
+      # untrusted head cannot forge it. Empty output means no release tag points
+      # at that commit; the gate rejects, because no version can equal it.
+      - name: Resolve the release tag at the pinned platform commit
+        id: platform-tag
+        env:
+          FLAMA_PLATFORM_SHA: ${{ inputs.platform-sha }}
+        run: |
+          refs=$(git ls-remote --tags https://github.com/maxbec/flama-delivery-platform.git)
+          version=$(printf '%s\n' "$refs" | awk -v sha="$FLAMA_PLATFORM_SHA" '
+            {
+              ref = $2
+              if (ref ~ /\^\{\}$/) { sub(/\^\{\}$/, "", ref); peeled[ref] = $1 }
+              else { plain[ref] = $1 }
+            }
+            END {
+              for (ref in plain) {
+                commit = (ref in peeled) ? peeled[ref] : plain[ref]
+                if (commit == sha && ref ~ /^refs\/tags\/v[0-9]+\.[0-9]+\.[0-9]+$/) {
+                  sub(/^refs\/tags\/v/, "", ref)
+                  print ref
+                }
+              }
+            }' | sort -u)
+          # Two release tags on one commit leave no single answer, and handing
+          # the gate a guess is worse than failing loudly here. It is also what
+          # keeps the line below from writing a second key into the step output.
+          [[ "$version" != *$'\n'* ]]
+          printf 'version=%s\n' "$version" >> "$GITHUB_OUTPUT"
+
       - name: Classify deployment-only changes
         id: change
         env:
@@ -104,6 +140,7 @@ jobs:
           FLAMA_APP_SLUG: ${{ inputs.paperclip-app-slug }}
           FLAMA_BASE_REF: ${{ github.event.pull_request.base.ref }}
           FLAMA_PLATFORM_SHA: ${{ inputs.platform-sha }}
+          FLAMA_PLATFORM_TAG_VERSION: ${{ steps.platform-tag.outputs.version }}
           FLAMA_PROFILE: ${{ inputs.profile }}
         run: |
           node platform/scripts/consumer-policy-gate.mjs \
@@ -111,7 +148,8 @@ jobs:
             "$FLAMA_BASE_REF" \
             "$FLAMA_PROFILE" \
             "$FLAMA_PLATFORM_SHA" \
-            "$FLAMA_APP_SLUG" >/dev/null
+            "$FLAMA_APP_SLUG" \
+            "$FLAMA_PLATFORM_TAG_VERSION" >/dev/null
 
       # The preflight is published by a controller that sweeps on its own
       # schedule, so it does not exist the moment a head is pushed. Sampling

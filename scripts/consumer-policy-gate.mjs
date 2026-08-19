@@ -145,13 +145,25 @@ export function assertContract(contract, profile) {
   }
 }
 
-function assertPlatformLock(lock, contract, platformSha) {
+/**
+ * `platformTagVersion` is the release tag that actually points at the pinned
+ * platform commit, read from the platform repository by the caller — never from
+ * the consumer. Without it the lock was only internally consistent: the label
+ * agreed with the contract and the commit agreed with the workflow input, but
+ * nothing tied the label to the commit, so the semver was unverified free text.
+ * A rollout that pinned an untagged commit under a release label therefore
+ * passed every gate. The empty string means no release tag points at the pinned
+ * commit, which no `version` can equal, so an untagged pin now has to be
+ * declared rather than pass in silence.
+ */
+export function assertPlatformLock(lock, contract, platformSha, platformTagVersion) {
   if (
     !exactKeys(lock, ["schemaVersion", "repository", "version", "ref"]) ||
     lock.schemaVersion !== 1 ||
     lock.repository !== "maxbec/flama-delivery-platform" ||
     lock.version !== contract.platform.version ||
-    lock.ref !== platformSha
+    lock.ref !== platformSha ||
+    lock.version !== platformTagVersion
   ) {
     rejectPolicy();
   }
@@ -242,12 +254,21 @@ async function assertGeneratedFiles(root, profile, platformSha, releaseEnabled) 
   }
 }
 
-export async function validateConsumerPolicy(rootInput, baseRef, profile, platformSha, appSlug) {
+export async function validateConsumerPolicy(
+  rootInput,
+  baseRef,
+  profile,
+  platformSha,
+  appSlug,
+  platformTagVersion,
+) {
   if (
     !["fast", "major"].includes(profile) ||
     (profile === "fast" ? baseRef !== "main" : !["dev", "main"].includes(baseRef)) ||
     !/^[0-9a-f]{40}$/u.test(platformSha) ||
-    !/^[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?$/u.test(appSlug)
+    !/^[a-z0-9](?:[a-z0-9-]{0,98}[a-z0-9])?$/u.test(appSlug) ||
+    typeof platformTagVersion !== "string" ||
+    (platformTagVersion !== "" && !/^[0-9]+\.[0-9]+\.[0-9]+$/u.test(platformTagVersion))
   ) {
     rejectPolicy();
   }
@@ -256,7 +277,12 @@ export async function validateConsumerPolicy(rootInput, baseRef, profile, platfo
   if (!rootMetadata.isDirectory() || rootMetadata.isSymbolicLink()) rejectPolicy();
   const contract = await readJson(root, ".flama/delivery-contract.json");
   assertContract(contract, profile);
-  assertPlatformLock(await readJson(root, ".flama/platform-lock.json"), contract, platformSha);
+  assertPlatformLock(
+    await readJson(root, ".flama/platform-lock.json"),
+    contract,
+    platformSha,
+    platformTagVersion,
+  );
   assertWebhookMetadata(
     await readJson(root, ".flama/paperclip-webhook.json"),
     contract,
@@ -264,23 +290,36 @@ export async function validateConsumerPolicy(rootInput, baseRef, profile, platfo
   );
   await assertEntrypoints(root);
   await assertGeneratedFiles(root, profile, platformSha, contract.release.enabled);
-  return { ok: true, profile, baseRef, platformSha };
+  return { ok: true, profile, baseRef, platformSha, platformVersion: platformTagVersion };
 }
 
 if (import.meta.url === new URL(process.argv[1], "file:").href) {
   try {
-    const [root, baseRef, profile, platformSha, appSlug, extra] = process.argv.slice(2);
+    const [root, baseRef, profile, platformSha, appSlug, platformTagVersion, extra] =
+      process.argv.slice(2);
     if (
       root === undefined ||
       baseRef === undefined ||
       profile === undefined ||
       platformSha === undefined ||
       appSlug === undefined ||
+      platformTagVersion === undefined ||
       extra !== undefined
     ) {
       rejectPolicy();
     }
-    process.stdout.write(`${JSON.stringify(await validateConsumerPolicy(root, baseRef, profile, platformSha, appSlug))}\n`);
+    process.stdout.write(
+      `${JSON.stringify(
+        await validateConsumerPolicy(
+          root,
+          baseRef,
+          profile,
+          platformSha,
+          appSlug,
+          platformTagVersion,
+        ),
+      )}\n`,
+    );
   } catch {
     process.stderr.write('{"error":{"code":"consumer_policy_rejected"},"ok":false}\n');
     process.exitCode = 1;
