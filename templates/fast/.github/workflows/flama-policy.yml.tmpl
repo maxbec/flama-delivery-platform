@@ -17,4 +17,4 @@ jobs:
       paperclip-app-slug: __FLAMA_PAPERCLIP_APP_SLUG__
       platform-sha: __FLAMA_PLATFORM_REF__
       profile: fast
-      runner-labels: ${{ vars.PIPELINE_RUNNER || '["ubuntu-latest"]' }}
+      runner-labels: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && vars.PIPELINE_RUNNER || '["ubuntu-latest"]' }}

@@ -15,7 +15,7 @@ jobs:
     with:
       profile: fast
       release-branch: main
-      runner-labels: ${{ vars.PIPELINE_RUNNER || '["ubuntu-latest"]' }}
+      runner-labels: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && vars.PIPELINE_RUNNER || '["ubuntu-latest"]' }}
     # Exactly the optional App credential pair is forwarded, by name. The App
     # identity makes the eventual merge push start push workflows, which the
     # default token's github-actions[bot] merge never does. Where the secrets
