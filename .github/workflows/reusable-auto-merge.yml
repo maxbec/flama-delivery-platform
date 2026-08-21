@@ -7,6 +7,11 @@ name: Reusable Auto Merge
 # rule, is still enforced by GitHub at the moment of merge — this only removes
 # the human from a decision that was already made by the gates.
 #
+# That holds only where GitHub actually has a rule to enforce. On a base branch
+# with no required status checks, `--auto` has nothing to wait for and merges
+# on the spot, which turns every gate here into a formality. Arming therefore
+# refuses unless GitHub reports that it is holding the pull request.
+#
 # Release pull requests are excluded on purpose: cutting a version is the one
 # call that stays a person's. So is anything targeting the release branch,
 # which is how a promotion reaches production.
@@ -119,6 +124,59 @@ jobs:
 
           echo "arm=$arm" >> "$GITHUB_OUTPUT"
           echo "$reason"
+
+      # `gh pr merge --auto` only *queues* the merge while something is holding
+      # the pull request. Where the base branch has no required status checks
+      # — a private repository on a plan that sells neither branch protection
+      # nor rulesets, for instance — nothing is holding it, and GitHub performs
+      # the merge the moment arming succeeds: seconds after the pull request
+      # was opened, before the Paperclip Preflight is published and while the
+      # policy gate is still polling for it. Every gate in this platform is
+      # then advisory in fact while looking configured.
+      #
+      # Measured on edilio-app/edilio (private, Free plan, rulesets answer 403):
+      # #839, #843 and #845 were each opened and merged 13-17 seconds later,
+      # each leaving an unguarded-commit issue behind from the push guard.
+      #
+      # `mergeStateStatus` is the admin-free way to ask whether GitHub is
+      # holding this pull request; reading branch protection directly needs a
+      # token with administration rights, which this job deliberately lacks.
+      # BLOCKED and BEHIND mean GitHub will hold the merge, so arming is only
+      # arming. CLEAN or UNSTABLE means nothing will, so arming *is* the merge
+      # — refuse it rather than merge past the gates.
+      - name: Confirm GitHub will hold the merge
+        if: ${{ steps.decide.outputs.arm == 'true' }}
+        env:
+          FLAMA_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          FLAMA_PR_URL: ${{ github.event.pull_request.html_url }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # Mergeability is computed asynchronously; UNKNOWN just means GitHub
+          # has not finished yet. Treating it as "nothing is holding this"
+          # would refuse every fast pull request, so wait for a real answer.
+          state=UNKNOWN
+          for _ in 1 2 3 4 5 6 7 8 9 10; do
+            state=$(gh pr view "$FLAMA_PR_URL" --json mergeStateStatus \
+              --jq '.mergeStateStatus' 2>/dev/null || printf 'UNKNOWN')
+            [[ "$state" == "UNKNOWN" ]] || break
+            sleep 6
+          done
+
+          case "$state" in
+            BLOCKED|BEHIND)
+              echo "mergeStateStatus=$state — GitHub is holding the merge; arming is safe."
+              ;;
+            UNKNOWN)
+              echo "::error::GitHub did not report mergeStateStatus for this pull request within 60s. Refusing to arm auto-merge, because an unheld merge would land it past the Flama gates."
+              exit 1
+              ;;
+            *)
+              echo "::error::mergeStateStatus=$state — nothing is holding this pull request, so arming auto-merge would merge it immediately, before the Paperclip Preflight and the policy gate report. Refusing. Give '$FLAMA_BASE_REF' a required-status-checks rule (rulesets need GitHub Pro on a private repository, GitHub Team for organisation-level rules) so GitHub enforces the gates it is being asked to wait for."
+              exit 1
+              ;;
+          esac
 
       # Merging a pull request that touches .github/workflows/** writes those
       # files, and GitHub refuses that to an App token without the `workflows`
