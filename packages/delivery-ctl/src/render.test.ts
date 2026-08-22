@@ -311,3 +311,50 @@ describe("push guard", () => {
     expect(workflow.jobs["push-guard"]?.with["app-slug"]).toBe(input.paperclip.appSlug);
   });
 });
+
+describe("merge gate", () => {
+  it("renders only where the plan refuses branch protection, and tells auto-merge", async () => {
+    // Where GitHub holds the merge itself, a second thing holding it would
+    // merge past the very rule it is standing in for.
+    const offRoot = await mkdtemp(join(tmpdir(), "flama-merge-gate-off-"));
+    const off = await renderTemplates({
+      repositoryRoot,
+      outputRoot: offRoot,
+      input,
+      dryRun: false,
+    });
+    expect(off.files.map(({ path }) => path))
+      .not.toContain(".github/workflows/flama-merge-gate.yml");
+    expect(
+      await readFile(join(offRoot, ".github", "workflows", "flama-auto-merge.yml"), "utf8"),
+    ).toContain("merge-gate: false");
+
+    const onRoot = await mkdtemp(join(tmpdir(), "flama-merge-gate-on-"));
+    const on = await renderTemplates({
+      repositoryRoot,
+      outputRoot: onRoot,
+      input: { ...input, substituteControls: { pushGuard: true, mergeGate: true } },
+      dryRun: false,
+    });
+    expect(on.files.map(({ path }) => path))
+      .toContain(".github/workflows/flama-merge-gate.yml");
+
+    const workflow = parseYaml(
+      await readFile(join(onRoot, ".github", "workflows", "flama-merge-gate.yml"), "utf8"),
+    ) as {
+      on: Record<string, { types: string[] }>;
+      jobs: Record<string, { with: Record<string, string> }>;
+    };
+    // Both events, because neither alone sees every check: the preflight is a
+    // standalone App check run, the gates are workflow runs.
+    expect(Object.keys(workflow.on).sort()).toEqual(["check_run", "workflow_run"]);
+    expect(workflow.jobs["merge-gate"]?.with["paperclip-app-slug"]).toBe(input.paperclip.appSlug);
+    expect(workflow.jobs["merge-gate"]?.with["base-branch"]).toBe("main");
+
+    // Auto-merge must stand down, or it fails closed on a repository this gate
+    // is already covering.
+    expect(
+      await readFile(join(onRoot, ".github", "workflows", "flama-auto-merge.yml"), "utf8"),
+    ).toContain("merge-gate: true");
+  });
+});

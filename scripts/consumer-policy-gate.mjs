@@ -239,6 +239,30 @@ async function assertGeneratedFiles(root, profile, platformSha, releaseEnabled) 
       rejectPolicy();
     }
   }
+  // Rendered only where the plan refuses branch protection, so its absence is
+  // normal and proves nothing. Where it exists it is generated code holding the
+  // merge, and it answers to the same rules as the rest.
+  // Existence is probed separately from reading it. Folding the two together
+  // in one try/catch would swallow `readRegular`'s own rejection — a symlinked
+  // or oversized file would read as "not rendered here" instead of as the
+  // violation it is.
+  const mergeGatePath = ".github/workflows/flama-merge-gate.yml";
+  let mergeGateExists = true;
+  try {
+    await lstat(join(root, mergeGatePath));
+  } catch {
+    mergeGateExists = false;
+  }
+  if (mergeGateExists) {
+    const mergeGate = await readRegular(root, mergeGatePath);
+    if (
+      !mergeGate.includes(`@${platformSha}`) ||
+      /pull_request_target|secrets:\s*inherit|id-token:\s*write/u.test(mergeGate)
+    ) {
+      rejectPolicy();
+    }
+  }
+
   const dependabot = await readRegular(root, ".github/dependabot.yml");
   if (
     !dependabot.includes("package-ecosystem: github-actions") ||

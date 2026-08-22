@@ -48,6 +48,43 @@ for profile in fast major; do
   fi
 done
 
+# The merge gate holds the merge where GitHub has no required check to hold it
+# behind, so it writes the pull request state and needs the same permission
+# ceiling as auto-merge. It carries the same narrow secret exception, for the
+# same reason: the merge must be attributed to the App or the push it produces
+# starts nothing.
+for profile in fast major; do
+  template="$ROOT_DIR/templates/$profile/.github/workflows/flama-merge-gate.yml.tmpl"
+  [[ -f "$template" ]] || { echo "missing merge-gate workflow template" >&2; exit 1; }
+  grep -Fqx 'permissions:' "$template"
+  grep -Fqx '  contents: write' "$template"
+  grep -Fqx '  pull-requests: write' "$template"
+  grep -Fqx '  checks: read' "$template"
+  grep -Fq '@__FLAMA_PLATFORM_REF__' "$template"
+  grep -Fq 'paperclip-app-slug: __FLAMA_PAPERCLIP_APP_SLUG__' "$template"
+  grep -Fqx '    secrets:' "$template"
+  grep -Fqx '      WORKFLOW_APP_ID: ${{ secrets.WORKFLOW_APP_ID }}' "$template"
+  grep -Fqx '      WORKFLOW_APP_PRIVATE_KEY: ${{ secrets.WORKFLOW_APP_PRIVATE_KEY }}' "$template"
+  # It runs on `check_run`/`workflow_run`, which never carry a pull request
+  # payload; `pull_request_target` here would be a category error as well as a
+  # trust-boundary one.
+  if grep -Eq 'pull_request_target|id-token:|secrets: inherit' "$template"; then
+    echo "merge-gate workflow template violates the trust boundary" >&2
+    exit 1
+  fi
+  if grep -Eo 'secrets\.[A-Za-z0-9_]+' "$template" | grep -Evq '^secrets\.WORKFLOW_APP_(ID|PRIVATE_KEY)$'; then
+    echo "merge-gate workflow template forwards a secret outside the App credential pair" >&2
+    exit 1
+  fi
+done
+
+# Auto-merge must know whether the merge gate exists, or it fails closed on a
+# repository the gate is already covering.
+for profile in fast major; do
+  grep -Fqx '      merge-gate: __FLAMA_MERGE_GATE__' \
+    "$ROOT_DIR/templates/$profile/.github/workflows/flama-auto-merge.yml.tmpl"
+done
+
 deploy_template="$ROOT_DIR/templates/common/.github/workflows/flama-deploy.yml.tmpl"
 grep -Fq '@__FLAMA_PLATFORM_REF__' "$deploy_template"
 grep -Fqx '      platform-sha: __FLAMA_PLATFORM_REF__' "$deploy_template"
