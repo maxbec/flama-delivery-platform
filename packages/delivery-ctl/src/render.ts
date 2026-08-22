@@ -26,7 +26,16 @@ export interface RenderInput {
    * guard is rendered only where the plan refuses branch protection; elsewhere
    * it would run on every push to report what protection already prevents.
    */
-  readonly substituteControls?: { readonly pushGuard: boolean };
+  readonly substituteControls?: {
+    readonly pushGuard: boolean;
+    /**
+     * Renders `flama-merge-gate.yml` and tells auto-merge to stand down. Set
+     * on the same repositories as `pushGuard` and for the same reason: with no
+     * required status checks, GitHub's auto-merge has nothing to wait for and
+     * merges past the gates, so something outside GitHub has to hold it.
+     */
+    readonly mergeGate?: boolean;
+  };
   readonly schemaVersion: 1;
   readonly repository: string;
   readonly profile: "fast" | "major";
@@ -226,7 +235,8 @@ async function buildTargets(repositoryRoot: string, input: RenderInput): Promise
   const replacePlatformRef = (template: string): string => {
     const rendered = template
       .replaceAll("__FLAMA_PLATFORM_REF__", input.platformRef)
-      .replaceAll("__FLAMA_PAPERCLIP_APP_SLUG__", input.paperclip.appSlug);
+      .replaceAll("__FLAMA_PAPERCLIP_APP_SLUG__", input.paperclip.appSlug)
+      .replaceAll("__FLAMA_MERGE_GATE__", String(input.substituteControls?.mergeGate === true));
     if (rendered.includes("__FLAMA_")) throw new Error("unresolved template token");
     return rendered;
   };
@@ -253,6 +263,15 @@ async function buildTargets(repositoryRoot: string, input: RenderInput): Promise
         path: ".github/workflows/flama-push-guard.yml",
         content: replacePlatformRef(
           await readTemplate(join(profile, ".github", "workflows", "flama-push-guard.yml.tmpl")),
+        ),
+        mode: 0o644,
+      }]
+      : []),
+    ...(input.substituteControls?.mergeGate === true
+      ? [{
+        path: ".github/workflows/flama-merge-gate.yml",
+        content: replacePlatformRef(
+          await readTemplate(join(profile, ".github", "workflows", "flama-merge-gate.yml.tmpl")),
         ),
         mode: 0o644,
       }]

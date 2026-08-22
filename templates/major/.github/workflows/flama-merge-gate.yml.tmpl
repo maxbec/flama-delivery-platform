@@ -1,0 +1,42 @@
+name: Flama Merge Gate
+
+# Branch protection is unavailable on this repository's plan, so GitHub has no
+# required check to hold a merge behind. `gh pr merge --auto` therefore merges
+# on the spot and every gate becomes advisory. Auto-merge stands down here
+# (`merge-gate: true`) and this holds the merge instead: it re-evaluates every
+# time a check finishes and merges once all of them have finished successfully.
+#
+# `check_run` and `workflow_run` only start workflows from the default branch,
+# so this file has to be on it to fire at all.
+
+on:
+  check_run:
+    types: [completed]
+  workflow_run:
+    types: [completed]
+
+permissions:
+  contents: write
+  pull-requests: write
+  checks: read
+
+jobs:
+  merge-gate:
+    uses: maxbec/flama-delivery-platform/.github/workflows/reusable-merge-gate.yml@__FLAMA_PLATFORM_REF__
+    with:
+      head-sha: ${{ github.event.check_run.head_sha || github.event.workflow_run.head_sha }}
+      base-branch: dev
+      paperclip-app-slug: __FLAMA_PAPERCLIP_APP_SLUG__
+      # Safe on the homelab runner even when the head is a fork: this gate
+      # never checks out or executes the change under review, it only reads the
+      # API. It is also the cheap option — `check_run` fires once per finished
+      # check, so a pull request starts this many times over.
+      runner-labels: ${{ vars.PIPELINE_RUNNER || '["ubuntu-latest"]' }}
+    # Exactly the optional App credential pair is forwarded, by name. The App
+    # identity makes the merge push start push workflows, which the default
+    # token's github-actions[bot] merge never does. Where the secrets do not
+    # exist the values arrive empty and the platform workflow falls back to the
+    # default token. Blanket inheritance stays forbidden.
+    secrets:
+      WORKFLOW_APP_ID: ${{ secrets.WORKFLOW_APP_ID }}
+      WORKFLOW_APP_PRIVATE_KEY: ${{ secrets.WORKFLOW_APP_PRIVATE_KEY }}

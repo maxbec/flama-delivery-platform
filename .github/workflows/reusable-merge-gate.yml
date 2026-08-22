@@ -1,0 +1,318 @@
+name: Reusable Merge Gate
+
+# Holds the merge where GitHub cannot.
+#
+# `reusable-auto-merge.yml` arms GitHub's own auto-merge, which is the right
+# mechanism wherever the base branch has required status checks: GitHub queues
+# the merge and releases it when the checks pass. On a plan that sells neither
+# branch protection nor rulesets there are no required checks, nothing holds
+# the pull request, and `--auto` merges on the spot — before the Paperclip
+# Preflight is published and while the policy gate is still polling for it.
+# Auto-merge therefore stands down there (`merge-gate: true`) and this workflow
+# owns the merge instead.
+#
+# It is event-driven, not a poller: the caller runs it on `check_run` and
+# `workflow_run` completion, so it re-evaluates when a check lands and exits in
+# seconds. Nothing holds a runner open waiting, which matters on a single
+# self-hosted runner shared with the pipeline.
+#
+# The bar is deliberately higher than "the gates are green": every check run on
+# the head must have finished, and none may have failed. That is what a merge
+# queue enforces, and reproducing it here is the whole point — a repository
+# without required checks has no other way to insist on it.
+#
+# This never merges into the release branch. A promotion is a person's decision,
+# exactly as in auto-merge, and release pull requests stay a person's too.
+
+on:
+  workflow_call:
+    inputs:
+      head-sha:
+        description: Commit the completed check or workflow run belongs to.
+        required: true
+        type: string
+      base-branch:
+        description: >-
+          Branch this gate merges into — `dev` on the two-branch profile,
+          `main` on the single-branch one. A pull request against anything else
+          is ignored.
+        required: true
+        type: string
+      paperclip-app-slug:
+        description: >-
+          App whose Paperclip Preflight counts. A check of that name published
+          by anything else proves nothing.
+        required: true
+        type: string
+      runner-labels:
+        description: >-
+          JSON array of runs-on labels, e.g. '["self-hosted","mainz-homelab"]'.
+          Defaults to the billed GitHub-hosted runner so public and foreign
+          consumers keep running unchanged.
+        required: false
+        default: '["ubuntu-latest"]'
+        type: string
+    secrets:
+      WORKFLOW_APP_ID:
+        description: >-
+          GitHub App id used to perform the merge, so the merge push is
+          attributed to the App and starts push workflows. Optional; the
+          default workflow token is used when absent, at the documented cost of
+          the release and deploy runs never starting.
+        required: false
+      WORKFLOW_APP_PRIVATE_KEY:
+        description: Private key of the same GitHub App. Optional, but must be provided together with WORKFLOW_APP_ID.
+        required: false
+
+permissions:
+  contents: read
+
+# One evaluation per commit at a time. Every completed check on the same head
+# starts a run, and two of them reaching the merge call together would race.
+concurrency:
+  group: flama-merge-gate-${{ github.repository }}-${{ inputs.head-sha }}
+  cancel-in-progress: false
+
+jobs:
+  gate:
+    name: Flama Merge Gate
+    runs-on: ${{ fromJSON(inputs.runner-labels) }}
+    timeout-minutes: 5
+    permissions:
+      contents: write
+      pull-requests: write
+      checks: read
+    steps:
+      - name: Find the pull request this commit belongs to
+        id: pull
+        env:
+          FLAMA_BASE_BRANCH: ${{ inputs.base-branch }}
+          FLAMA_SHA: ${{ inputs.head-sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          pulls=$(mktemp "$RUNNER_TEMP/flama-pulls-XXXXXX.json")
+          gh api -H 'Accept: application/vnd.github+json' \
+            "/repos/$GITHUB_REPOSITORY/commits/$FLAMA_SHA/pulls" > "$pulls" 2>/dev/null \
+            || printf '[]\n' > "$pulls"
+
+          # Open, not draft, targeting the branch this gate owns, and not a
+          # release pull request — cutting a version stays a person's call, as
+          # it is in auto-merge. A promotion cannot match either: on the
+          # two-branch profile the caller passes `base-branch: dev`, and a
+          # promotion targets `main`. `head.sha` must match too: a commit can
+          # appear in several pull requests, and only the one it is the tip of
+          # is the one the checks were run against.
+          number=$(jq -r \
+            --arg base "$FLAMA_BASE_BRANCH" \
+            --arg sha "$FLAMA_SHA" \
+            '[.[] | select(
+               .state == "open" and
+               .draft == false and
+               .base.ref == $base and
+               .head.sha == $sha and
+               (.head.ref | startswith("release-please--") | not)
+             )][0].number // ""' "$pulls")
+
+          if [[ -z "$number" ]]; then
+            echo "No open, mergeable-by-this-gate pull request has $FLAMA_SHA as its head. Nothing to do."
+            echo "number=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+
+      - name: Require every check on the head to have finished, and none to have failed
+        id: checks
+        if: ${{ steps.pull.outputs.number != '' }}
+        env:
+          FLAMA_APP_SLUG: ${{ inputs.paperclip-app-slug }}
+          FLAMA_SHA: ${{ inputs.head-sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # `filter=latest` so a re-run supersedes the attempt it replaced;
+          # `filter=all` would keep failing a head that has since gone green.
+          checks=$(mktemp "$RUNNER_TEMP/flama-checks-XXXXXX.json")
+          gh api -H 'Accept: application/vnd.github+json' \
+            "/repos/$GITHUB_REPOSITORY/commits/$FLAMA_SHA/check-runs?filter=latest&per_page=100" \
+            > "$checks" 2>/dev/null || printf '{"check_runs":[]}\n' > "$checks"
+
+          faults=$(mktemp "$RUNNER_TEMP/flama-faults-XXXXXX")
+
+          # The preflight predicate is the policy gate's, character for
+          # character: right name, right app, completed, successful, and an
+          # external id of the shape only the controller produces. A weaker
+          # test here would be the hole the policy gate was written to close.
+          jq -e --arg app "$FLAMA_APP_SLUG" --arg sha "$FLAMA_SHA" \
+            '[.check_runs[] | select(
+               .name == "Paperclip Preflight" and
+               .head_sha == $sha and
+               .status == "completed" and
+               .conclusion == "success" and
+               .app.slug == $app and
+               (.external_id | test("^paperclip-preflight:sha256:[0-9a-f]{64}$"))
+             )] | length == 1' "$checks" >/dev/null \
+            || printf 'no app-authored Paperclip Preflight from %s\n' "$FLAMA_APP_SLUG" >> "$faults"
+
+          for gate in "policy / Flama Policy Gate" "branch-guard / Flama Branch Guard"; do
+            jq -e --arg name "$gate" \
+              '[.check_runs[] | select(
+                 .name == $name and .status == "completed" and .conclusion == "success"
+               )] | length >= 1' "$checks" >/dev/null \
+              || printf '%s has not passed\n' "$gate" >> "$faults"
+          done
+
+          # Everything else that reports on this head must have finished, and
+          # must not have failed. This is what makes the gate equivalent to a
+          # required-checks rule without one: no check name is hard-coded, so a
+          # consumer's own pipeline counts without this workflow knowing it
+          # exists. This gate's own run is excluded — it is still in progress,
+          # by definition.
+          self='Flama Merge Gate'
+
+          pending=$(jq -r --arg self "$self" \
+            '[.check_runs[] | select((.name | contains($self)) | not)
+              | select(.status != "completed") | .name] | unique | join(", ")' "$checks")
+          [[ -z "$pending" ]] || printf 'still running: %s\n' "$pending" >> "$faults"
+
+          failed=$(jq -r --arg self "$self" \
+            '[.check_runs[] | select((.name | contains($self)) | not)
+              | select(.status == "completed")
+              | select(.conclusion == "failure" or .conclusion == "cancelled"
+                       or .conclusion == "timed_out" or .conclusion == "action_required"
+                       or .conclusion == "stale")
+              | .name] | unique | join(", ")' "$checks")
+          [[ -z "$failed" ]] || printf 'not successful: %s\n' "$failed" >> "$faults"
+
+          if [[ -s "$faults" ]]; then
+            # Not an error. Most completed checks arrive while others are still
+            # running, so the ordinary outcome of this workflow is "not yet".
+            # Failing here would paint a red check on every pull request for
+            # the entire time it is legitimately in flight.
+            echo "Not merging $FLAMA_SHA yet:"
+            sed 's/^/  - /' "$faults"
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Every check on $FLAMA_SHA has finished successfully."
+          echo "ready=true" >> "$GITHUB_OUTPUT"
+
+      - name: Check app credentials
+        id: app-creds
+        if: ${{ steps.checks.outputs.ready == 'true' }}
+        env:
+          FLAMA_APP_ID: ${{ secrets.WORKFLOW_APP_ID }}
+          FLAMA_APP_PRIVATE_KEY: ${{ secrets.WORKFLOW_APP_PRIVATE_KEY }}
+        run: |
+          # A half-configured credential would silently fall back to the
+          # default token, whose merge push starts no workflows — no release,
+          # no deploy — while looking configured. Refuse it instead.
+          if [[ -n "$FLAMA_APP_ID" && -n "$FLAMA_APP_PRIVATE_KEY" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          elif [[ -n "$FLAMA_APP_ID" || -n "$FLAMA_APP_PRIVATE_KEY" ]]; then
+            echo '::error::WORKFLOW_APP_ID and WORKFLOW_APP_PRIVATE_KEY must be provided together'
+            exit 1
+          else
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Merging a pull request that touches .github/workflows/** writes those
+      # files, and GitHub refuses that to an App token without the `workflows`
+      # permission. The permission is requested only for the heads that need
+      # it, so an ordinary code change still gets a token that cannot rewrite
+      # CI. Same split as in auto-merge, for the same reason.
+      - name: Note whether the head touches workflow files
+        id: workflows
+        if: ${{ steps.checks.outputs.ready == 'true' && steps.app-creds.outputs.available == 'true' }}
+        env:
+          FLAMA_PR_NUMBER: ${{ steps.pull.outputs.number }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api --paginate \
+            "repos/$GITHUB_REPOSITORY/pulls/$FLAMA_PR_NUMBER/files" \
+            --jq '.[].filename' | grep -q '^\.github/workflows/'; then
+            echo "needed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "needed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # No step in this job checks out or executes pull-request code, so the
+      # credential is never exposed to the change under review.
+      - name: Mint the App installation token that will own the merge
+        id: app-token
+        if: ${{ steps.checks.outputs.ready == 'true' && steps.app-creds.outputs.available == 'true' && steps.workflows.outputs.needed == 'false' }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.WORKFLOW_APP_ID }}
+          private-key: ${{ secrets.WORKFLOW_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+
+      - name: Mint the App installation token for a head that rewrites CI
+        id: app-token-workflows
+        if: ${{ steps.checks.outputs.ready == 'true' && steps.app-creds.outputs.available == 'true' && steps.workflows.outputs.needed == 'true' }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.WORKFLOW_APP_ID }}
+          private-key: ${{ secrets.WORKFLOW_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-workflows: write
+
+      - name: Merge
+        if: ${{ steps.checks.outputs.ready == 'true' }}
+        env:
+          FLAMA_PR_NUMBER: ${{ steps.pull.outputs.number }}
+          FLAMA_SHA: ${{ inputs.head-sha }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token || steps.app-token-workflows.outputs.token || github.token }}
+        run: |
+          set -euo pipefail
+
+          # Mergeability is computed asynchronously, and this workflow runs
+          # moments after a check landed. UNKNOWN means "not computed yet", not
+          # "no" — and once every check has finished there is no further event
+          # to retry on, so a single sample would strand the pull request.
+          state=UNKNOWN
+          for _ in 1 2 3 4 5 6; do
+            state=$(gh pr view "$FLAMA_PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+              --json state,mergeable,headRefOid \
+              --jq '"\(.state):\(.mergeable):\(.headRefOid)"' 2>/dev/null || printf 'UNKNOWN')
+            [[ "$state" == *:UNKNOWN:* ]] || break
+            sleep 5
+          done
+
+          # Between the check sweep and here, someone may have merged it,
+          # closed it, or pushed again. Any of those makes this run's verdict
+          # about a different pull request than the one in front of us.
+          case "$state" in
+            OPEN:MERGEABLE:"$FLAMA_SHA")
+              ;;
+            *:CONFLICTING:*)
+              echo "::notice::Pull request #$FLAMA_PR_NUMBER conflicts with its base. Not merging; it needs a human."
+              exit 0
+              ;;
+            *)
+              echo "::notice::Pull request #$FLAMA_PR_NUMBER moved on ($state). Not merging $FLAMA_SHA."
+              exit 0
+              ;;
+          esac
+
+          # Squash, matching the branch profile this gate serves, and
+          # attributed to the App so the merge push starts the push workflows.
+          gh pr merge "$FLAMA_PR_NUMBER" --repo "$GITHUB_REPOSITORY" --squash
+          echo "Merged #$FLAMA_PR_NUMBER at $FLAMA_SHA."
+
+          # Tidy-up, never a verdict: the branch may already be gone, or be
+          # someone's fork. Failing the run here would report a merge that
+          # succeeded as a failure.
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/git/refs/heads/$(
+            gh pr view "$FLAMA_PR_NUMBER" --repo "$GITHUB_REPOSITORY" --json headRefName --jq .headRefName
+          )" >/dev/null 2>&1 || true

@@ -319,6 +319,18 @@ describe("Branch protection the plan does not sell", () => {
       .toContain("push_guard_missing");
   });
 
+  it("requires the merge gate instead of the required checks it cannot have", () => {
+    // Without a required check there is nothing for GitHub's auto-merge to wait
+    // on, so it merges the instant it is armed. Something has to hold the merge.
+    const gated = { ...unavailable, substituteControls: { pushGuard: true, mergeGate: true } };
+    expect(auditGitHubPolicy(gated, policy).findings.map(({ code }) => code))
+      .not.toContain("merge_gate_missing");
+
+    const ungated = { ...unavailable, substituteControls: { pushGuard: true } };
+    expect(auditGitHubPolicy(ungated, policy).findings.map(({ code }) => code))
+      .toContain("merge_gate_missing");
+  });
+
   it("does not demand auto-merge the plan also refuses", () => {
     // GitHub answers the PATCH with a 200 and leaves `allow_auto_merge` false on
     // a private repository under a free plan — the same gate as branch

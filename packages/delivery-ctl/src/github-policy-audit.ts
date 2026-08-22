@@ -65,7 +65,7 @@ export interface GitHubPolicyAuditInput {
     readonly protectionAvailable?: boolean;
   }[];
   /** Controls that stand in where a platform feature is unavailable. */
-  readonly substituteControls?: { readonly pushGuard: boolean };
+  readonly substituteControls?: { readonly pushGuard: boolean; readonly mergeGate?: boolean };
   readonly merge: { readonly squash: boolean; readonly mergeCommit: boolean; readonly rebase: boolean };
   readonly actions: {
     readonly defaultWorkflowPermissions: "read" | "write";
@@ -217,6 +217,15 @@ export function auditGitHubPolicy(
   // protection is preventive, and it is what is actually available.
   if (planRefusesPrivateFeatures && input.substituteControls?.pushGuard !== true) {
     add("push_guard_missing", "branches");
+  }
+  // The same plan limit has a second consequence, and it is preventive rather
+  // than detective. With no required check on the base branch, `gh pr merge
+  // --auto` has nothing to wait for and merges the moment auto-merge arms it —
+  // before the preflight is published, while the policy gate is still polling
+  // for it. The merge gate is the substitute that holds the merge instead, so
+  // where protection is unavailable it is required, not optional.
+  if (planRefusesPrivateFeatures && input.substituteControls?.mergeGate !== true) {
+    add("merge_gate_missing", "branches");
   }
   for (const expected of expectedBranches) {
     const observed = input.protectedBranches.find(({ name }) => name === expected.name);

@@ -10,7 +10,10 @@ name: Reusable Auto Merge
 # That holds only where GitHub actually has a rule to enforce. On a base branch
 # with no required status checks, `--auto` has nothing to wait for and merges
 # on the spot, which turns every gate here into a formality. Arming therefore
-# refuses unless GitHub reports that it is holding the pull request.
+# refuses unless GitHub reports that it is holding the pull request — or, where
+# the caller passes `merge-gate: true`, stands down in favour of
+# `reusable-merge-gate.yml`, which holds the merge itself on repositories whose
+# plan will never sell branch protection.
 #
 # Release pull requests are excluded on purpose: cutting a version is the one
 # call that stays a person's. So is anything targeting the release branch,
@@ -47,6 +50,17 @@ on:
         required: false
         default: '["ubuntu-latest"]'
         type: string
+      merge-gate:
+        description: >-
+          Whether this repository also renders `flama-merge-gate.yml`. Set on
+          repositories whose plan refuses branch protection: there is nothing
+          for `--auto` to wait on, so this workflow stands down instead of
+          failing, and the merge gate performs the merge once every check on
+          the head has finished successfully. Leave false everywhere GitHub
+          enforces the checks itself.
+        required: false
+        default: false
+        type: boolean
     secrets:
       WORKFLOW_APP_ID:
         description: >-
@@ -145,9 +159,11 @@ jobs:
       # arming. CLEAN or UNSTABLE means nothing will, so arming *is* the merge
       # — refuse it rather than merge past the gates.
       - name: Confirm GitHub will hold the merge
+        id: hold
         if: ${{ steps.decide.outputs.arm == 'true' }}
         env:
           FLAMA_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          FLAMA_MERGE_GATE: ${{ inputs.merge-gate }}
           FLAMA_PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -173,7 +189,12 @@ jobs:
               exit 1
               ;;
             *)
-              echo "::error::mergeStateStatus=$state — nothing is holding this pull request, so arming auto-merge would merge it immediately, before the Paperclip Preflight and the policy gate report. Refusing. Give '$FLAMA_BASE_REF' a required-status-checks rule (rulesets need GitHub Pro on a private repository, GitHub Team for organisation-level rules) so GitHub enforces the gates it is being asked to wait for."
+              if [[ "$FLAMA_MERGE_GATE" == "true" ]]; then
+                echo "::notice::mergeStateStatus=$state — nothing is holding this pull request, so auto-merge stands down. The Flama Merge Gate merges it once every check on the head has finished successfully."
+                echo "stand-down=true" >> "$GITHUB_OUTPUT"
+                exit 0
+              fi
+              echo "::error::mergeStateStatus=$state — nothing is holding this pull request, so arming auto-merge would merge it immediately, before the Paperclip Preflight and the policy gate report. Refusing. Give '$FLAMA_BASE_REF' a required-status-checks rule (rulesets need GitHub Pro on a private repository, GitHub Team for organisation-level rules) so GitHub enforces the gates it is being asked to wait for, or render the merge gate and pass merge-gate: true."
               exit 1
               ;;
           esac
@@ -191,7 +212,7 @@ jobs:
       # still gets a token that cannot rewrite CI.
       - name: Note whether the head touches workflow files
         id: workflows
-        if: ${{ steps.decide.outputs.arm == 'true' && steps.decide.outputs.app == 'true' }}
+        if: ${{ steps.decide.outputs.arm == 'true' && steps.decide.outputs.app == 'true' && steps.hold.outputs.stand-down != 'true' }}
         env:
           FLAMA_PR_NUMBER: ${{ github.event.pull_request.number }}
           GH_TOKEN: ${{ github.token }}
@@ -209,7 +230,7 @@ jobs:
       # narrowed to this repository and to the permissions arming needs.
       - name: Mint the App installation token that will own the merge
         id: app-token
-        if: ${{ steps.decide.outputs.arm == 'true' && steps.decide.outputs.app == 'true' && steps.workflows.outputs.needed == 'false' }}
+        if: ${{ steps.decide.outputs.arm == 'true' && steps.decide.outputs.app == 'true' && steps.workflows.outputs.needed == 'false' && steps.hold.outputs.stand-down != 'true' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.WORKFLOW_APP_ID }}
@@ -221,7 +242,7 @@ jobs:
 
       - name: Mint the App installation token for a head that rewrites CI
         id: app-token-workflows
-        if: ${{ steps.decide.outputs.arm == 'true' && steps.decide.outputs.app == 'true' && steps.workflows.outputs.needed == 'true' }}
+        if: ${{ steps.decide.outputs.arm == 'true' && steps.decide.outputs.app == 'true' && steps.workflows.outputs.needed == 'true' && steps.hold.outputs.stand-down != 'true' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
           app-id: ${{ secrets.WORKFLOW_APP_ID }}
@@ -233,7 +254,7 @@ jobs:
           permission-workflows: write
 
       - name: Arm auto-merge
-        if: ${{ steps.decide.outputs.arm == 'true' }}
+        if: ${{ steps.decide.outputs.arm == 'true' && steps.hold.outputs.stand-down != 'true' }}
         env:
           FLAMA_PR_URL: ${{ github.event.pull_request.html_url }}
           GH_TOKEN: ${{ steps.app-token.outputs.token || steps.app-token-workflows.outputs.token || github.token }}
