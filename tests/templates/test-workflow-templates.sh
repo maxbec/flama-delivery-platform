@@ -65,6 +65,9 @@ for profile in fast major; do
   # It listens to every finished workflow and check, which includes its own.
   grep -Fq "github.event.workflow_run.name != 'Flama Merge Gate'" "$template"
   grep -Fq "!contains(github.event.check_run.name, 'Flama Merge Gate')" "$template"
+  # `workflow_run` with no `workflows` list matches nothing, so the trigger
+  # would be inert. actionlint reports it; assert it here so it cannot recur.
+  grep -Fq 'workflows: [Navigaite Pipeline, Flama Policy, Flama Branch Guard, Flama Auto Merge]' "$template"
   grep -Fqx '    secrets:' "$template"
   grep -Fqx '      WORKFLOW_APP_ID: ${{ secrets.WORKFLOW_APP_ID }}' "$template"
   grep -Fqx '      WORKFLOW_APP_PRIVATE_KEY: ${{ secrets.WORKFLOW_APP_PRIVATE_KEY }}' "$template"

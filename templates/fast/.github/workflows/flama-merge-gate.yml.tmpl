@@ -14,6 +14,15 @@ on:
   check_run:
     types: [completed]
   workflow_run:
+    # `workflow_run` matches nothing at all without an explicit list, so this is
+    # load-bearing rather than decoration: without it the gate would simply
+    # never re-evaluate when a workflow finished. actionlint calls it out as
+    # `no workflow is configured for "workflow_run" event`.
+    #
+    # `Navigaite Pipeline` is the caller name every consumer of the universal
+    # pipeline uses, by contract. The Flama gates are named here because their
+    # verdicts are exactly what this gate waits on.
+    workflows: [Navigaite Pipeline, Flama Policy, Flama Branch Guard, Flama Auto Merge]
     types: [completed]
 
 permissions:
