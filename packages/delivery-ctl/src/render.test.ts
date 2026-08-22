@@ -350,6 +350,10 @@ describe("merge gate", () => {
     expect(Object.keys(workflow.on).sort()).toEqual(["check_run", "workflow_run"]);
     expect(workflow.jobs["merge-gate"]?.with["paperclip-app-slug"]).toBe(input.paperclip.appSlug);
     expect(workflow.jobs["merge-gate"]?.with["base-branch"]).toBe("main");
+    // It listens to every finished workflow and check run, its own included.
+    const guard = (workflow.jobs["merge-gate"] as unknown as { if: string }).if;
+    expect(guard).toContain("github.event.workflow_run.name != 'Flama Merge Gate'");
+    expect(guard).toContain("!contains(github.event.check_run.name, 'Flama Merge Gate')");
 
     // Auto-merge must stand down, or it fails closed on a repository this gate
     // is already covering.

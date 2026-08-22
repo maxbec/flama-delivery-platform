@@ -62,6 +62,9 @@ for profile in fast major; do
   grep -Fqx '  checks: read' "$template"
   grep -Fq '@__FLAMA_PLATFORM_REF__' "$template"
   grep -Fq 'paperclip-app-slug: __FLAMA_PAPERCLIP_APP_SLUG__' "$template"
+  # It listens to every finished workflow and check, which includes its own.
+  grep -Fq "github.event.workflow_run.name != 'Flama Merge Gate'" "$template"
+  grep -Fq "!contains(github.event.check_run.name, 'Flama Merge Gate')" "$template"
   grep -Fqx '    secrets:' "$template"
   grep -Fqx '      WORKFLOW_APP_ID: ${{ secrets.WORKFLOW_APP_ID }}' "$template"
   grep -Fqx '      WORKFLOW_APP_PRIVATE_KEY: ${{ secrets.WORKFLOW_APP_PRIVATE_KEY }}' "$template"
