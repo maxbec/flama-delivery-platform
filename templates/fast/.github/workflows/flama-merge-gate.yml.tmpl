@@ -23,6 +23,14 @@ permissions:
 
 jobs:
   merge-gate:
+    # This workflow's own completion is a `workflow_run` event, and its own job
+    # is a `check_run`. GitHub suppresses both for anything its token produced,
+    # and does not chain `workflow_run` from a `workflow_run` run — but a loop
+    # here would be a self-inflicted denial of service on a shared runner, so
+    # it is refused explicitly rather than left to those two guarantees.
+    if: >-
+      ${{ (github.event_name != 'workflow_run' || github.event.workflow_run.name != 'Flama Merge Gate')
+        && (github.event_name != 'check_run' || !contains(github.event.check_run.name, 'Flama Merge Gate')) }}
     uses: maxbec/flama-delivery-platform/.github/workflows/reusable-merge-gate.yml@__FLAMA_PLATFORM_REF__
     with:
       head-sha: ${{ github.event.check_run.head_sha || github.event.workflow_run.head_sha }}
