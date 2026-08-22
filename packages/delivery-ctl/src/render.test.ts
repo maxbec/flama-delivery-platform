@@ -348,6 +348,9 @@ describe("merge gate", () => {
     // Both events, because neither alone sees every check: the preflight is a
     // standalone App check run, the gates are workflow runs.
     expect(Object.keys(workflow.on).sort()).toEqual(["check_run", "workflow_run"]);
+    // A `workflow_run` trigger with no `workflows` list matches nothing at all.
+    expect((workflow.on["workflow_run"] as unknown as { workflows: string[] }).workflows)
+      .toContain("Navigaite Pipeline");
     expect(workflow.jobs["merge-gate"]?.with["paperclip-app-slug"]).toBe(input.paperclip.appSlug);
     expect(workflow.jobs["merge-gate"]?.with["base-branch"]).toBe("main");
     // It listens to every finished workflow and check run, its own included.
