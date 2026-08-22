@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.5.9](https://github.com/maxbec/flama-delivery-platform/compare/v0.5.8...v0.5.9) (2026-08-22)
+
+
+### ✨ Features
+
+* **merge-gate:** hold the merge where GitHub has no rule to hold it ([#60](https://github.com/maxbec/flama-delivery-platform/issues/60)) ([731846e](https://github.com/maxbec/flama-delivery-platform/commit/731846eaef1a694ccde248c11f46955cce50982f))
+
+
+### 🐛 Bug Fixes
+
+* **merge-gate:** refuse to start itself ([#62](https://github.com/maxbec/flama-delivery-platform/issues/62)) ([234c73c](https://github.com/maxbec/flama-delivery-platform/commit/234c73c3f534e4812c3bec13b2ffd543e38490e9))
+
 ## [0.5.8](https://github.com/maxbec/flama-delivery-platform/compare/v0.5.7...v0.5.8) (2026-08-21)
 
 
