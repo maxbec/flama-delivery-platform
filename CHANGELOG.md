@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.5.8](https://github.com/maxbec/flama-delivery-platform/compare/v0.5.7...v0.5.8) (2026-08-21)
+
+
+### 🐛 Bug Fixes
+
+* **auto-merge:** refuse to arm where GitHub will not hold the merge ([#59](https://github.com/maxbec/flama-delivery-platform/issues/59)) ([fde4513](https://github.com/maxbec/flama-delivery-platform/commit/fde45139bf605a2cbeb4f0839ff4ab9291d2a00a))
+* **templates:** fail-closed runner-labels against fork-authored PRs (PRI-896) ([#57](https://github.com/maxbec/flama-delivery-platform/issues/57)) ([064f00f](https://github.com/maxbec/flama-delivery-platform/commit/064f00f888d6cea5c76e151d071be35f81d5c25d))
+
 ## [0.5.7](https://github.com/maxbec/flama-delivery-platform/compare/v0.5.6...v0.5.7) (2026-08-19)
 
 
