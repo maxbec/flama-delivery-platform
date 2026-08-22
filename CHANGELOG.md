@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.10](https://github.com/maxbec/flama-delivery-platform/compare/v0.5.9...v0.5.10) (2026-08-22)
+
+
+### 🐛 Bug Fixes
+
+* **merge-gate:** name the workflows its workflow_run trigger listens for ([#63](https://github.com/maxbec/flama-delivery-platform/issues/63)) ([8b7d2c4](https://github.com/maxbec/flama-delivery-platform/commit/8b7d2c43f0f895c7c1c74d22578b8959afcc11d2))
+
 ## [0.5.9](https://github.com/maxbec/flama-delivery-platform/compare/v0.5.8...v0.5.9) (2026-08-22)
 
 
