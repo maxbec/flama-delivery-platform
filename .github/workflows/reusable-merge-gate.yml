@@ -67,10 +67,19 @@ on:
 permissions:
   contents: read
 
-# One evaluation per commit at a time. Every completed check on the same head
-# starts a run, and two of them reaching the merge call together would race.
+# Serialised on the branch being merged into, not on the head.
+#
+# Keying this on the head was wrong in a way only a second ready pull request
+# exposes: two different heads are two different groups, so both reach the
+# merge call at once, the first merge moves the base, and GitHub refuses the
+# second with `Base branch was modified. Review and try the merge again.`
+# Keying on the base makes every merge into it queue behind the one before,
+# which is what a merge queue does and what this gate stands in for.
+#
+# It still also serialises the several runs a single head produces, since they
+# share this group too.
 concurrency:
-  group: flama-merge-gate-${{ github.repository }}-${{ inputs.head-sha }}
+  group: flama-merge-gate-${{ github.repository }}-${{ inputs.base-branch }}
   cancel-in-progress: false
 
 jobs:
@@ -307,7 +316,46 @@ jobs:
 
           # Squash, matching the branch profile this gate serves, and
           # attributed to the App so the merge push starts the push workflows.
-          gh pr merge "$FLAMA_PR_NUMBER" --repo "$GITHUB_REPOSITORY" --squash
+          #
+          # `Base branch was modified` means something landed on the base
+          # between the check sweep and here. It says nothing about this pull
+          # request: the head is unchanged, so the verdict those checks reached
+          # still holds, and the merge is simply retried against the new base.
+          # Serialising on the base makes this rare; it does not make it
+          # impossible, because a release merge or a direct push moves the base
+          # too. It must be retried rather than failed — the merge of another
+          # pull request pushes the base, which fires no event on *this* head,
+          # so a run that gives up here leaves the pull request red with
+          # nothing left to wake it.
+          merged=false
+          for attempt in 1 2 3; do
+            if gh pr merge "$FLAMA_PR_NUMBER" --repo "$GITHUB_REPOSITORY" --squash \
+              2>"$RUNNER_TEMP/merge.err"; then
+              merged=true
+              break
+            fi
+            if ! grep -qi 'base branch was modified' "$RUNNER_TEMP/merge.err"; then
+              cat "$RUNNER_TEMP/merge.err" >&2
+              exit 1
+            fi
+            echo "Base moved under attempt $attempt; re-checking and retrying."
+            still=$(gh pr view "$FLAMA_PR_NUMBER" --repo "$GITHUB_REPOSITORY" \
+              --json state,headRefOid --jq '"\(.state):\(.headRefOid)"')
+            case "$still" in
+              OPEN:"$FLAMA_SHA") sleep 5 ;;
+              *)
+                echo "::notice::Pull request #$FLAMA_PR_NUMBER moved on ($still) while the base was changing. Not merging $FLAMA_SHA."
+                exit 0
+                ;;
+            esac
+          done
+
+          if [[ "$merged" != true ]]; then
+            cat "$RUNNER_TEMP/merge.err" >&2
+            echo "::error::Could not merge #$FLAMA_PR_NUMBER at $FLAMA_SHA: the base kept moving. A later check on this head will retry."
+            exit 1
+          fi
+
           echo "Merged #$FLAMA_PR_NUMBER at $FLAMA_SHA."
 
           # Tidy-up, never a verdict: the branch may already be gone, or be
