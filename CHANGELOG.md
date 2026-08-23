@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.11](https://github.com/maxbec/flama-delivery-platform/compare/v0.5.10...v0.5.11) (2026-08-23)
+
+
+### 🐛 Bug Fixes
+
+* **merge-gate:** serialise on the base branch, and retry a moved base ([#65](https://github.com/maxbec/flama-delivery-platform/issues/65)) ([cd351ec](https://github.com/maxbec/flama-delivery-platform/commit/cd351ec6c7fcf20fc6acab05ebc8685ef3703ee9))
+
 ## [0.5.10](https://github.com/maxbec/flama-delivery-platform/compare/v0.5.9...v0.5.10) (2026-08-22)
 
 
