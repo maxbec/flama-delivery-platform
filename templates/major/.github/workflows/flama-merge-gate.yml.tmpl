@@ -10,6 +10,18 @@ name: Flama Merge Gate
 # so this file has to be on it to fire at all.
 
 on:
+  # Sweep. The event-driven path below has a blind spot: the gate only sees a
+  # head that arrives on an event, and re-running a failed gate does not
+  # produce one — measured 2026-08-24 on edilio, where a green, mergeable pull
+  # request sat unmerged until a human did it by hand. That is not an edge
+  # case: the policy gate fails whenever the preflight sweep stalls, and
+  # re-running it is the documented fix. Ten minutes is well inside the time a
+  # person takes to notice, and a tick with nothing to do exits in seconds.
+  schedule:
+    - cron: '*/10 * * * *'
+  # So a stuck pull request can be released immediately instead of waiting for
+  # the next tick.
+  workflow_dispatch:
   check_run:
     types: [completed]
   workflow_run:
@@ -41,7 +53,10 @@ jobs:
         && (github.event_name != 'check_run' || !contains(github.event.check_run.name, 'Flama Merge Gate')) }}
     uses: maxbec/flama-delivery-platform/.github/workflows/reusable-merge-gate.yml@__FLAMA_PLATFORM_REF__
     with:
-      head-sha: ${{ github.event.check_run.head_sha || github.event.workflow_run.head_sha }}
+      # Empty on `schedule`/`workflow_dispatch`, which puts the platform
+      # workflow into sweep mode: it picks the oldest open pull request this
+      # gate owns rather than resolving backwards from a commit.
+      head-sha: ${{ github.event.check_run.head_sha || github.event.workflow_run.head_sha || '' }}
       base-branch: dev
       paperclip-app-slug: __FLAMA_PAPERCLIP_APP_SLUG__
       # Safe on the homelab runner even when the head is a fork: this gate

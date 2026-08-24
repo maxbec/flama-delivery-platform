@@ -347,7 +347,22 @@ describe("merge gate", () => {
     };
     // Both events, because neither alone sees every check: the preflight is a
     // standalone App check run, the gates are workflow runs.
-    expect(Object.keys(workflow.on).sort()).toEqual(["check_run", "workflow_run"]);
+    //
+    // Plus a sweep, because those two events still miss a case with no other
+    // way out: re-running a failed gate does not deliver the pull request's
+    // head to this workflow, so a green, mergeable pull request sat unmerged
+    // until a human merged it (edilio, 2026-08-24). The schedule releases it;
+    // `workflow_dispatch` releases it now instead of on the next tick.
+    expect(Object.keys(workflow.on).sort()).toEqual([
+      "check_run",
+      "schedule",
+      "workflow_dispatch",
+      "workflow_run",
+    ]);
+    // Sweep mode is signalled by an empty head-sha — the platform workflow
+    // enumerates open pull requests when it gets one, so this must stay
+    // falsy-tolerant rather than becoming a required input again.
+    expect(workflow.jobs["merge-gate"]?.with["head-sha"]).toContain("|| ''");
     // A `workflow_run` trigger with no `workflows` list matches nothing at all.
     expect((workflow.on["workflow_run"] as unknown as { workflows: string[] }).workflows)
       .toContain("Navigaite Pipeline");

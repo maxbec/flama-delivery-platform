@@ -28,8 +28,12 @@ on:
   workflow_call:
     inputs:
       head-sha:
-        description: Commit the completed check or workflow run belongs to.
-        required: true
+        description: >-
+          Commit the completed check or workflow run belongs to. Leave empty to
+          sweep instead: the gate then picks the oldest open pull request this
+          gate owns and evaluates that. A scheduled caller passes nothing.
+        required: false
+        default: ''
         type: string
       base-branch:
         description: >-
@@ -101,6 +105,44 @@ jobs:
         run: |
           set -euo pipefail
 
+          # Sweep mode: no head sha, so there is no commit to resolve backwards
+          # from. Enumerate what this gate owns instead and take the oldest.
+          #
+          # This exists because the event-driven path has a blind spot with no
+          # other way out. The gate only ever sees a head that arrives on a
+          # `check_run`/`workflow_run` event, and re-running a failed gate does
+          # not produce one — measured 2026-08-24 on edilio: ~20 gate runs fired
+          # in the window after a Policy Gate re-run and every one carried a
+          # `dev` sha, none the pull request's. The pull request was green,
+          # mergeable, and simply sat there until a human merged it. That is
+          # not rare either: the policy gate fails whenever the preflight sweep
+          # stalls, and re-running it is the documented fix.
+          #
+          # Oldest-first, one per run: the concurrency group already serialises
+          # merges into a base, so draining a backlog one pull request per tick
+          # costs nothing and keeps this a cheap, bounded sweep rather than a
+          # fan-out on a shared runner.
+          if [[ -z "$FLAMA_SHA" ]]; then
+            candidates=$(mktemp "$RUNNER_TEMP/flama-open-XXXXXX.json")
+            gh api -H 'Accept: application/vnd.github+json' \
+              "/repos/$GITHUB_REPOSITORY/pulls?state=open&base=$FLAMA_BASE_BRANCH&sort=created&direction=asc&per_page=100" \
+              > "$candidates" 2>/dev/null || printf '[]\n' > "$candidates"
+
+            FLAMA_SHA=$(jq -r \
+              '[.[] | select(
+                 .draft == false and
+                 (.head.ref | startswith("release-please--") | not)
+               )][0].head.sha // ""' "$candidates")
+
+            if [[ -z "$FLAMA_SHA" ]]; then
+              echo "Sweep: no open pull request this gate owns. Nothing to do."
+              echo "number=" >> "$GITHUB_OUTPUT"
+              echo "sha=" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            echo "Sweep: evaluating $FLAMA_SHA."
+          fi
+
           pulls=$(mktemp "$RUNNER_TEMP/flama-pulls-XXXXXX.json")
           gh api -H 'Accept: application/vnd.github+json' \
             "/repos/$GITHUB_REPOSITORY/commits/$FLAMA_SHA/pulls" > "$pulls" 2>/dev/null \
@@ -127,17 +169,22 @@ jobs:
           if [[ -z "$number" ]]; then
             echo "No open, mergeable-by-this-gate pull request has $FLAMA_SHA as its head. Nothing to do."
             echo "number=" >> "$GITHUB_OUTPUT"
+            echo "sha=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
           echo "number=$number" >> "$GITHUB_OUTPUT"
+          # Downstream steps read the sha from here, not from the input: in
+          # sweep mode the input is empty and this is the only place that knows
+          # which head was chosen.
+          echo "sha=$FLAMA_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Require every check on the head to have finished, and none to have failed
         id: checks
         if: ${{ steps.pull.outputs.number != '' }}
         env:
           FLAMA_APP_SLUG: ${{ inputs.paperclip-app-slug }}
-          FLAMA_SHA: ${{ inputs.head-sha }}
+          FLAMA_SHA: ${{ steps.pull.outputs.sha }}
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
@@ -280,7 +327,7 @@ jobs:
         if: ${{ steps.checks.outputs.ready == 'true' }}
         env:
           FLAMA_PR_NUMBER: ${{ steps.pull.outputs.number }}
-          FLAMA_SHA: ${{ inputs.head-sha }}
+          FLAMA_SHA: ${{ steps.pull.outputs.sha }}
           GH_TOKEN: ${{ steps.app-token.outputs.token || steps.app-token-workflows.outputs.token || github.token }}
         run: |
           set -euo pipefail
