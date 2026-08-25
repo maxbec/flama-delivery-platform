@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.12](https://github.com/maxbec/flama-delivery-platform/compare/v0.5.11...v0.5.12) (2026-08-25)
+
+
+### 🐛 Bug Fixes
+
+* **merge-gate:** sweep for pull requests the events never deliver ([#67](https://github.com/maxbec/flama-delivery-platform/issues/67)) ([db129ba](https://github.com/maxbec/flama-delivery-platform/commit/db129badb9a12bb7facd8430d814e833c2469812))
+
 ## [0.5.11](https://github.com/maxbec/flama-delivery-platform/compare/v0.5.10...v0.5.11) (2026-08-23)
 
 
