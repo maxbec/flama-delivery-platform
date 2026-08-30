@@ -237,10 +237,15 @@ async function assertGeneratedFiles(root, profile, platformSha, releaseEnabled) 
   ];
   for (const workflowName of workflowNames) {
     const source = await readRegular(root, `.github/workflows/${workflowName}`);
+    // Two generated callers legitimately request an OIDC identity: the
+    // deploy caller, and the preflight caller, whose scope and publish jobs
+    // read the owner's App credential from Infisical with it. Every other
+    // caller runs on the pull-request event and gets none.
     if (
       !source.includes(`@${platformSha}`) ||
       /pull_request_target|secrets:\s*inherit/u.test(source) ||
-      (workflowName !== "flama-deploy.yml" && /id-token:\s*write/u.test(source))
+      (workflowName !== "flama-deploy.yml" && workflowName !== "flama-preflight.yml" &&
+        /id-token:\s*write/u.test(source))
     ) {
       rejectPolicy();
     }

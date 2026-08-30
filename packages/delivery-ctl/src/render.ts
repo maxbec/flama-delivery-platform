@@ -229,14 +229,78 @@ function renderDependabot(input: RenderInput, policy: DependabotPolicy): string 
   )}`;
 }
 
+interface PreflightPublisher {
+  readonly credentialSuffix: string;
+  readonly infisical: {
+    readonly identityId: string;
+    readonly domain: string;
+    readonly localDomain: string;
+    readonly projectSlug: string;
+    readonly envSlug: string;
+    readonly secretPath: string;
+  };
+}
+
+/**
+ * Where the generated preflight workflow finds the owner's App credential:
+ * an Infisical OIDC identity and the project path holding the App id and
+ * key. Platform policy, not consumer input, so a consumer can neither point
+ * its publisher at another owner's App nor have to know where the credential
+ * lives. An owner without a publisher cannot be rendered — a consumer whose
+ * default branch carries the workflow keeps the sweep off, so rendering it
+ * without a working publisher would leave that repository with no preflight
+ * at all.
+ */
+async function loadPreflightPublisher(repositoryRoot: string, owner: string): Promise<PreflightPublisher> {
+  const value: unknown = JSON.parse(
+    await readFile(join(repositoryRoot, "policies", "preflight-publishers.json"), "utf8"),
+  );
+  if (typeof value !== "object" || value === null || Reflect.get(value, "version") !== 1) {
+    throw new Error("invalid preflight publisher policy");
+  }
+  const owners = Reflect.get(value, "owners");
+  const publisher = typeof owners === "object" && owners !== null ? Reflect.get(owners, owner) : undefined;
+  if (typeof publisher !== "object" || publisher === null) {
+    throw new Error(`no preflight publisher is configured for owner ${owner}`);
+  }
+  const infisical = Reflect.get(publisher, "infisical");
+  const text = (source: unknown, key: string, pattern: RegExp): string => {
+    const candidate = typeof source === "object" && source !== null ? Reflect.get(source, key) : undefined;
+    if (typeof candidate !== "string" || !pattern.test(candidate)) {
+      throw new Error(`preflight publisher for ${owner} has an invalid ${key}`);
+    }
+    return candidate;
+  };
+  return {
+    credentialSuffix: text(publisher, "credentialSuffix", /^[A-Z]{1,32}$/u),
+    infisical: {
+      identityId: text(infisical, "identityId", /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u),
+      domain: text(infisical, "domain", /^https:\/\/[a-z0-9.-]+$/u),
+      localDomain: text(infisical, "localDomain", /^(?:https:\/\/[a-z0-9.-]+)?$/u),
+      projectSlug: text(infisical, "projectSlug", /^[a-z0-9-]{1,64}$/u),
+      envSlug: text(infisical, "envSlug", /^[a-z0-9-]{1,32}$/u),
+      secretPath: text(infisical, "secretPath", /^\/[A-Za-z0-9._\/-]*$/u),
+    },
+  };
+}
+
 async function buildTargets(repositoryRoot: string, input: RenderInput): Promise<readonly TargetFile[]> {
   const profile = join(repositoryRoot, "templates", input.profile);
   const dependabotPolicy = await loadDependabotPolicy(repositoryRoot);
+  const owner = input.repository.split("/")[0] ?? "";
+  const publisher = await loadPreflightPublisher(repositoryRoot, owner);
   const replacePlatformRef = (template: string): string => {
     const rendered = template
       .replaceAll("__FLAMA_PLATFORM_REF__", input.platformRef)
       .replaceAll("__FLAMA_PAPERCLIP_APP_SLUG__", input.paperclip.appSlug)
-      .replaceAll("__FLAMA_MERGE_GATE__", String(input.substituteControls?.mergeGate === true));
+      .replaceAll("__FLAMA_MERGE_GATE__", String(input.substituteControls?.mergeGate === true))
+      .replaceAll("__FLAMA_PREFLIGHT_INFISICAL_IDENTITY_ID__", publisher.infisical.identityId)
+      .replaceAll("__FLAMA_PREFLIGHT_INFISICAL_DOMAIN__", publisher.infisical.domain)
+      .replaceAll("__FLAMA_PREFLIGHT_INFISICAL_LOCAL_DOMAIN__", publisher.infisical.localDomain)
+      .replaceAll("__FLAMA_PREFLIGHT_INFISICAL_PROJECT_SLUG__", publisher.infisical.projectSlug)
+      .replaceAll("__FLAMA_PREFLIGHT_INFISICAL_ENV_SLUG__", publisher.infisical.envSlug)
+      .replaceAll("__FLAMA_PREFLIGHT_INFISICAL_SECRET_PATH__", publisher.infisical.secretPath)
+      .replaceAll("__FLAMA_PREFLIGHT_APP_CREDENTIAL_SUFFIX__", publisher.credentialSuffix);
     if (rendered.includes("__FLAMA_")) throw new Error("unresolved template token");
     return rendered;
   };

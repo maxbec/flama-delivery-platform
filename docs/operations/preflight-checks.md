@@ -59,11 +59,22 @@ the consumer's runner labels:
    so the check never stays in progress with nothing left to wake it. Checks
    out nothing but the platform.
 
-The App credential reaches the workflow as the repository or organisation
-secrets `FLAMA_APP_ID` and `FLAMA_APP_PRIVATE_KEY`, forwarded by name by the
-generated caller — the same pattern as `WORKFLOW_APP_*` for the merge. Blanket
-`secrets: inherit` stays forbidden. Where the pair is missing the Scope job
-fails with a message rather than building for nothing.
+The App credential lives in Infisical and nowhere in GitHub. The Scope and
+Publish jobs request a short-lived OIDC identity (`id-token: write`, on those
+two jobs only) and read `FLAMA_GITHUB_APP_ID_<SUFFIX>` /
+`FLAMA_GITHUB_APP_PRIVATE_KEY_<SUFFIX>` from the owner's delivery-platform
+project through `Infisical/secrets-action`; the identity, project, environment
+and path come from `policies/preflight-publishers.json` in the platform,
+rendered into the caller, never typed by a consumer. Self-hosted runners use
+the LAN host (`localDomain`); GitHub-hosted runners use the public host and
+pass the Cloudflare Access service token, forwarded by name as
+`CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET` exactly as the universal
+pipeline does. Blanket `secrets: inherit` stays forbidden. The Infisical
+identity must accept the consumer repositories' tokens (bind its subject to
+the owner and, for the tightest fit, its `job_workflow_ref` claim to
+`maxbec/flama-delivery-platform/.github/workflows/reusable-preflight.yml@*`)
+and must be a member of the project with read access to that path; where it
+is not, the Scope job fails with a message rather than building for nothing.
 
 A `workflow_run`-started run is attached to the default branch, not the pull
 request, so the run itself is not on the pull request's checks tab. The

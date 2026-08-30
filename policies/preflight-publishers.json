@@ -1,0 +1,39 @@
+{
+  "$comment": "Where the generated flama-preflight.yml finds the owner's Flama delivery App credential. Nothing here is secret: the identity is an Infisical OIDC identity that accepts the consumer workflow's GitHub token, and the project path is where the App id and private key live. The credential itself never leaves Infisical except into the platform's publish job for the minutes it runs.",
+  "version": 1,
+  "owners": {
+    "maxbec": {
+      "credentialSuffix": "MAXBEC",
+      "infisical": {
+        "identityId": "69a5ede0-37ed-4b8d-97b2-963d9df5460c",
+        "domain": "https://infisical.navigaite.de",
+        "localDomain": "https://infisical.local.navigaite.de",
+        "projectSlug": "flama-delivery-platform-eb-9v",
+        "envSlug": "prod",
+        "secretPath": "/github-apps/maxbec"
+      }
+    },
+    "navigaite": {
+      "credentialSuffix": "NAVIGAITE",
+      "infisical": {
+        "identityId": "a9254e9e-db07-48b8-9e40-bce3f61389a6",
+        "domain": "https://infisical.navigaite.de",
+        "localDomain": "https://infisical.local.navigaite.de",
+        "projectSlug": "delivery-platform-mglz",
+        "envSlug": "production",
+        "secretPath": "/"
+      }
+    },
+    "edilio-app": {
+      "credentialSuffix": "EDILIO",
+      "infisical": {
+        "identityId": "2edb3bdc-c9cf-47c2-abb3-eaa07be91a67",
+        "domain": "https://infisical.navigaite.de",
+        "localDomain": "https://infisical.local.navigaite.de",
+        "projectSlug": "delivery-platform-j-af-r",
+        "envSlug": "production",
+        "secretPath": "/"
+      }
+    }
+  }
+}

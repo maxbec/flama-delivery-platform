@@ -121,4 +121,15 @@ jq -e '
   .platformRepositories == ["maxbec/flama-delivery-platform"]
 ' "$ROOT_DIR/policies/repository-scope.json" >/dev/null
 
+jq -e '
+  .version == 1 and
+  (.owners | keys | sort) == ["edilio-app", "maxbec", "navigaite"] and
+  all(.owners[]; (.credentialSuffix | test("^[A-Z]+$")) and
+    (.infisical.identityId | test("^[0-9a-f-]{36}$")) and
+    (.infisical.domain | startswith("https://")) and
+    (.infisical.projectSlug | length > 0) and
+    (.infisical.envSlug | length > 0) and
+    (.infisical.secretPath | startswith("/")))
+' "$ROOT_DIR/policies/preflight-publishers.json" >/dev/null
+
 echo "contract and policy tests passed"

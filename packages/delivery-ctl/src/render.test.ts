@@ -64,6 +64,13 @@ describe("template renderer", () => {
     expect(preflight).toContain("workflows: [Flama Branch Guard]");
     expect(preflight).toContain("base-branch: main");
     expect(preflight).toContain(`app-slug: ${input.paperclip.appSlug}`);
+    // The App credential is read from Infisical by the platform's own jobs;
+    // no App secret exists in GitHub and none is forwarded.
+    expect(preflight).toContain("infisical-identity-id: 69a5ede0-37ed-4b8d-97b2-963d9df5460c");
+    expect(preflight).toContain("infisical-project-slug: flama-delivery-platform-eb-9v");
+    expect(preflight).toContain("app-credential-suffix: MAXBEC");
+    expect(preflight).toContain("id-token: write");
+    expect(preflight).not.toContain("FLAMA_APP_");
     expect(preflight).not.toContain("pull_request_target");
     expect(preflight).not.toContain("__FLAMA_");
     const dependabot = parseYaml(

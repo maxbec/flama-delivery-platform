@@ -103,15 +103,26 @@ for profile in fast major; do
   grep -Fqx '      head-sha: ${{ github.event.workflow_run.head_sha }}' "$template"
   grep -Fqx '      app-slug: __FLAMA_PAPERCLIP_APP_SLUG__' "$template"
   grep -Fqx '      platform-sha: __FLAMA_PLATFORM_REF__' "$template"
+  # The App credential comes from Infisical through the platform's own jobs,
+  # bound by policy rather than typed by a consumer; the only secret forwarded
+  # is the Cloudflare Access service token in front of the public host.
+  grep -Fqx '  id-token: write' "$template"
+  grep -Fqx '      infisical-identity-id: __FLAMA_PREFLIGHT_INFISICAL_IDENTITY_ID__' "$template"
+  grep -Fqx '      infisical-domain: __FLAMA_PREFLIGHT_INFISICAL_DOMAIN__' "$template"
+  grep -Fqx '      infisical-local-domain: __FLAMA_PREFLIGHT_INFISICAL_LOCAL_DOMAIN__' "$template"
+  grep -Fqx '      infisical-project-slug: __FLAMA_PREFLIGHT_INFISICAL_PROJECT_SLUG__' "$template"
+  grep -Fqx '      infisical-env-slug: __FLAMA_PREFLIGHT_INFISICAL_ENV_SLUG__' "$template"
+  grep -Fqx '      infisical-secret-path: __FLAMA_PREFLIGHT_INFISICAL_SECRET_PATH__' "$template"
+  grep -Fqx '      app-credential-suffix: __FLAMA_PREFLIGHT_APP_CREDENTIAL_SUFFIX__' "$template"
   grep -Fqx '    secrets:' "$template"
-  grep -Fqx '      FLAMA_APP_ID: ${{ secrets.FLAMA_APP_ID }}' "$template"
-  grep -Fqx '      FLAMA_APP_PRIVATE_KEY: ${{ secrets.FLAMA_APP_PRIVATE_KEY }}' "$template"
-  if grep -Eq 'pull_request_target|pull_request:|id-token:|secrets: inherit' "$template"; then
+  grep -Fqx '      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}' "$template"
+  grep -Fqx '      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}' "$template"
+  if grep -Eq 'pull_request_target|pull_request:|secrets: inherit|FLAMA_APP_' "$template"; then
     echo "preflight workflow template violates the trust boundary" >&2
     exit 1
   fi
-  if grep -Eo 'secrets\.[A-Za-z0-9_]+' "$template" | grep -Evq '^secrets\.FLAMA_APP_(ID|PRIVATE_KEY)$'; then
-    echo "preflight workflow template forwards a secret outside the Flama App credential pair" >&2
+  if grep -Eo 'secrets\.[A-Za-z0-9_]+' "$template" | grep -Evq '^secrets\.CF_ACCESS_CLIENT_(ID|SECRET)$'; then
+    echo "preflight workflow template forwards a secret outside the Cloudflare Access pair" >&2
     exit 1
   fi
 done
