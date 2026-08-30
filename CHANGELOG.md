@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.14](https://github.com/maxbec/flama-delivery-platform/compare/v0.5.13...v0.5.14) (2026-08-30)
+
+
+### ✨ Features
+
+* **preflight:** read the App credential from Infisical, not from GitHub secrets ([#71](https://github.com/maxbec/flama-delivery-platform/issues/71)) ([1405ecc](https://github.com/maxbec/flama-delivery-platform/commit/1405ecca0a7bc5b8037c2a75e9d9494a76ba7708))
+
 ## [0.5.13](https://github.com/maxbec/flama-delivery-platform/compare/v0.5.12...v0.5.13) (2026-08-30)
 
 
