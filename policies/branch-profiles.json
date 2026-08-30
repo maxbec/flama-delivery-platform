@@ -9,7 +9,7 @@
       "featureMergeMethod": "squash",
       "requiredChecks": [
         "branch-guard / Flama Branch Guard",
-        "Paperclip Preflight",
+        "Flama Preflight",
         "final / Flama Final Gate"
       ]
     },
@@ -21,7 +21,7 @@
       "promotionMergeMethod": "merge",
       "integrationChecks": [
         "branch-guard / Flama Branch Guard",
-        "Paperclip Preflight",
+        "Flama Preflight",
         "policy / Flama Policy Gate"
       ],
       "stableChecks": [

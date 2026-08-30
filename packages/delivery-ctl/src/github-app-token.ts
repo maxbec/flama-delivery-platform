@@ -263,7 +263,11 @@ export interface OpenPullRequestHead {
   readonly headSha: string;
   readonly baseSha: string;
   readonly isFork: boolean;
-  /** True when an app-authored Paperclip Preflight already passed for this head. */
+  /**
+   * True when the owner's App already has a `Flama Preflight` check on this
+   * head, in any state: published, failed, or announced by the Actions
+   * publisher and still running. The sweep leaves all three alone.
+   */
   readonly hasPreflight: boolean;
 }
 
@@ -299,9 +303,15 @@ async function headIsPreflightable(
 }
 
 /**
- * A head already carrying a successful app-authored preflight needs no work.
- * The app slug is checked as well as the name: only the owner's own App may
- * satisfy the gate, so a same-named check from anything else must not count.
+ * A head already carrying an app-authored preflight needs no work from the
+ * sweep. The app slug is checked as well as the name: only the owner's own App
+ * may satisfy the gate, so a same-named check from anything else must not
+ * count. Any state counts, not only success: the consumer's own Actions
+ * workflow announces its check before it builds, and a sweep that recognised
+ * only a completed check would build the same head a second time and then
+ * collide with the announced check at publication. A failed check counts too —
+ * the verdict stands until a new head is pushed, and rebuilding a head that
+ * already failed every few minutes is what the sweep used to do.
  */
 async function hasAppPreflight(
   fetchImplementation: FetchImplementation,
@@ -323,10 +333,10 @@ async function hasAppPreflight(
   if (!isRecord(runs) || !Array.isArray(runs["check_runs"])) return false;
   return runs["check_runs"].some(
     (run) =>
-      isRecord(run) && run["name"] === "Paperclip Preflight" && run["conclusion"] === "success" &&
+      isRecord(run) && run["name"] === "Flama Preflight" &&
       isRecord(run["app"]) && run["app"]["slug"] === appSlug &&
       typeof run["external_id"] === "string" &&
-      /^paperclip-preflight:sha256:[0-9a-f]{64}$/u.test(run["external_id"]),
+      run["external_id"].startsWith("flama-preflight:"),
   );
 }
 

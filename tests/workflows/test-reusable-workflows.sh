@@ -39,13 +39,17 @@ grep -Fq 'consumer-policy-gate.mjs' "$POLICY"
 grep -Fq 'git ls-remote --tags https://github.com/maxbec/flama-delivery-platform.git' "$POLICY"
 grep -Fq 'FLAMA_PLATFORM_TAG_VERSION: ${{ steps.platform-tag.outputs.version }}' "$POLICY"
 grep -Fq '"$FLAMA_PLATFORM_TAG_VERSION" >/dev/null' "$POLICY"
-grep -Fq 'check_name=Paperclip%20Preflight' "$POLICY"
-# A gate that samples once fails on a preflight that has not been published
-# yet and never looks again, so the verdict stays red until someone re-runs it.
-# It must wait for absence and decide immediately on a completed failure.
-grep -Fq 'inputs.preflight-wait-seconds' "$POLICY"
-grep -Fq 'sleep 30' "$POLICY"
+grep -Fq 'check_name=Flama%20Preflight' "$POLICY"
+grep -Fq 'flama-preflight:sha256:[0-9a-f]{64}' "$POLICY"
+# The gate judges a completed preflight and never waits for one: a wait holds
+# the runner slot the publisher needs, which deadlocks a single runner. A
+# completed failure is a verdict and must fail immediately; absence is left
+# to the merge gate and the required-check rule.
 grep -Fq '.conclusion != "success"' "$POLICY"
+if grep -Eq 'sleep [0-9]+|preflight-wait-seconds' "$POLICY"; then
+  echo "policy workflow waits on a runner for the preflight" >&2
+  exit 1
+fi
 grep -Fq "if: \${{ steps.change.outputs.mode == 'code' }}" "$POLICY"
 grep -Fqx '          fetch-depth: 0' "$POLICY"
 if grep -Eq './scripts/delivery (buildable|affected|full)' "$POLICY"; then
@@ -104,6 +108,60 @@ grep -Fq 'steps.app-token.outputs.token || steps.app-token-workflows.outputs.tok
 grep -Fq 'WORKFLOW_APP_ID and WORKFLOW_APP_PRIVATE_KEY must be provided together' "$AUTO_MERGE"
 if grep -Eq 'secrets: inherit|actions/checkout|continue-on-error:' "$AUTO_MERGE"; then
   echo "auto-merge workflow widens the credential surface it is allowed" >&2
+  exit 1
+fi
+
+# The preflight publisher is the one reusable workflow that both executes the
+# change and holds an App credential, and it may only do so in separate jobs:
+# the job that checks out and runs consumer code gets no secret and a
+# read-only token, and the job that holds the credential checks out nothing
+# but the platform. It runs from the default branch via workflow_run, never
+# via pull_request_target.
+PREFLIGHT="$ROOT_DIR/.github/workflows/reusable-preflight.yml"
+[[ -f "$PREFLIGHT" ]] || { echo "missing reusable preflight workflow" >&2; exit 1; }
+grep -Fqx 'permissions:' "$PREFLIGHT"
+grep -Fqx '  contents: read' "$PREFLIGHT"
+grep -Fqx '  checks: read' "$PREFLIGHT"
+grep -Fqx '    name: Flama Preflight Scope' "$PREFLIGHT"
+grep -Fqx '    name: Flama Preflight Run' "$PREFLIGHT"
+grep -Fqx '    name: Flama Preflight Publish' "$PREFLIGHT"
+grep -Fqx '      FLAMA_APP_ID:' "$PREFLIGHT"
+grep -Fqx '      FLAMA_APP_PRIVATE_KEY:' "$PREFLIGHT"
+grep -Fq 'actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1' "$PREFLIGHT"
+grep -Fq '          permission-checks: write' "$PREFLIGHT"
+grep -Fq 'scripts/obtain-cli.sh' "$PREFLIGHT"
+grep -Fq 'runnerClass: "github_actions"' "$PREFLIGHT"
+grep -Fq 'FLAMA_GITHUB_APP_INSTALLATION_TOKEN: ${{ steps.app-token.outputs.token }}' "$PREFLIGHT"
+grep -Fq "external_id=\"flama-preflight:pending:\$GITHUB_RUN_ID\"" "$PREFLIGHT"
+grep -Fq "external_id=\"flama-preflight:failed:\$GITHUB_RUN_ID\"" "$PREFLIGHT"
+if grep -Eq 'pull_request_target|id-token:|secrets: inherit|continue-on-error:' "$PREFLIGHT"; then
+  echo "preflight workflow contains a forbidden trust or mutability pattern" >&2
+  exit 1
+fi
+while IFS= read -r action_ref; do
+  [[ "$action_ref" =~ ^[0-9a-f]{40}$ ]] || {
+    echo "preflight workflow action is not pinned to a full SHA" >&2
+    exit 1
+  }
+done < <(sed -nE 's/^[[:space:]]*uses:[[:space:]]+[^@]+@([^[:space:]#]+).*/\1/p' "$PREFLIGHT")
+# Job boundaries. The run job is the only one that checks out the consumer,
+# and it must reference no secret; the publish job must check out nothing
+# but the platform.
+run_job=$(awk '/^  run:$/{p=1} /^  publish:$/{p=0} p' "$PREFLIGHT")
+publish_job=$(awk '/^  publish:$/{p=1} p' "$PREFLIGHT")
+resolve_job=$(awk '/^  resolve:$/{p=1} /^  run:$/{p=0} p' "$PREFLIGHT")
+grep -Fq 'ref: ${{ inputs.head-sha }}' <<< "$run_job"
+grep -Fqx '      contents: read' <<< "$run_job"
+if grep -Eq 'secrets\.|app-token' <<< "$run_job"; then
+  echo "preflight run job can reach a secret" >&2
+  exit 1
+fi
+if grep -Fq 'ref: ${{ inputs.head-sha }}' <<< "$publish_job"; then
+  echo "preflight publish job checks out the change under review" >&2
+  exit 1
+fi
+if grep -Fq 'actions/checkout' <<< "$resolve_job"; then
+  echo "preflight resolve job checks out code while holding the App credential" >&2
   exit 1
 fi
 

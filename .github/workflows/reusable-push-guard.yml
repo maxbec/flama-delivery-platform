@@ -17,7 +17,7 @@ on:
         required: true
         type: string
       app-slug:
-        description: Slug of the owner's Paperclip delivery App, which publishes the preflight.
+        description: Slug of the owner's Flama delivery App, which publishes the preflight.
         required: true
         type: string
 
@@ -74,10 +74,10 @@ jobs:
             > "$checks" 2>/dev/null || printf '{"check_runs":[]}\n' > "$checks"
 
           jq -e --arg app "$FLAMA_APP_SLUG" '[.check_runs[] | select(
-            .name == "Paperclip Preflight" and .status == "completed"
+            .name == "Flama Preflight" and .status == "completed"
             and .conclusion == "success" and .app.slug == $app
           )] | length == 1' "$checks" >/dev/null \
-            || printf 'carries no successful Paperclip Preflight from %s\n' "$FLAMA_APP_SLUG" >> "$faults"
+            || printf 'carries no successful Flama Preflight from %s\n' "$FLAMA_APP_SLUG" >> "$faults"
 
           jq -e '[.check_runs[] | select(
             (.name | startswith("Flama ")) and .conclusion == "failure"

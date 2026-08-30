@@ -46,6 +46,8 @@ interface PullSpec {
   readonly headSha: string;
   readonly isFork?: boolean;
   readonly hasPreflight?: boolean;
+  /** An app-authored check announced by the Actions publisher and still running. */
+  readonly preflightInFlight?: boolean;
   /** Head predating the delivery profile: no scripts/delivery in its tree. */
   readonly unadopted?: boolean;
 }
@@ -88,8 +90,15 @@ function githubStub(pulls: readonly PullSpec[], created: string[] = []): typeof 
         return json({
           check_runs: spec?.hasPreflight
             ? [{
-              name: "Paperclip Preflight", conclusion: "success", app: { slug: "flama-delivery-maxbec" },
-              external_id: `paperclip-preflight:sha256:${"a".repeat(64)}`,
+              name: "Flama Preflight", status: "completed", conclusion: "success",
+              app: { slug: "flama-delivery-maxbec" },
+              external_id: `flama-preflight:sha256:${"a".repeat(64)}`,
+            }]
+            : spec?.preflightInFlight
+            ? [{
+              name: "Flama Preflight", status: "in_progress", conclusion: null,
+              app: { slug: "flama-delivery-maxbec" },
+              external_id: "flama-preflight:pending:4242",
             }]
             : [],
         });
@@ -141,6 +150,27 @@ describe("preflight sweep", () => {
       "2:skipped_fork",
     ]);
     // Neither path may reach publication.
+    expect(created).toEqual([]);
+  });
+
+  /*
+   * The Actions publisher announces its check before it builds. A sweep that
+   * only recognised a completed check would clone and build the same head a
+   * second time, then collide with the announced check at publication.
+   */
+  it("leaves a head alone while the Actions publisher is already working on it", async () => {
+    const { headSha } = await upstream();
+    const created: string[] = [];
+    const outcomes = await sweepPreflights({
+      owner: "maxbec",
+      appSlug: "flama-delivery-maxbec",
+      environment,
+      cacheRoot: await cacheRoot(),
+      runnerId: "11111111-1111-4111-8111-111111111111",
+      fetchImplementation: githubStub([{ number: 11, headSha, preflightInFlight: true }], created),
+    });
+
+    expect(outcomes.map(({ number, status }) => `${number}:${status}`)).toEqual(["11:already_published"]);
     expect(created).toEqual([]);
   });
 

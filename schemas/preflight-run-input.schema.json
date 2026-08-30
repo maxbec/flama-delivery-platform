@@ -10,6 +10,10 @@
     "repository": { "type": "string", "pattern": "^(maxbec|navigaite|edilio-app)/[A-Za-z0-9._-]+$" },
     "headSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
     "baseSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
-    "releaseImpact": { "enum": ["none", "patch", "minor", "major"] }
+    "releaseImpact": { "enum": ["none", "patch", "minor", "major"] },
+    "runnerClass": {
+      "description": "Kind of runner executing the commands; defaults to the Paperclip sweep.",
+      "enum": ["paperclip_ephemeral", "github_actions"]
+    }
   }
 }

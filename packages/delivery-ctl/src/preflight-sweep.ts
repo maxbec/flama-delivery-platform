@@ -62,6 +62,8 @@ export interface SweepPreflightsInput {
   readonly budgetMilliseconds?: number;
   readonly fetchImplementation?: FetchImplementation;
   readonly now?: () => Date;
+  /** Forwarded to publication: also publish the retired check name. */
+  readonly publishLegacyCheck?: boolean;
 }
 
 export interface SweepOutcome {
@@ -156,6 +158,7 @@ export async function sweepPreflights(
         runnerId: input.runnerId,
         fetchImplementation,
         now,
+        ...(input.publishLegacyCheck === undefined ? {} : { publishLegacyCheck: input.publishLegacyCheck }),
       });
 
       outcomes.push({

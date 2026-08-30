@@ -88,7 +88,12 @@ function githubStub(
   }) as typeof fetch;
 }
 
-function run(root: string, headSha: string, fetchImplementation: typeof fetch) {
+function run(
+  root: string,
+  headSha: string,
+  fetchImplementation: typeof fetch,
+  options: { readonly publishLegacyCheck?: boolean } = {},
+) {
   return publishPreflight({
     repository: "maxbec/example",
     headSha,
@@ -98,6 +103,7 @@ function run(root: string, headSha: string, fetchImplementation: typeof fetch) {
     environment,
     runnerId: "11111111-1111-4111-8111-111111111111",
     fetchImplementation,
+    ...options,
     // Real clock on purpose: certify refuses a signature that predates the run
     // it attests, and the run finishes at wall-clock time.
   });
@@ -117,7 +123,7 @@ describe("preflight publication", () => {
     const created = calls.find((call) => call.method === "POST" && call.url.includes("/check-runs"));
     expect(created?.body).toMatchObject({ head_sha: headSha });
     expect((created?.body as { external_id: string }).external_id).toMatch(
-      /^paperclip-preflight:sha256:[0-9a-f]{64}$/u,
+      /^flama-preflight:sha256:[0-9a-f]{64}$/u,
     );
   });
 
@@ -169,5 +175,37 @@ describe("preflight publication", () => {
         fetchImplementation: githubStub(),
       }),
     ).rejects.toBeInstanceOf(PublishPreflightError);
+  });
+});
+
+/*
+ * A consumer pinned to a platform older than the rename still requires a check
+ * called `Paperclip Preflight`. Until every consumer is re-rendered the sweep
+ * publishes both names for one run, so the rollout pull requests themselves can
+ * merge through the older merge gate they were opened under.
+ */
+describe("legacy check publication", () => {
+  it("publishes the retired name alongside the new one, carrying the same digest", async () => {
+    const { root, headSha } = await checkout();
+    const calls: Call[] = [];
+    const result = await run(root, headSha, githubStub({}, calls), { publishLegacyCheck: true });
+
+    expect(result.status).toBe("published");
+    const created = calls
+      .filter((call) => call.method === "POST" && call.url.includes("/check-runs"))
+      .map((call) => call.body as { name: string; external_id: string });
+    expect(created.map(({ name }) => name)).toEqual(["Flama Preflight", "Paperclip Preflight"]);
+    const digest = created[0]?.external_id.replace(/^flama-preflight:/u, "");
+    expect(digest).toMatch(/^sha256:[0-9a-f]{64}$/u);
+    expect(created[1]?.external_id).toBe(`paperclip-preflight:${digest}`);
+  });
+
+  it("publishes only the new name by default", async () => {
+    const { root, headSha } = await checkout();
+    const calls: Call[] = [];
+    await run(root, headSha, githubStub({}, calls));
+    expect(
+      calls.filter((call) => call.method === "POST" && call.url.includes("/check-runs")).map((call) => (call.body as { name: string }).name),
+    ).toEqual(["Flama Preflight"]);
   });
 });

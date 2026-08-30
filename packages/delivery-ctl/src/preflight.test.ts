@@ -177,3 +177,29 @@ describe("deterministic preflight", () => {
     expect(await readFile(join(root, "untracked.txt"), "utf8")).toBe("dirty");
   });
 });
+
+/*
+ * The same run happens on a GitHub Actions runner now, published from the
+ * consumer's own trusted workflow, so the evidence has to say which kind of
+ * runner produced it rather than asserting a Paperclip one that never ran.
+ */
+describe("runner class", () => {
+  it("defaults to the Paperclip runner and records a GitHub Actions runner when told", async () => {
+    const { root, headSha } = await repositoryWithDeliveryScript();
+    const input: PreflightRunInput = {
+      schemaVersion: 1,
+      repository: "maxbec/example",
+      headSha,
+      baseSha: headSha,
+      releaseImpact: "none",
+    };
+    const validator = await createSchemaValidator(platformRoot);
+
+    const paperclip = await runPreflight(input, root);
+    expect(paperclip.runnerClass).toBe("paperclip_ephemeral");
+
+    const actions = await runPreflight(input, root, { runnerClass: "github_actions" });
+    expect(actions.runnerClass).toBe("github_actions");
+    expect(validator.validate("preflight-run-result", actions).ok).toBe(true);
+  });
+});

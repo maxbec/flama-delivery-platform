@@ -86,7 +86,9 @@ jobs:
           bash -n tests/release/test-platform-release.sh
           bash -n scripts/public-repository-audit.sh
           bash -n scripts/delivery
+          bash -n scripts/obtain-cli.sh
           bash -n tests/scripts/test-delivery-script.sh
+          bash -n tests/scripts/test-obtain-cli.sh
           bash -n tests/drills/test-drills.sh
           bash -n scripts/drill-rollback.sh
           node --check scripts/drill-event-replay.mjs
@@ -120,6 +122,9 @@ jobs:
 
       - name: Test platform delivery entrypoint
         run: bash tests/scripts/test-delivery-script.sh
+
+      - name: Test the CLI fetch the preflight workflow performs
+        run: bash tests/scripts/test-obtain-cli.sh
 
       # The drills themselves need real infrastructure; CI proves they refuse
       # every unauthorized invocation instead of appearing to pass.

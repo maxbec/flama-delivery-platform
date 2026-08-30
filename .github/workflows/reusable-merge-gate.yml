@@ -44,8 +44,10 @@ on:
         type: string
       paperclip-app-slug:
         description: >-
-          App whose Paperclip Preflight counts. A check of that name published
-          by anything else proves nothing.
+          App whose Flama Preflight counts — the owner's Flama delivery App,
+          which both the repository's preflight workflow and the ai-vm sweep
+          publish as. A check of that name published by anything else proves
+          nothing.
         required: true
         type: string
       runner-labels:
@@ -200,18 +202,20 @@ jobs:
 
           # The preflight predicate is the policy gate's, character for
           # character: right name, right app, completed, successful, and an
-          # external id of the shape only the controller produces. A weaker
-          # test here would be the hole the policy gate was written to close.
+          # external id of the shape only the platform's publisher produces.
+          # This is where the preflight is enforced on a repository without a
+          # required-check rule: the policy gate judges a completed preflight
+          # but no longer waits for one, so a head without it is held here.
           jq -e --arg app "$FLAMA_APP_SLUG" --arg sha "$FLAMA_SHA" \
             '[.check_runs[] | select(
-               .name == "Paperclip Preflight" and
+               .name == "Flama Preflight" and
                .head_sha == $sha and
                .status == "completed" and
                .conclusion == "success" and
                .app.slug == $app and
-               (.external_id | test("^paperclip-preflight:sha256:[0-9a-f]{64}$"))
+               (.external_id | test("^flama-preflight:sha256:[0-9a-f]{64}$"))
              )] | length == 1' "$checks" >/dev/null \
-            || printf 'no app-authored Paperclip Preflight from %s\n' "$FLAMA_APP_SLUG" >> "$faults"
+            || printf 'no app-authored Flama Preflight from %s\n' "$FLAMA_APP_SLUG" >> "$faults"
 
           for gate in "policy / Flama Policy Gate" "branch-guard / Flama Branch Guard"; do
             jq -e --arg name "$gate" \

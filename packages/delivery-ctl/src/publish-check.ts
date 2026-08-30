@@ -1,7 +1,17 @@
 import { createHash } from "node:crypto";
 import { inspect } from "node:util";
 
-const checkName = "Paperclip Preflight" as const;
+/**
+ * The check the gates require. It was called `Paperclip Preflight` while the
+ * only publisher was the Paperclip sweep on ai-vm; the consumer's own GitHub
+ * Actions workflow publishes it now and Paperclip merely reads it, so the name
+ * says what it is rather than who once wrote it. The retired name stays
+ * publishable so consumers pinned to an older platform can still merge while
+ * they are re-rendered.
+ */
+const checkName = "Flama Preflight" as const;
+const legacyCheckName = "Paperclip Preflight" as const;
+export type CheckName = typeof checkName | typeof legacyCheckName;
 const maximumResponseBytes = 1024 * 1024;
 const githubApiVersion = "2026-03-10" as const;
 
@@ -25,7 +35,7 @@ export interface SignedPreflightEvidence {
   readonly startedAt: string;
   readonly finishedAt: string;
   readonly runner: {
-    readonly class: "paperclip_ephemeral";
+    readonly class: "paperclip_ephemeral" | "github_actions";
     readonly id: string;
     readonly controller: DeliveryController;
   };
@@ -59,14 +69,14 @@ export interface PublishCheckInput {
 }
 
 export interface GitHubCheckRequest {
-  readonly name: typeof checkName;
+  readonly name: CheckName;
   readonly headSha: string;
   readonly externalId: string;
   readonly status: "completed";
   readonly conclusion: "success";
   readonly completedAt: string;
   readonly output: {
-    readonly title: "Paperclip preflight passed";
+    readonly title: "Flama preflight passed" | "Paperclip preflight passed";
     readonly summary: string;
   };
 }
@@ -85,6 +95,20 @@ export interface GitHubCheckClient {
   assertSingleRepositoryScope(repository: string): Promise<void>;
   listCheckRuns(repository: string, headSha: string, name: string): Promise<readonly RemoteCheckRun[]>;
   createCheckRun(repository: string, request: GitHubCheckRequest): Promise<RemoteCheckRun>;
+  /** Completes a check run this App announced earlier; the request replaces its state. */
+  updateCheckRun(repository: string, checkRunId: number, request: GitHubCheckRequest): Promise<RemoteCheckRun>;
+}
+
+export interface PublishCheckOptions {
+  /**
+   * A check run the publisher announced as in progress before the delivery
+   * commands ran, to be completed with the verdict rather than duplicated.
+   * Ignored when no such check is visible any more; refused when the check it
+   * names turns out to be somebody else's.
+   */
+  readonly pendingCheckRunId?: number;
+  /** Publish under the retired `Paperclip Preflight` name instead. */
+  readonly legacyName?: boolean;
 }
 
 export type PublishCheckResult =
@@ -94,7 +118,7 @@ export type PublishCheckResult =
       readonly headSha: string;
       readonly evidenceDigest: string;
       readonly check: {
-        readonly name: typeof checkName;
+        readonly name: CheckName;
         readonly externalId: string;
         readonly status: "completed";
         readonly conclusion: "success";
@@ -106,7 +130,7 @@ export type PublishCheckResult =
       readonly headSha: string;
       readonly evidenceDigest: string;
       readonly check: {
-        readonly name: typeof checkName;
+        readonly name: CheckName;
         readonly externalId: string;
         readonly status: "completed";
         readonly conclusion: "success";
@@ -246,17 +270,24 @@ function assertPublishable(input: PublishCheckInput): string {
   return digest;
 }
 
-function checkRequest(evidence: SignedPreflightEvidence, digest: string): GitHubCheckRequest {
+function checkRequest(
+  evidence: SignedPreflightEvidence,
+  digest: string,
+  legacyName: boolean,
+): GitHubCheckRequest {
+  const runner = evidence.runner.class === "github_actions"
+    ? "the repository's own Flama Preflight workflow"
+    : "the Flama preflight sweep";
   return {
-    name: checkName,
+    name: legacyName ? legacyCheckName : checkName,
     headSha: evidence.headSha,
-    externalId: `paperclip-preflight:${digest}`,
+    externalId: `${legacyName ? "paperclip-preflight" : "flama-preflight"}:${digest}`,
     status: "completed",
     conclusion: "success",
     completedAt: evidence.finishedAt,
     output: {
-      title: "Paperclip preflight passed",
-      summary: `Controller-signed buildable and affected evidence verified for the exact commit. Evidence digest: ${digest}.`,
+      title: legacyName ? "Paperclip preflight passed" : "Flama preflight passed",
+      summary: `\`./scripts/delivery buildable\` and \`./scripts/delivery affected\` passed on the exact commit, run by ${runner} (${evidence.runner.id}). Evidence digest: ${digest}.`,
     },
   };
 }
@@ -292,24 +323,29 @@ function isMatchingCheck(
   );
 }
 
-export function planPublishCheck(input: PublishCheckInput): PublishCheckResult {
+export function planPublishCheck(
+  input: PublishCheckInput,
+  options: PublishCheckOptions = {},
+): PublishCheckResult {
   const digest = assertPublishable(input);
-  const request = checkRequest(input.evidence, digest);
+  const request = checkRequest(input.evidence, digest, options.legacyName === true);
   return { ...commonResult(input.evidence, digest, request), status: "planned" };
 }
 
 export async function publishCheck(
   input: PublishCheckInput,
   client: GitHubCheckClient,
+  options: PublishCheckOptions = {},
 ): Promise<PublishCheckResult> {
   const digest = assertPublishable(input);
-  const request = checkRequest(input.evidence, digest);
+  const request = checkRequest(input.evidence, digest, options.legacyName === true);
   await client.assertSingleRepositoryScope(input.repository.nameWithOwner);
-  const existing = (await client.listCheckRuns(
+  const visible = await client.listCheckRuns(
     input.repository.nameWithOwner,
     input.evidence.headSha,
-    checkName,
-  )).filter((check) => check.externalId === request.externalId);
+    request.name,
+  );
+  const existing = visible.filter((check) => check.externalId === request.externalId);
   if (existing.length > 1) throw new PublishCheckError("github_check_conflict");
   if (existing.length === 1) {
     const check = existing[0];
@@ -320,6 +356,33 @@ export async function publishCheck(
       ...commonResult(input.evidence, digest, request),
       status: "published",
       publication: { checkRunId: check.id, appSlug: check.appSlug, reused: true },
+    };
+  }
+
+  // An announced check is completed in place. One that is visible but is not
+  // this App's, or not this head's, is refused rather than overwritten: the
+  // caller named it, so the caller's picture of the head is wrong, and writing
+  // a verdict onto it would put this App's name on somebody else's check.
+  const pending = options.pendingCheckRunId === undefined
+    ? undefined
+    : visible.find((check) => check.id === options.pendingCheckRunId);
+  if (pending !== undefined) {
+    if (
+      pending.name !== request.name ||
+      pending.headSha !== request.headSha ||
+      pending.appSlug !== input.publisher.appSlug ||
+      pending.status === "completed"
+    ) {
+      throw new PublishCheckError("github_check_conflict");
+    }
+    const completed = await client.updateCheckRun(input.repository.nameWithOwner, pending.id, request);
+    if (completed.id !== pending.id || !isMatchingCheck(completed, request, input.publisher.appSlug)) {
+      throw new PublishCheckError("github_check_response_invalid");
+    }
+    return {
+      ...commonResult(input.evidence, digest, request),
+      status: "published",
+      publication: { checkRunId: completed.id, appSlug: completed.appSlug, reused: false },
     };
   }
 
@@ -436,7 +499,7 @@ export class GitHubRestCheckClient implements GitHubCheckClient {
     this.#token = parseToken(environment);
   }
 
-  async #request(method: "GET" | "POST", path: string, body?: unknown): Promise<unknown> {
+  async #request(method: "GET" | "POST" | "PATCH", path: string, body?: unknown): Promise<unknown> {
     try {
       const response = await this.fetchImplementation(`https://api.github.com${path}`, {
         method,
@@ -501,6 +564,27 @@ export class GitHubRestCheckClient implements GitHubCheckClient {
       {
         name: request.name,
         head_sha: request.headSha,
+        external_id: request.externalId,
+        status: request.status,
+        conclusion: request.conclusion,
+        completed_at: request.completedAt,
+        output: request.output,
+      },
+    );
+    return remoteCheckRun(value);
+  }
+
+  async updateCheckRun(
+    repository: string,
+    checkRunId: number,
+    request: GitHubCheckRequest,
+  ): Promise<RemoteCheckRun> {
+    const [owner, repositoryName] = repository.split("/");
+    const value = await this.#request(
+      "PATCH",
+      `/repos/${encodeURIComponent(owner ?? "")}/${encodeURIComponent(repositoryName ?? "")}/check-runs/${checkRunId}`,
+      {
+        name: request.name,
         external_id: request.externalId,
         status: request.status,
         conclusion: request.conclusion,

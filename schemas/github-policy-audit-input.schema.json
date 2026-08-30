@@ -99,7 +99,7 @@
             "items": {
               "enum": [
                 "branch-guard / Flama Branch Guard",
-                "Paperclip Preflight",
+                "Flama Preflight",
                 "policy / Flama Policy Gate",
                 "final / Flama Final Gate"
               ]

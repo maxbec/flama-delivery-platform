@@ -81,8 +81,8 @@ jq -e '
 ' "$ROOT_DIR/routines/github-transition.json" >/dev/null
 
 jq -e '
-  .profiles.fast.requiredChecks == ["branch-guard / Flama Branch Guard", "Paperclip Preflight", "final / Flama Final Gate"] and
-  .profiles.major.integrationChecks == ["branch-guard / Flama Branch Guard", "Paperclip Preflight", "policy / Flama Policy Gate"] and
+  .profiles.fast.requiredChecks == ["branch-guard / Flama Branch Guard", "Flama Preflight", "final / Flama Final Gate"] and
+  .profiles.major.integrationChecks == ["branch-guard / Flama Branch Guard", "Flama Preflight", "policy / Flama Policy Gate"] and
   .profiles.major.stableChecks == ["branch-guard / Flama Branch Guard", "final / Flama Final Gate"] and
   .common.normalBypassActors == [] and
   .common.forcePush == false

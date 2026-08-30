@@ -20,6 +20,8 @@ export interface PreflightCommandResult {
   readonly evidenceDigest: string;
 }
 
+export type PreflightRunnerClass = "paperclip_ephemeral" | "github_actions";
+
 export interface PreflightRunResult {
   readonly schemaVersion: 1;
   readonly repository: string;
@@ -27,7 +29,7 @@ export interface PreflightRunResult {
   readonly baseSha: string;
   readonly startedAt: string;
   readonly finishedAt: string;
-  readonly runnerClass: "paperclip_ephemeral";
+  readonly runnerClass: PreflightRunnerClass;
   readonly releaseImpact: "none" | "patch" | "minor" | "major";
   readonly status: "passed" | "failed";
   readonly commands: readonly PreflightCommandResult[];
@@ -200,6 +202,12 @@ export interface RunPreflightOptions {
    * demonstrated anything.
    */
   readonly commandTimeoutMilliseconds?: number;
+  /**
+   * Where the run happens. The Paperclip sweep is the default; the consumer's
+   * own GitHub Actions workflow says so, because the evidence names the kind
+   * of runner and must not claim one that never ran.
+   */
+  readonly runnerClass?: PreflightRunnerClass;
 }
 
 export async function runPreflight(
@@ -258,7 +266,7 @@ export async function runPreflight(
     baseSha: input.baseSha,
     startedAt,
     finishedAt: new Date().toISOString(),
-    runnerClass: "paperclip_ephemeral",
+    runnerClass: options.runnerClass ?? "paperclip_ephemeral",
     releaseImpact: input.releaseImpact,
     status,
     commands,

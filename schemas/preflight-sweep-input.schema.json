@@ -32,6 +32,10 @@
       "type": "integer",
       "minimum": 1,
       "maximum": 200
+    },
+    "publishLegacyCheck": {
+      "description": "Also publish the retired `Paperclip Preflight` name, for consumers pinned to a platform older than the rename.",
+      "type": "boolean"
     }
   }
 }

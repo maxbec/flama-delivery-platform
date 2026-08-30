@@ -133,7 +133,7 @@ describe("GitHub webhook minimization", () => {
       {
         action: "completed",
         repository: { id: 202, full_name: "navigaite/app" },
-        check_run: { id: 2, name: "Paperclip Preflight", app: { slug: "paperclip-preflight" }, status: "completed", conclusion: "failure", head_sha: sha, html_url: "https://github.com/navigaite/app/runs/2" },
+        check_run: { id: 2, name: "Flama Preflight", app: { slug: "flama-delivery-navigaite" }, status: "completed", conclusion: "failure", head_sha: sha, html_url: "https://github.com/navigaite/app/runs/2" },
       },
       "check_run",
     ],

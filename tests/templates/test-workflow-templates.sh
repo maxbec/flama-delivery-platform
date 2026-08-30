@@ -84,6 +84,40 @@ for profile in fast major; do
   fi
 done
 
+# The preflight caller is chained on the Branch Guard's completion so its
+# definition comes from the default branch, and it forwards exactly the Flama
+# App credential pair the platform's publish job needs. A fork head never
+# reaches it: the caller checks the head repository before calling.
+for profile in fast major; do
+  template="$ROOT_DIR/templates/$profile/.github/workflows/flama-preflight.yml.tmpl"
+  [[ -f "$template" ]] || { echo "missing preflight workflow template" >&2; exit 1; }
+  grep -Fqx 'name: Flama Preflight' "$template"
+  grep -Fqx '  workflow_run:' "$template"
+  grep -Fqx '    workflows: [Flama Branch Guard]' "$template"
+  grep -Fqx 'permissions:' "$template"
+  grep -Fqx '  contents: read' "$template"
+  grep -Fqx '  checks: read' "$template"
+  grep -Fq "github.event.workflow_run.head_repository.full_name == github.repository" "$template"
+  grep -Fq "github.event.workflow_run.conclusion == 'success'" "$template"
+  grep -Fq '@__FLAMA_PLATFORM_REF__' "$template"
+  grep -Fqx '      head-sha: ${{ github.event.workflow_run.head_sha }}' "$template"
+  grep -Fqx '      app-slug: __FLAMA_PAPERCLIP_APP_SLUG__' "$template"
+  grep -Fqx '      platform-sha: __FLAMA_PLATFORM_REF__' "$template"
+  grep -Fqx '    secrets:' "$template"
+  grep -Fqx '      FLAMA_APP_ID: ${{ secrets.FLAMA_APP_ID }}' "$template"
+  grep -Fqx '      FLAMA_APP_PRIVATE_KEY: ${{ secrets.FLAMA_APP_PRIVATE_KEY }}' "$template"
+  if grep -Eq 'pull_request_target|pull_request:|id-token:|secrets: inherit' "$template"; then
+    echo "preflight workflow template violates the trust boundary" >&2
+    exit 1
+  fi
+  if grep -Eo 'secrets\.[A-Za-z0-9_]+' "$template" | grep -Evq '^secrets\.FLAMA_APP_(ID|PRIVATE_KEY)$'; then
+    echo "preflight workflow template forwards a secret outside the Flama App credential pair" >&2
+    exit 1
+  fi
+done
+grep -Fqx '      base-branch: main' "$ROOT_DIR/templates/fast/.github/workflows/flama-preflight.yml.tmpl"
+grep -Fqx '      base-branch: dev' "$ROOT_DIR/templates/major/.github/workflows/flama-preflight.yml.tmpl"
+
 # Auto-merge must know whether the merge gate exists, or it fails closed on a
 # repository the gate is already covering.
 for profile in fast major; do

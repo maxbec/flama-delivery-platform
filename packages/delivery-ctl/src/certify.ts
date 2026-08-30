@@ -18,7 +18,7 @@ export interface PreflightRun {
   readonly baseSha: string;
   readonly startedAt: string;
   readonly finishedAt: string;
-  readonly runnerClass: "paperclip_ephemeral";
+  readonly runnerClass: "paperclip_ephemeral" | "github_actions";
   readonly releaseImpact: "none" | "patch" | "minor" | "major";
   readonly status: "passed" | "failed";
   readonly commands: readonly {

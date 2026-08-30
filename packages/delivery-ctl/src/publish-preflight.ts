@@ -10,7 +10,7 @@ import {
 
 /**
  * Runs the preflight chain end to end for one pull request head and publishes
- * the `Paperclip Preflight` check the policy gate requires.
+ * the `Flama Preflight` check the gates require.
  *
  * Each stage already existed — `preflight`, `certify`, `publish-check` — and
  * none of them had a caller, which is why the gate has never once been
@@ -66,6 +66,13 @@ export interface PublishPreflightInput {
   readonly commandTimeoutMilliseconds?: number;
   readonly fetchImplementation?: FetchImplementation;
   readonly now?: () => Date;
+  /**
+   * Also publish the retired `Paperclip Preflight` name, with the same digest,
+   * for consumers whose pinned platform still looks for it. Transitional: it
+   * is what lets the re-rendering pull requests merge through the older merge
+   * gate they were opened under, and it goes away with the last consumer.
+   */
+  readonly publishLegacyCheck?: boolean;
 }
 
 export type PublishPreflightResult =
@@ -171,29 +178,31 @@ export async function publishPreflight(
 
   await assertRepositoryEligible(input.repository, token.reveal(), fetchImplementation);
 
-  const check = await publishCheck(
-    {
-      schemaVersion: 1,
-      repository: {
-        nameWithOwner: input.repository,
-        disposition: "in_scope",
-        mutationAllowed: true,
-        isFork: false,
-        isArchived: false,
-      },
-      publisher: {
-        controller: binding.controller,
-        appSlug: binding.appSlug,
-        tokenScope: "single-repository-checks-write",
-        apiVersion: githubApiVersion,
-      },
-      evidence,
+  const publishInput = {
+    schemaVersion: 1 as const,
+    repository: {
+      nameWithOwner: input.repository,
+      disposition: "in_scope" as const,
+      mutationAllowed: true as const,
+      isFork: false as const,
+      isArchived: false as const,
     },
-    new GitHubRestCheckClient(
-      { FLAMA_GITHUB_APP_INSTALLATION_TOKEN: token.reveal() },
-      fetchImplementation,
-    ),
+    publisher: {
+      controller: binding.controller,
+      appSlug: binding.appSlug,
+      tokenScope: "single-repository-checks-write" as const,
+      apiVersion: githubApiVersion,
+    },
+    evidence,
+  };
+  const client = new GitHubRestCheckClient(
+    { FLAMA_GITHUB_APP_INSTALLATION_TOKEN: token.reveal() },
+    fetchImplementation,
   );
+  const check = await publishCheck(publishInput, client);
+  if (input.publishLegacyCheck === true) {
+    await publishCheck(publishInput, client, { legacyName: true });
+  }
 
   return { status: "published", check };
 }
