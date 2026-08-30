@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.13](https://github.com/maxbec/flama-delivery-platform/compare/v0.5.12...v0.5.13) (2026-08-30)
+
+
+### ✨ Features
+
+* **preflight:** publish Flama Preflight from the consumer's own workflow ([#69](https://github.com/maxbec/flama-delivery-platform/issues/69)) ([aa96e93](https://github.com/maxbec/flama-delivery-platform/commit/aa96e93f585443afecf89d216f2354d9eaab3226))
+
 ## [0.5.12](https://github.com/maxbec/flama-delivery-platform/compare/v0.5.11...v0.5.12) (2026-08-25)
 
 
