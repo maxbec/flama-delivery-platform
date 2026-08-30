@@ -77,6 +77,7 @@ function input(): PublishCheckInput {
 class FakeCheckClient implements GitHubCheckClient {
   scopeAssertions: string[] = [];
   createCalls: GitHubCheckRequest[] = [];
+  updateCalls: Array<{ readonly checkRunId: number; readonly request: GitHubCheckRequest }> = [];
 
   constructor(readonly existing: readonly RemoteCheckRun[] = []) {}
 
@@ -86,6 +87,23 @@ class FakeCheckClient implements GitHubCheckClient {
 
   async listCheckRuns(): Promise<readonly RemoteCheckRun[]> {
     return this.existing;
+  }
+
+  async updateCheckRun(
+    _repository: string,
+    checkRunId: number,
+    request: GitHubCheckRequest,
+  ): Promise<RemoteCheckRun> {
+    this.updateCalls.push({ checkRunId, request });
+    return {
+      id: checkRunId,
+      name: request.name,
+      headSha: request.headSha,
+      externalId: request.externalId,
+      status: request.status,
+      conclusion: request.conclusion,
+      appSlug: "flama-maxbec-delivery",
+    };
   }
 
   async createCheckRun(_repository: string, request: GitHubCheckRequest): Promise<RemoteCheckRun> {
@@ -102,7 +120,7 @@ class FakeCheckClient implements GitHubCheckClient {
   }
 }
 
-describe("Paperclip preflight check publication", () => {
+describe("Flama preflight check publication", () => {
   it("plans a minimal exact-SHA success check without repository identifiers", () => {
     const result = planPublishCheck(input());
 
@@ -110,7 +128,7 @@ describe("Paperclip preflight check publication", () => {
       status: "planned",
       headSha: "a".repeat(40),
       check: {
-        name: "Paperclip Preflight",
+        name: "Flama Preflight",
         status: "completed",
         conclusion: "success",
       },
@@ -169,9 +187,9 @@ describe("Paperclip preflight check publication", () => {
     const wrongApp = new FakeCheckClient([
       {
         id: 7,
-        name: "Paperclip Preflight",
+        name: "Flama Preflight",
         headSha: valid.evidence.headSha,
-        externalId: `paperclip-preflight:${valid.evidence.signature.payloadDigest}`,
+        externalId: `flama-preflight:${valid.evidence.signature.payloadDigest}`,
         status: "completed",
         conclusion: "success",
         appSlug: "untrusted-app",
@@ -221,9 +239,9 @@ describe("Paperclip preflight check publication", () => {
       new Response(
         JSON.stringify({
           id: 42,
-          name: "Paperclip Preflight",
+          name: "Flama Preflight",
           head_sha: "a".repeat(40),
-          external_id: `paperclip-preflight:${signedEvidence().signature.payloadDigest}`,
+          external_id: `flama-preflight:${signedEvidence().signature.payloadDigest}`,
           status: "completed",
           conclusion: "success",
           app: { slug: "flama-maxbec-delivery" },
@@ -247,17 +265,116 @@ describe("Paperclip preflight check publication", () => {
     });
     expect(calls.map(({ url }) => url)).toEqual([
       "https://api.github.com/installation/repositories?per_page=2",
-      `https://api.github.com/repos/maxbec/example/commits/${"a".repeat(40)}/check-runs?check_name=Paperclip%20Preflight&filter=all&per_page=100`,
+      `https://api.github.com/repos/maxbec/example/commits/${"a".repeat(40)}/check-runs?check_name=Flama%20Preflight&filter=all&per_page=100`,
       "https://api.github.com/repos/maxbec/example/check-runs",
     ]);
     expect(calls.every(({ init }) => (init.headers as Record<string, string>)["X-GitHub-Api-Version"] === "2026-03-10")).toBe(true);
     const createBody = JSON.parse(String(calls[2]?.init.body)) as Record<string, unknown>;
     expect(createBody).toMatchObject({
-      name: "Paperclip Preflight",
+      name: "Flama Preflight",
       head_sha: "a".repeat(40),
       status: "completed",
       conclusion: "success",
     });
     expect(JSON.stringify(calls.map(({ init }) => init.body))).not.toContain(protectedValue);
+  });
+});
+
+/*
+ * The Actions publisher announces an in-progress `Flama Preflight` check the
+ * moment it starts, so the pull request shows what is running and where. The
+ * verdict must then complete that same check run rather than sit beside it as
+ * a second one: two checks of one name, one of them forever in progress, is
+ * exactly the ambiguity the gates were written to refuse.
+ */
+describe("completing an announced check", () => {
+  const pending = (over: Partial<RemoteCheckRun> = {}): RemoteCheckRun => ({
+    id: 7,
+    name: "Flama Preflight",
+    headSha: "a".repeat(40),
+    externalId: "flama-preflight:pending:123",
+    status: "in_progress",
+    conclusion: null,
+    appSlug: "flama-maxbec-delivery",
+    ...over,
+  });
+
+  it("completes the pending check the workflow announced instead of creating a second one", async () => {
+    const client = new FakeCheckClient([pending()]);
+    const result = await publishCheck(input(), client, { pendingCheckRunId: 7 });
+
+    expect(result).toMatchObject({
+      status: "published",
+      check: { name: "Flama Preflight", status: "completed", conclusion: "success" },
+      publication: { checkRunId: 7, reused: false },
+    });
+    expect(client.createCalls).toHaveLength(0);
+    expect(client.updateCalls).toHaveLength(1);
+    expect(client.updateCalls[0]?.checkRunId).toBe(7);
+    expect(client.updateCalls[0]?.request.externalId).toMatch(/^flama-preflight:sha256:[0-9a-f]{64}$/u);
+  });
+
+  it("refuses to complete a pending check that belongs to another app or another head", async () => {
+    for (const foreign of [pending({ appSlug: "untrusted-app" }), pending({ headSha: "b".repeat(40) })]) {
+      const client = new FakeCheckClient([foreign]);
+      await expect(publishCheck(input(), client, { pendingCheckRunId: 7 })).rejects.toEqual(
+        new PublishCheckError("github_check_conflict"),
+      );
+      expect(client.updateCalls).toHaveLength(0);
+      expect(client.createCalls).toHaveLength(0);
+    }
+  });
+
+  /*
+   * The sweep lists the head's checks right before it publishes. A check the
+   * Actions publisher announced in the meantime means that publisher owns the
+   * verdict; creating a second completed check beside it would leave two
+   * checks of one name, which the gates refuse.
+   */
+  it("yields to a check another publisher announced meanwhile", async () => {
+    const client = new FakeCheckClient([pending()]);
+    await expect(publishCheck(input(), client)).rejects.toEqual(
+      new PublishCheckError("github_check_pending"),
+    );
+    expect(client.createCalls).toHaveLength(0);
+    expect(client.updateCalls).toHaveLength(0);
+  });
+
+  it("creates the check when the pending one it was told about no longer exists", async () => {
+    const client = new FakeCheckClient([]);
+    const result = await publishCheck(input(), client, { pendingCheckRunId: 7 });
+
+    expect(result).toMatchObject({ status: "published", publication: { checkRunId: 42, reused: false } });
+    expect(client.updateCalls).toHaveLength(0);
+    expect(client.createCalls).toHaveLength(1);
+  });
+});
+
+/*
+ * Consumers pinned to a platform older than the rename still look for a check
+ * called `Paperclip Preflight`. The sweep publishes that name alongside the new
+ * one while those consumers are re-rendered, so a rollout pull request merges
+ * through its own, older, merge gate.
+ */
+describe("legacy check name", () => {
+  it("publishes under the retired Paperclip name on request, with the same digest", async () => {
+    const client = new FakeCheckClient();
+    const result = await publishCheck(input(), client, { legacyName: true });
+
+    expect(result).toMatchObject({
+      status: "published",
+      check: { name: "Paperclip Preflight", status: "completed", conclusion: "success" },
+    });
+    expect(result.check.externalId).toBe(`paperclip-preflight:${result.evidenceDigest}`);
+    expect(client.createCalls[0]).toMatchObject({
+      name: "Paperclip Preflight",
+      output: { title: "Paperclip preflight passed" },
+    });
+  });
+
+  it("plans under the new name by default", () => {
+    const planned = planPublishCheck(input());
+    expect(planned.check.name).toBe("Flama Preflight");
+    expect(planned.check.externalId).toBe(`flama-preflight:${planned.evidenceDigest}`);
   });
 });

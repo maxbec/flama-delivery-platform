@@ -35,7 +35,7 @@ describe("template renderer", () => {
     const outputRoot = await mkdtemp(join(tmpdir(), "flama-render-"));
     const dryRun = await renderTemplates({ repositoryRoot, outputRoot, input, dryRun: true });
 
-    expect(dryRun.files).toHaveLength(11);
+    expect(dryRun.files).toHaveLength(12);
     expect(dryRun.files.every(({ status }) => status === "planned")).toBe(true);
     await expect(access(join(outputRoot, ".github", "dependabot.yml"))).rejects.toThrow();
 
@@ -56,6 +56,16 @@ describe("template renderer", () => {
     const final = await readFile(join(outputRoot, ".github/workflows/flama-final.yml"), "utf8");
     expect(final).toContain("pull_request:");
     expect(final).not.toContain("push:");
+    // The preflight publisher runs from the default branch on the Branch
+    // Guard's completion, as the owner's App, without Paperclip in the loop.
+    const preflight = await readFile(join(outputRoot, ".github/workflows/flama-preflight.yml"), "utf8");
+    expect(preflight).toContain(`@${input.platformRef}`);
+    expect(preflight).toContain("workflow_run:");
+    expect(preflight).toContain("workflows: [Flama Branch Guard]");
+    expect(preflight).toContain("base-branch: main");
+    expect(preflight).toContain(`app-slug: ${input.paperclip.appSlug}`);
+    expect(preflight).not.toContain("pull_request_target");
+    expect(preflight).not.toContain("__FLAMA_");
     const dependabot = parseYaml(
       await readFile(join(outputRoot, ".github/dependabot.yml"), "utf8"),
     ) as { updates: Array<Record<string, unknown>> };
@@ -165,7 +175,7 @@ describe("template renderer", () => {
       dryRun: false,
     });
 
-    expect(rendered.files).toHaveLength(9);
+    expect(rendered.files).toHaveLength(10);
     const dependabot = parseYaml(
       await readFile(join(outputRoot, ".github/dependabot.yml"), "utf8"),
     ) as { updates: Array<Record<string, unknown>> };

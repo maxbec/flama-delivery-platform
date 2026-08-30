@@ -263,8 +263,37 @@ export interface OpenPullRequestHead {
   readonly headSha: string;
   readonly baseSha: string;
   readonly isFork: boolean;
-  /** True when an app-authored Paperclip Preflight already passed for this head. */
+  /**
+   * True when the owner's App already has a `Flama Preflight` check on this
+   * head, in any state: published, failed, or announced by the Actions
+   * publisher and still running. The sweep leaves all three alone.
+   */
   readonly hasPreflight: boolean;
+  /**
+   * True when the repository's default branch carries the generated
+   * `flama-preflight.yml`: the repository publishes its own check from GitHub
+   * Actions, and the sweep has no business with any of its heads. Read from
+   * the default branch, not the head, because that is where `workflow_run`
+   * reads it from.
+   */
+  readonly publishesOwnPreflight: boolean;
+}
+
+async function repositoryPublishesOwnPreflight(
+  fetchImplementation: FetchImplementation,
+  repository: string,
+  token: string,
+): Promise<boolean> {
+  try {
+    await requestJson(
+      fetchImplementation,
+      `/repos/${repository}/contents/.github/workflows/flama-preflight.yml`,
+      token,
+    );
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -299,9 +328,15 @@ async function headIsPreflightable(
 }
 
 /**
- * A head already carrying a successful app-authored preflight needs no work.
- * The app slug is checked as well as the name: only the owner's own App may
- * satisfy the gate, so a same-named check from anything else must not count.
+ * A head already carrying an app-authored preflight needs no work from the
+ * sweep. The app slug is checked as well as the name: only the owner's own App
+ * may satisfy the gate, so a same-named check from anything else must not
+ * count. Any state counts, not only success: the consumer's own Actions
+ * workflow announces its check before it builds, and a sweep that recognised
+ * only a completed check would build the same head a second time and then
+ * collide with the announced check at publication. A failed check counts too —
+ * the verdict stands until a new head is pushed, and rebuilding a head that
+ * already failed every few minutes is what the sweep used to do.
  */
 async function hasAppPreflight(
   fetchImplementation: FetchImplementation,
@@ -323,10 +358,10 @@ async function hasAppPreflight(
   if (!isRecord(runs) || !Array.isArray(runs["check_runs"])) return false;
   return runs["check_runs"].some(
     (run) =>
-      isRecord(run) && run["name"] === "Paperclip Preflight" && run["conclusion"] === "success" &&
+      isRecord(run) && run["name"] === "Flama Preflight" &&
       isRecord(run["app"]) && run["app"]["slug"] === appSlug &&
       typeof run["external_id"] === "string" &&
-      /^paperclip-preflight:sha256:[0-9a-f]{64}$/u.test(run["external_id"]),
+      run["external_id"].startsWith("flama-preflight:"),
   );
 }
 
@@ -390,6 +425,7 @@ export async function discoverOpenPullRequests(
     if (!isRecord(entry) || typeof entry["full_name"] !== "string") continue;
     if (entry["archived"] === true || entry["disabled"] === true) continue;
     const fullName = entry["full_name"];
+    const publishesOwnPreflight = await repositoryPublishesOwnPreflight(fetchImplementation, fullName, token);
     const pulls = await requestJson(
       fetchImplementation,
       `/repos/${fullName}/pulls?state=open&per_page=100`,
@@ -411,6 +447,7 @@ export async function discoverOpenPullRequests(
         headSha: head["sha"],
         baseSha: base["sha"],
         hasPreflight: await hasAppPreflight(fetchImplementation, fullName, head["sha"], token, appSlug),
+        publishesOwnPreflight,
         // A head from another repository is a fork contribution; publication
         // refuses it later, but recording it keeps the reason visible.
         isFork: !isRecord(headRepository) || headRepository["full_name"] !== fullName,

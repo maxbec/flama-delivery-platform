@@ -4,13 +4,14 @@ import { runPreflight } from "./preflight.js";
 import {
   GitHubRestCheckClient,
   publishCheck,
+  PublishCheckError,
   type DeliveryController,
   type PublishCheckResult,
 } from "./publish-check.js";
 
 /**
  * Runs the preflight chain end to end for one pull request head and publishes
- * the `Paperclip Preflight` check the policy gate requires.
+ * the `Flama Preflight` check the gates require.
  *
  * Each stage already existed — `preflight`, `certify`, `publish-check` — and
  * none of them had a caller, which is why the gate has never once been
@@ -66,10 +67,19 @@ export interface PublishPreflightInput {
   readonly commandTimeoutMilliseconds?: number;
   readonly fetchImplementation?: FetchImplementation;
   readonly now?: () => Date;
+  /**
+   * Also publish the retired `Paperclip Preflight` name, with the same digest,
+   * for consumers whose pinned platform still looks for it. Transitional: it
+   * is what lets the re-rendering pull requests merge through the older merge
+   * gate they were opened under, and it goes away with the last consumer.
+   */
+  readonly publishLegacyCheck?: boolean;
 }
 
 export type PublishPreflightResult =
   | { readonly status: "published"; readonly check: PublishCheckResult }
+  /** The repository's own Actions publisher announced this head meanwhile; its verdict stands. */
+  | { readonly status: "superseded" }
   | {
     readonly status: "preflight_failed";
     readonly failedCommand: string | null;
@@ -171,29 +181,44 @@ export async function publishPreflight(
 
   await assertRepositoryEligible(input.repository, token.reveal(), fetchImplementation);
 
-  const check = await publishCheck(
-    {
-      schemaVersion: 1,
-      repository: {
-        nameWithOwner: input.repository,
-        disposition: "in_scope",
-        mutationAllowed: true,
-        isFork: false,
-        isArchived: false,
-      },
-      publisher: {
-        controller: binding.controller,
-        appSlug: binding.appSlug,
-        tokenScope: "single-repository-checks-write",
-        apiVersion: githubApiVersion,
-      },
-      evidence,
+  const publishInput = {
+    schemaVersion: 1 as const,
+    repository: {
+      nameWithOwner: input.repository,
+      disposition: "in_scope" as const,
+      mutationAllowed: true as const,
+      isFork: false as const,
+      isArchived: false as const,
     },
-    new GitHubRestCheckClient(
-      { FLAMA_GITHUB_APP_INSTALLATION_TOKEN: token.reveal() },
-      fetchImplementation,
-    ),
+    publisher: {
+      controller: binding.controller,
+      appSlug: binding.appSlug,
+      tokenScope: "single-repository-checks-write" as const,
+      apiVersion: githubApiVersion,
+    },
+    evidence,
+  };
+  const client = new GitHubRestCheckClient(
+    { FLAMA_GITHUB_APP_INSTALLATION_TOKEN: token.reveal() },
+    fetchImplementation,
   );
+  // Legacy name first. Discovery keys on the new name, so a pass that
+  // publishes the legacy check and then fails on the new one is simply
+  // retried whole next time (the legacy publication reuses itself); the
+  // reverse order would leave a consumer pinned to the old platform without
+  // the check its gates need, for good.
+  if (input.publishLegacyCheck === true) {
+    await publishCheck(publishInput, client, { legacyName: true });
+  }
+  let check: PublishCheckResult;
+  try {
+    check = await publishCheck(publishInput, client);
+  } catch (error) {
+    if (error instanceof PublishCheckError && error.code === "github_check_pending") {
+      return { status: "superseded" };
+    }
+    throw error;
+  }
 
   return { status: "published", check };
 }

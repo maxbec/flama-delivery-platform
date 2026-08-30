@@ -59,7 +59,7 @@ jq -e '
   .ok == true and
   .command == "bootstrap" and
   .result.status == "planned" and
-  (.result.generated.files | length) == 11 and
+  (.result.generated.files | length) == 12 and
   (.result.repositoryOwned | length) == 7
 ' "$FIRST/bootstrap-plan.json" >/dev/null
 if grep -Eq 'maxbec/example|project-1|workspace-1' "$FIRST/bootstrap-plan.json"; then
@@ -126,7 +126,7 @@ jq -e '
   .ok == true and
   .command == "publish-check" and
   .result.status == "planned" and
-  .result.check.name == "Paperclip Preflight" and
+  .result.check.name == "Flama Preflight" and
   .result.check.conclusion == "success"
 ' "$FIRST/publish-check-plan.json" >/dev/null
 if grep -Eq 'maxbec/example|runner-example' "$FIRST/publish-check-plan.json"; then

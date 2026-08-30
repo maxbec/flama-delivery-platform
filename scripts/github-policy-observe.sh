@@ -138,7 +138,7 @@ for branch in main dev; do
       {
       name: $name,
       requiredChecks: ([(.required_status_checks.contexts // [])[]
-        | select(. == "branch-guard / Flama Branch Guard" or . == "Paperclip Preflight"
+        | select(. == "branch-guard / Flama Branch Guard" or . == "Flama Preflight"
                  or . == "policy / Flama Policy Gate"
                  or . == "final / Flama Final Gate")] | unique),
       pullRequestRequired: (.required_pull_request_reviews != null),

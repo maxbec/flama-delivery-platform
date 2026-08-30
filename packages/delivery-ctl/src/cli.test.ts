@@ -586,7 +586,7 @@ describe("delivery CLI", () => {
       result: {
         status: "planned",
         headSha: "a".repeat(40),
-        check: { name: "Paperclip Preflight", conclusion: "success" },
+        check: { name: "Flama Preflight", conclusion: "success" },
       },
     });
     expect(io.stdout).not.toContain("maxbec/example");

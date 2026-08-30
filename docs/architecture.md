@@ -8,7 +8,7 @@ choices that the plan leaves open.
 
 | Actor | Authority |
 | --- | --- |
-| Paperclip | Intent, task readiness, preflight, repair, orchestration, evidence |
+| Paperclip | Intent, task readiness, repair, orchestration, evidence; may accelerate preflight |
 | GitHub | Source, protected merges, final verification, releases, deploy execution |
 | Max | Production authorization by approving the exact deployment PR SHA |
 | Coding agent | Assigned source/spec changes in one isolated task worktree |
@@ -26,7 +26,12 @@ stable. Classification defaults to Fast and selects Major only for a strong
 integration, staging, migration, coupling, coordination, or production-risk
 need. Profile changes are explicit migrations.
 
-Every code PR SHA requires signed `Paperclip Preflight` evidence. GitHub owns
+Every code PR SHA requires signed `Flama Preflight` evidence, published as
+the owner's Flama delivery App from the repository's own generated workflow
+(`reusable-preflight.yml`, trusted because it runs from the default branch on
+`workflow_run`) and, where ai-vm is up, from the Paperclip sweep as an
+accelerator. The pipeline does not depend on Paperclip; Paperclip consumes the
+pipeline's evidence. GitHub owns
 the authoritative final build/test gate at the `main` boundary. Production is a
 separate deployment PR and never follows automatically from a code merge alone.
 

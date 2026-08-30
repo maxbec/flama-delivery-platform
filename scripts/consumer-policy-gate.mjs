@@ -228,7 +228,13 @@ async function assertEntrypoints(root) {
 }
 
 async function assertGeneratedFiles(root, profile, platformSha, releaseEnabled) {
-  const workflowNames = ["flama-branch-guard.yml", "flama-deploy.yml", "flama-final.yml", "flama-policy.yml"];
+  const workflowNames = [
+    "flama-branch-guard.yml",
+    "flama-deploy.yml",
+    "flama-final.yml",
+    "flama-policy.yml",
+    "flama-preflight.yml",
+  ];
   for (const workflowName of workflowNames) {
     const source = await readRegular(root, `.github/workflows/${workflowName}`);
     if (

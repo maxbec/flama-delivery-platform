@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/preflight-evidence.schema.json",
-  "title": "Controller-signed Paperclip preflight evidence",
+  "title": "Signed Flama preflight evidence",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "repository", "headSha", "baseSha", "startedAt", "finishedAt", "runner", "commands", "releaseImpact", "signature"],
@@ -17,7 +17,7 @@
       "additionalProperties": false,
       "required": ["class", "id", "controller"],
       "properties": {
-        "class": { "const": "paperclip_ephemeral" },
+        "class": { "enum": ["paperclip_ephemeral", "github_actions"] },
         "id": { "type": "string", "minLength": 1 },
         "controller": { "type": "string", "pattern": "^(maxbec|navigaite|edilio)-delivery-controller$" }
       }

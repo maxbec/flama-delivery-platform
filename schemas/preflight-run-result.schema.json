@@ -12,7 +12,7 @@
     "baseSha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
     "startedAt": { "type": "string", "format": "date-time" },
     "finishedAt": { "type": "string", "format": "date-time" },
-    "runnerClass": { "const": "paperclip_ephemeral" },
+    "runnerClass": { "enum": ["paperclip_ephemeral", "github_actions"] },
     "releaseImpact": { "enum": ["none", "patch", "minor", "major"] },
     "status": { "enum": ["passed", "failed"] },
     "commands": {

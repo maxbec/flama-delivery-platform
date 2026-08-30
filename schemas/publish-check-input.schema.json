@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/publish-check-input.schema.json",
-  "title": "Controller-authorized Paperclip Preflight check publication input",
+  "title": "Controller-authorized Flama Preflight check publication input",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "repository", "publisher", "evidence"],
@@ -30,6 +30,11 @@
         "apiVersion": { "const": "2026-03-10" }
       }
     },
-    "evidence": { "type": "object" }
+    "evidence": { "type": "object" },
+    "pendingCheckRunId": {
+      "description": "Check run this App announced as in progress for the head; completed in place with the verdict.",
+      "type": "integer",
+      "minimum": 1
+    }
   }
 }

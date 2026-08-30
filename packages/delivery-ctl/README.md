@@ -102,10 +102,14 @@ Implemented commands:
   so those refusals and the choice of who may run it are the whole safeguard.
 - `publish-check --input <controller-evidence>` validates the canonical signed
   evidence digest, exact command sequence, owner/controller binding, and
-  fork/archive scope before planning or publishing `Paperclip Preflight` for the
+  fork/archive scope before planning or publishing `Flama Preflight` for the
   exact SHA. Publication accepts only a short-lived `ghs_` installation token
   from the process environment, proves it is scoped to exactly one repository,
-  and never emits the token or GitHub error bodies.
+  and never emits the token or GitHub error bodies. An input naming
+  `pendingCheckRunId` completes the check the Actions publisher announced
+  instead of creating a second one. The generated `flama-preflight.yml` runs
+  `preflight`, `certify` and `publish-check` in that order on the consumer's
+  own runner; see `docs/operations/preflight-checks.md`.
 - `promote --input <promotion-plan> --output <evidence>` creates or reuses the
   Major-profile `dev → main` pull request only when both protected branches
   match their recorded SHAs, `dev` is strictly ahead and not behind, and the

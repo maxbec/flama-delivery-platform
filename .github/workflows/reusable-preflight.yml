@@ -1,0 +1,538 @@
+name: Reusable Preflight
+
+# Runs `./scripts/delivery buildable` and `./scripts/delivery affected` on the
+# exact pull-request head and publishes the App-authored `Flama Preflight`
+# check that the policy gate, the merge gate and the push guard require.
+#
+# The check used to be published only by a sweep on ai-vm — Paperclip's
+# machine — so the whole delivery pipeline stopped whenever that machine or
+# its timers did. Measured 2026-08-29: `paperclipai.service` was stopped, the
+# sweep timers stopped with it, and every policy gate in the fleet timed out
+# 35 minutes later on a head nobody had preflighted. The pipeline must not
+# depend on Paperclip; Paperclip depends on the pipeline. This workflow is the
+# publisher that lives where the code does. The sweep still runs where it is
+# available, as an accelerator, and finds nothing left to do.
+#
+# Trust. The generated caller runs on `workflow_run` completion of the Branch
+# Guard, and `workflow_run` starts a workflow only from the default branch — so
+# the definition executed here is the one on `dev` or `main`, never the one in
+# the pull request, and a change cannot rewrite the publisher that judges it.
+# That is what makes the App's authorship of the check mean something. The
+# other event that runs a trusted definition against a pull request hands
+# secrets to the job that checks out the change, and the platform forbids it.
+# Here the split is by job: `run` executes the change with no secret and a
+# read-only token; `publish` holds the App credential and checks out nothing
+# but this platform. No step gives the change a token it could write with.
+#
+# What the check proves is unchanged from the sweep: the head's own delivery
+# commands, from a clean checkout of exactly that commit, exited zero —
+# observed by the platform's preflight harness and attested by the owner's
+# App. What the change controls is what those commands do, exactly as before.
+#
+# Runs started by `workflow_run` are attached to the default branch, not to
+# the pull request, so this run itself is invisible on the pull request. The
+# announced check is what the pull request shows: in progress with a link to
+# this run the moment the head is picked up, then the verdict.
+
+on:
+  workflow_call:
+    inputs:
+      head-sha:
+        description: Exact pull-request head SHA the completed Branch Guard ran on
+        required: true
+        type: string
+      base-branch:
+        description: >-
+          Branch feature pull requests target — `dev` on the two-branch
+          profile, `main` on the single-branch one. A head whose pull request
+          targets anything else is left alone: the stable boundary has the
+          Final Gate.
+        required: true
+        type: string
+      app-slug:
+        description: Owner-scoped Flama delivery GitHub App slug that authors the check
+        required: true
+        type: string
+      platform-sha:
+        description: Exact platform commit used by generated callers
+        required: true
+        type: string
+      runner-labels:
+        description: >-
+          JSON array of runs-on labels, e.g. '["self-hosted","mainz-homelab"]'.
+          Defaults to the billed GitHub-hosted runner so public and foreign
+          consumers keep running unchanged.
+        required: false
+        default: '["ubuntu-latest"]'
+        type: string
+    secrets:
+      FLAMA_APP_ID:
+        description: >-
+          Id of the owner's Flama delivery GitHub App — the same App the sweep
+          publishes as, so a check from either publisher satisfies the gates.
+          Optional at the workflow boundary only so a missing secret fails in
+          a job with a message instead of as a silent startup_failure.
+        required: false
+      FLAMA_APP_PRIVATE_KEY:
+        description: Private key of the same App. Must be provided together with FLAMA_APP_ID.
+        required: false
+
+permissions:
+  contents: read
+  checks: read
+  pull-requests: read
+
+# One publication per head at a time. A second run for the same head — the
+# Branch Guard re-run by hand, say — queues rather than races, and then finds
+# the check already published and stands down.
+concurrency:
+  group: flama-preflight-${{ github.repository }}-${{ inputs.head-sha }}
+  cancel-in-progress: false
+
+jobs:
+  # Decides whether there is work, and announces it. Reads the API only; never
+  # checks out or executes anything, which is what makes it safe to hold the
+  # App credential.
+  resolve:
+    name: Flama Preflight Scope
+    runs-on: ${{ fromJSON(inputs.runner-labels) }}
+    timeout-minutes: 5
+    outputs:
+      proceed: ${{ steps.pull.outputs.proceed }}
+      base-sha: ${{ steps.pull.outputs.base-sha }}
+      number: ${{ steps.pull.outputs.number }}
+      pending-check-run-id: ${{ steps.announce.outputs.check-run-id }}
+    steps:
+      - name: Validate exact SHA inputs
+        env:
+          FLAMA_HEAD_SHA: ${{ inputs.head-sha }}
+          FLAMA_PLATFORM_SHA: ${{ inputs.platform-sha }}
+        run: |
+          [[ "$FLAMA_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$FLAMA_PLATFORM_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+      - name: Check App credentials
+        env:
+          FLAMA_APP_ID: ${{ secrets.FLAMA_APP_ID }}
+          FLAMA_APP_PRIVATE_KEY: ${{ secrets.FLAMA_APP_PRIVATE_KEY }}
+        run: |
+          # Without the App this workflow can build but never publish, and an
+          # unpublished preflight looks exactly like a head nobody picked up.
+          # Refuse here, loudly, rather than run the commands for nothing.
+          if [[ -z "$FLAMA_APP_ID" || -z "$FLAMA_APP_PRIVATE_KEY" ]]; then
+            echo '::error::FLAMA_APP_ID and FLAMA_APP_PRIVATE_KEY must both be provided: they are the Flama delivery App this repository publishes its preflight as.'
+            exit 1
+          fi
+
+      - name: Find the pull request this head is the tip of
+        id: pull
+        env:
+          FLAMA_APP_SLUG: ${{ inputs.app-slug }}
+          FLAMA_BASE_BRANCH: ${{ inputs.base-branch }}
+          FLAMA_HEAD_SHA: ${{ inputs.head-sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          # Open, targeting the feature branch, and from this repository: a
+          # fork head must never be built here or lent the App's authority, and
+          # a promotion or release pull request is judged at the stable boundary.
+          # `head.sha` must match — a commit can appear in several pull requests
+          # and only the one it is the tip of is the one being judged.
+          pulls=$(mktemp "$RUNNER_TEMP/flama-pulls-XXXXXX.json")
+          gh api -H 'Accept: application/vnd.github+json' \
+            "/repos/$GITHUB_REPOSITORY/commits/$FLAMA_HEAD_SHA/pulls?per_page=100" > "$pulls" 2>/dev/null \
+            || printf '[]\n' > "$pulls"
+
+          selected=$(jq -c \
+            --arg base "$FLAMA_BASE_BRANCH" \
+            --arg sha "$FLAMA_HEAD_SHA" \
+            --arg repo "$GITHUB_REPOSITORY" \
+            '[.[] | select(
+               .state == "open" and
+               .base.ref == $base and
+               .head.sha == $sha and
+               .head.repo.full_name == $repo
+             )][0] // empty | { number, base: .base.sha }' "$pulls")
+
+          if [[ -z "$selected" ]]; then
+            echo "No open pull request from this repository has $FLAMA_HEAD_SHA as its head against $FLAMA_BASE_BRANCH. Nothing to do."
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          number=$(jq -r '.number' <<< "$selected")
+          base_sha=$(jq -r '.base' <<< "$selected")
+          [[ "$base_sha" =~ ^[0-9a-f]{40}$ ]]
+
+          # Already published — by an earlier run of this workflow or by the
+          # sweep — is done. The predicate is the gates', character for
+          # character. A completed failure is not done: a re-run is the way to
+          # retry a head that failed for reasons outside the change, and the
+          # gates read the latest check of the name.
+          checks=$(mktemp "$RUNNER_TEMP/flama-checks-XXXXXX.json")
+          gh api -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "/repos/$GITHUB_REPOSITORY/commits/$FLAMA_HEAD_SHA/check-runs?check_name=Flama%20Preflight&filter=all&per_page=100" \
+            > "$checks" 2>/dev/null || printf '{"check_runs":[]}\n' > "$checks"
+
+          if jq -e --arg app "$FLAMA_APP_SLUG" --arg sha "$FLAMA_HEAD_SHA" \
+            '[.check_runs[] | select(
+               .name == "Flama Preflight" and
+               .head_sha == $sha and
+               .status == "completed" and
+               .conclusion == "success" and
+               .app.slug == $app and
+               (.external_id | test("^flama-preflight:sha256:[0-9a-f]{64}$"))
+             )] | length >= 1' "$checks" >/dev/null; then
+            echo "Pull request #$number at $FLAMA_HEAD_SHA already carries an App-authored Flama Preflight. Nothing to do."
+            echo "proceed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # A check this App announced and never completed — a runner that
+          # died mid-build — is picked up and completed rather than duplicated.
+          pending=$(jq -r --arg app "$FLAMA_APP_SLUG" --arg sha "$FLAMA_HEAD_SHA" \
+            '[.check_runs[] | select(
+               .name == "Flama Preflight" and .head_sha == $sha and
+               .status != "completed" and .app.slug == $app
+             )] | sort_by(.id) | last | .id // ""' "$checks")
+
+          echo "Pull request #$number at $FLAMA_HEAD_SHA needs a preflight."
+          echo "proceed=true" >> "$GITHUB_OUTPUT"
+          echo "number=$number" >> "$GITHUB_OUTPUT"
+          echo "base-sha=$base_sha" >> "$GITHUB_OUTPUT"
+          echo "pending=$pending" >> "$GITHUB_OUTPUT"
+
+      # Scoped to this repository and to checks:write: enough to announce and
+      # to complete the check, and nothing else, for the minutes it lives.
+      - name: Mint the App token that announces the check
+        id: app-token
+        if: ${{ steps.pull.outputs.proceed == 'true' }}
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.FLAMA_APP_ID }}
+          private-key: ${{ secrets.FLAMA_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-checks: write
+
+      # The pull request shows this at once: what is running, and where. The
+      # sweep sees it too and leaves the head alone, so the two publishers do
+      # not build the same head twice and collide at publication.
+      - name: Announce the check as in progress
+        id: announce
+        if: ${{ steps.pull.outputs.proceed == 'true' }}
+        env:
+          FLAMA_APP_SLUG: ${{ inputs.app-slug }}
+          FLAMA_HEAD_SHA: ${{ inputs.head-sha }}
+          FLAMA_PENDING: ${{ steps.pull.outputs.pending }}
+          FLAMA_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          if [[ -n "$FLAMA_PENDING" ]]; then
+            gh api -X PATCH -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2026-03-10' \
+              "/repos/$GITHUB_REPOSITORY/check-runs/$FLAMA_PENDING" \
+              -f status=in_progress \
+              -f details_url="$FLAMA_RUN_URL" \
+              -f 'output[title]=Flama preflight running' \
+              -f "output[summary]=Picked up again by $FLAMA_RUN_URL after an earlier attempt did not complete." \
+              >/dev/null
+            echo "check-run-id=$FLAMA_PENDING" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          created=$(gh api -X POST -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "/repos/$GITHUB_REPOSITORY/check-runs" \
+            -f name='Flama Preflight' \
+            -f head_sha="$FLAMA_HEAD_SHA" \
+            -f external_id="flama-preflight:pending:$GITHUB_RUN_ID" \
+            -f status=in_progress \
+            -f details_url="$FLAMA_RUN_URL" \
+            -f 'output[title]=Flama preflight running' \
+            -f "output[summary]=Running ./scripts/delivery buildable and ./scripts/delivery affected on $FLAMA_HEAD_SHA in $FLAMA_RUN_URL." \
+            --jq '.id')
+          [[ "$created" =~ ^[0-9]+$ ]]
+          echo "check-run-id=$created" >> "$GITHUB_OUTPUT"
+
+  # Executes the change. No secret reaches this job, and its token can read
+  # and nothing else. It is the only job that checks out consumer code.
+  run:
+    name: Flama Preflight Run
+    needs: resolve
+    if: ${{ needs.resolve.outputs.proceed == 'true' }}
+    runs-on: ${{ fromJSON(inputs.runner-labels) }}
+    # Preflight gives each delivery command a CI job's worth of time, twenty
+    # minutes, and an install from cold comes before them.
+    timeout-minutes: 50
+    permissions:
+      contents: read
+    outputs:
+      # The run result, base64 so a single output line carries the JSON. It is
+      # telemetry for the evidence; the verdict is this job's result, which the
+      # change cannot write.
+      result: ${{ steps.result.outputs.result }}
+    steps:
+      - name: Check out exact platform
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: maxbec/flama-delivery-platform
+          ref: ${{ inputs.platform-sha }}
+          path: platform
+          persist-credentials: false
+
+      # Full history: preflight verifies the base commit is reachable from the
+      # checkout before it runs anything.
+      - name: Check out exact consumer head
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.head-sha }}
+          fetch-depth: 0
+          path: consumer
+          persist-credentials: false
+
+      # The platform's own Node, which is also what the sweep on ai-vm ran the
+      # consumers' commands under. Corepack makes the consumer's declared
+      # package manager resolvable for the lockfile-pinned install its
+      # delivery dispatcher performs.
+      - name: Set up Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: platform/.nvmrc
+
+      # The read-only workflow token is what verifies the release's provenance
+      # attestation; it is the one token this job has, and it can write nothing.
+      - name: Obtain the platform CLI
+        id: cli
+        env:
+          FLAMA_PLATFORM_SHA: ${{ inputs.platform-sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          corepack enable
+          bash platform/scripts/obtain-cli.sh "$FLAMA_PLATFORM_SHA" "$RUNNER_TEMP/flama-cli" platform
+          echo "path=$RUNNER_TEMP/flama-cli/flama-delivery-ctl.js" >> "$GITHUB_OUTPUT"
+
+      - name: Run the delivery commands on the exact head
+        id: preflight
+        env:
+          FLAMA_BASE_SHA: ${{ needs.resolve.outputs.base-sha }}
+          FLAMA_CLI: ${{ steps.cli.outputs.path }}
+          FLAMA_HEAD_SHA: ${{ inputs.head-sha }}
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d "$RUNNER_TEMP/flama-preflight-XXXXXX")
+          echo "work=$work" >> "$GITHUB_OUTPUT"
+          jq -n --arg repo "$GITHUB_REPOSITORY" --arg head "$FLAMA_HEAD_SHA" --arg base "$FLAMA_BASE_SHA" '{
+            schemaVersion: 1,
+            repository: $repo,
+            headSha: $head,
+            baseSha: $base,
+            releaseImpact: "none",
+            runnerClass: "github_actions"
+          }' > "$work/input.json"
+          cd consumer
+          node "$FLAMA_CLI" preflight --input "$work/input.json" --output "$work/result.json"
+
+      # Runs whether the commands passed or failed: a failed preflight is a
+      # result the publish job turns into a red check, not a missing one.
+      - name: Record the run result
+        id: result
+        if: ${{ always() && steps.preflight.outputs.work != '' }}
+        env:
+          FLAMA_WORK: ${{ steps.preflight.outputs.work }}
+        run: |
+          set -euo pipefail
+          if [[ -f "$FLAMA_WORK/result.json" ]]; then
+            printf 'result=%s\n' "$(base64 -w0 < "$FLAMA_WORK/result.json")" >> "$GITHUB_OUTPUT"
+          fi
+
+  # Attests the verdict as the owner's App. Holds the App credential and
+  # checks out nothing but the platform, so no consumer code ever runs beside
+  # it. Runs on a failed, cancelled or timed-out build too: the announced
+  # check must complete either way, or it stays in progress and holds the
+  # merge with nothing left to wake it.
+  publish:
+    name: Flama Preflight Publish
+    needs: [resolve, run]
+    if: ${{ always() && needs.resolve.outputs.proceed == 'true' }}
+    runs-on: ${{ fromJSON(inputs.runner-labels) }}
+    timeout-minutes: 10
+    steps:
+      - name: Mint the App token that completes the check
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          app-id: ${{ secrets.FLAMA_APP_ID }}
+          private-key: ${{ secrets.FLAMA_APP_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-checks: write
+
+      # Success needs both the job's own result and the recorded run to agree.
+      # The job result is set by the harness from the CLI's exit code, which
+      # the change cannot write; the recorded run is what the evidence
+      # carries. Either one saying "failed" is a failure.
+      - name: Read the verdict
+        id: verdict
+        env:
+          FLAMA_RESULT: ${{ needs.run.outputs.result }}
+          FLAMA_RUN_RESULT: ${{ needs.run.result }}
+        run: |
+          set -euo pipefail
+          work=$(mktemp -d "$RUNNER_TEMP/flama-publish-XXXXXX")
+          echo "work=$work" >> "$GITHUB_OUTPUT"
+          status=failed
+          failed_command=''
+          if [[ -n "$FLAMA_RESULT" ]]; then
+            base64 -d <<< "$FLAMA_RESULT" > "$work/run.json"
+            status=$(jq -r '.status // "failed"' "$work/run.json")
+            failed_command=$(jq -r '[.commands[] | select(.status != "passed")][0].command // ""' "$work/run.json")
+          fi
+          if [[ "$FLAMA_RUN_RESULT" == "success" && "$status" == "passed" ]]; then
+            echo "passed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "passed=false" >> "$GITHUB_OUTPUT"
+            # A cancelled run — by a person, or by the job timeout, which
+            # GitHub also reports as cancelled — is not a verdict on the
+            # change, and the check says so rather than calling it a failure.
+            if [[ "$FLAMA_RUN_RESULT" == "cancelled" ]]; then
+              echo "conclusion=cancelled" >> "$GITHUB_OUTPUT"
+              echo "reason=the run was cancelled or timed out before the delivery commands finished" >> "$GITHUB_OUTPUT"
+            elif [[ -n "$failed_command" ]]; then
+              echo "conclusion=failure" >> "$GITHUB_OUTPUT"
+              echo "reason=$failed_command failed" >> "$GITHUB_OUTPUT"
+            elif [[ "$FLAMA_RUN_RESULT" != "success" ]]; then
+              echo "conclusion=failure" >> "$GITHUB_OUTPUT"
+              echo "reason=the run job finished with result '$FLAMA_RUN_RESULT'" >> "$GITHUB_OUTPUT"
+            else
+              echo "conclusion=failure" >> "$GITHUB_OUTPUT"
+              echo "reason=no run result was recorded" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Check out exact platform
+        if: ${{ steps.verdict.outputs.passed == 'true' }}
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: maxbec/flama-delivery-platform
+          ref: ${{ inputs.platform-sha }}
+          path: platform
+          persist-credentials: false
+
+      - name: Set up Node.js
+        if: ${{ steps.verdict.outputs.passed == 'true' }}
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: platform/.nvmrc
+
+      - name: Obtain the platform CLI
+        id: cli
+        if: ${{ steps.verdict.outputs.passed == 'true' }}
+        env:
+          FLAMA_PLATFORM_SHA: ${{ inputs.platform-sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          corepack enable
+          bash platform/scripts/obtain-cli.sh "$FLAMA_PLATFORM_SHA" "$RUNNER_TEMP/flama-cli" platform
+          echo "path=$RUNNER_TEMP/flama-cli/flama-delivery-ctl.js" >> "$GITHUB_OUTPUT"
+
+      # `certify` refuses a failing run, a signature predating it, and a
+      # controller that does not own the repository; `publish-check` verifies
+      # the digest, the exact command sequence and the single-repository token
+      # scope before it writes. The announced check is completed in place.
+      - name: Certify and publish the passing preflight
+        if: ${{ steps.verdict.outputs.passed == 'true' }}
+        env:
+          FLAMA_APP_SLUG: ${{ inputs.app-slug }}
+          FLAMA_CLI: ${{ steps.cli.outputs.path }}
+          FLAMA_GITHUB_APP_INSTALLATION_TOKEN: ${{ steps.app-token.outputs.token }}
+          FLAMA_OWNER: ${{ github.repository_owner }}
+          FLAMA_PENDING: ${{ needs.resolve.outputs.pending-check-run-id }}
+          FLAMA_WORK: ${{ steps.verdict.outputs.work }}
+        run: |
+          set -euo pipefail
+          case "$FLAMA_OWNER" in
+            maxbec) controller=maxbec-delivery-controller ;;
+            navigaite) controller=navigaite-delivery-controller ;;
+            edilio-app) controller=edilio-delivery-controller ;;
+            *) echo "::error::no delivery controller is bound to owner $FLAMA_OWNER"; exit 1 ;;
+          esac
+          jq -n --slurpfile run "$FLAMA_WORK/run.json" \
+            --arg controller "$controller" --arg app "$FLAMA_APP_SLUG" --arg runner "$GITHUB_RUN_ID" \
+            --arg signed "$(date -u +%Y-%m-%dT%H:%M:%S.000Z)" '{
+              run: $run[0], controller: $controller, appSlug: $app, runnerId: $runner, signedAt: $signed
+            }' > "$FLAMA_WORK/certify.json"
+          node "$FLAMA_CLI" certify --input "$FLAMA_WORK/certify.json" --output "$FLAMA_WORK/evidence.json" >/dev/null
+          jq -n --slurpfile evidence "$FLAMA_WORK/evidence.json" \
+            --arg repo "$GITHUB_REPOSITORY" --arg controller "$controller" --arg app "$FLAMA_APP_SLUG" \
+            --arg pending "$FLAMA_PENDING" '{
+              schemaVersion: 1,
+              repository: { nameWithOwner: $repo, disposition: "in_scope", mutationAllowed: true, isFork: false, isArchived: false },
+              publisher: { controller: $controller, appSlug: $app, tokenScope: "single-repository-checks-write", apiVersion: "2026-03-10" },
+              evidence: $evidence[0]
+            } + (if $pending == "" then {} else { pendingCheckRunId: ($pending | tonumber) } end)' \
+            > "$FLAMA_WORK/publish.json"
+          node "$FLAMA_CLI" publish-check --input "$FLAMA_WORK/publish.json"
+
+      # A failed preflight is a verdict the pull request must see, with a link
+      # to the run that explains it — not a check that stays in progress until
+      # the merge gate gives up on it.
+      - name: Publish the failing preflight
+        if: ${{ steps.verdict.outputs.passed != 'true' }}
+        env:
+          FLAMA_CONCLUSION: ${{ steps.verdict.outputs.conclusion }}
+          FLAMA_HEAD_SHA: ${{ inputs.head-sha }}
+          FLAMA_PENDING: ${{ needs.resolve.outputs.pending-check-run-id }}
+          FLAMA_REASON: ${{ steps.verdict.outputs.reason }}
+          FLAMA_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          [[ "$FLAMA_CONCLUSION" == "cancelled" || "$FLAMA_CONCLUSION" == "failure" ]]
+          summary="Flama preflight did not pass on $FLAMA_HEAD_SHA: $FLAMA_REASON. Details: $FLAMA_RUN_URL"
+          if [[ -n "$FLAMA_PENDING" ]]; then
+            gh api -X PATCH -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2026-03-10' \
+              "/repos/$GITHUB_REPOSITORY/check-runs/$FLAMA_PENDING" \
+              -f external_id="flama-preflight:failed:$GITHUB_RUN_ID" \
+              -f status=completed -f conclusion="$FLAMA_CONCLUSION" \
+              -f details_url="$FLAMA_RUN_URL" \
+              -f 'output[title]=Flama preflight failed' \
+              -f "output[summary]=$summary" >/dev/null
+          else
+            gh api -X POST -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2026-03-10' \
+              "/repos/$GITHUB_REPOSITORY/check-runs" \
+              -f name='Flama Preflight' -f head_sha="$FLAMA_HEAD_SHA" \
+              -f external_id="flama-preflight:failed:$GITHUB_RUN_ID" \
+              -f status=completed -f conclusion="$FLAMA_CONCLUSION" \
+              -f details_url="$FLAMA_RUN_URL" \
+              -f 'output[title]=Flama preflight failed' \
+              -f "output[summary]=$summary" >/dev/null
+          fi
+          echo "::error::$summary"
+
+      # Last resort. If publication itself failed or this job was cancelled,
+      # the announced check would otherwise stay in progress and hold the
+      # merge with nothing to wake it.
+      - name: Close the announced check if publication failed
+        if: ${{ (failure() || cancelled()) && needs.resolve.outputs.pending-check-run-id != '' }}
+        env:
+          FLAMA_CONCLUSION: ${{ cancelled() && 'cancelled' || 'failure' }}
+          FLAMA_PENDING: ${{ needs.resolve.outputs.pending-check-run-id }}
+          FLAMA_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          gh api -X PATCH -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "/repos/$GITHUB_REPOSITORY/check-runs/$FLAMA_PENDING" \
+            -f external_id="flama-preflight:unpublished:$GITHUB_RUN_ID" \
+            -f status=completed -f conclusion="$FLAMA_CONCLUSION" \
+            -f details_url="$FLAMA_RUN_URL" \
+            -f 'output[title]=Flama preflight could not be published' \
+            -f "output[summary]=The preflight ran but its check could not be published. Re-run $FLAMA_RUN_URL." \
+            >/dev/null || true

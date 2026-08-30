@@ -722,15 +722,18 @@ export async function runCli(
         io.writeStdout(jsonLine({ command, ok: false, errors: validation.errors, toolVersion }));
         return 1;
       }
-      const publishInput = input as PublishCheckInput;
+      const { pendingCheckRunId, ...publishInput } = input as PublishCheckInput & {
+        readonly pendingCheckRunId?: number;
+      };
       const evidenceValidation = validator.validate("preflight-evidence", publishInput.evidence);
       if (!evidenceValidation.ok) {
         io.writeStdout(jsonLine({ command, ok: false, errors: evidenceValidation.errors, toolVersion }));
         return 1;
       }
+      const publishOptions = pendingCheckRunId === undefined ? {} : { pendingCheckRunId };
       const result = options["dry-run"]
-        ? planPublishCheck(publishInput)
-        : await publishCheck(publishInput, new GitHubRestCheckClient(process.env));
+        ? planPublishCheck(publishInput, publishOptions)
+        : await publishCheck(publishInput, new GitHubRestCheckClient(process.env), publishOptions);
       const resultValidation = validator.validate("publish-check-result", result);
       if (!resultValidation.ok) return fail(io, "result_validation_failed");
       if (!options["dry-run"] && typeof options.output === "string") {
@@ -997,7 +1000,14 @@ export async function runCli(
         return 0;
       }
       if (typeof options.output !== "string") return fail(io, "output_required");
-      const result = await runPreflight(input as PreflightRunInput, workingDirectory);
+      const { runnerClass, ...runInput } = input as PreflightRunInput & {
+        readonly runnerClass?: "paperclip_ephemeral" | "github_actions";
+      };
+      const result = await runPreflight(
+        runInput,
+        workingDirectory,
+        runnerClass === undefined ? {} : { runnerClass },
+      );
       const resultValidation = validator.validate("preflight-run-result", result);
       if (!resultValidation.ok) return fail(io, "result_validation_failed");
       await writeEvidence(options.output, result);
@@ -1031,6 +1041,7 @@ export async function runCli(
         readonly cacheRoot: string;
         readonly budgetSeconds?: number;
         readonly maximumPublications?: number;
+        readonly publishLegacyCheck?: boolean;
       };
       if (options["dry-run"]) {
         io.writeStdout(jsonLine({
@@ -1054,6 +1065,9 @@ export async function runCli(
         ...(sweepInput.maximumPublications === undefined
           ? {}
           : { maximumPublications: sweepInput.maximumPublications }),
+        ...(sweepInput.publishLegacyCheck === undefined
+          ? {}
+          : { publishLegacyCheck: sweepInput.publishLegacyCheck }),
       });
       const counts = outcomes.reduce<Record<string, number>>(
         (totals, { status }) => ({ ...totals, [status]: (totals[status] ?? 0) + 1 }),

@@ -144,7 +144,7 @@ jobs:
       # — a private repository on a plan that sells neither branch protection
       # nor rulesets, for instance — nothing is holding it, and GitHub performs
       # the merge the moment arming succeeds: seconds after the pull request
-      # was opened, before the Paperclip Preflight is published and while the
+      # was opened, before the Flama Preflight is published and while the
       # policy gate is still polling for it. Every gate in this platform is
       # then advisory in fact while looking configured.
       #
@@ -194,7 +194,7 @@ jobs:
                 echo "stand-down=true" >> "$GITHUB_OUTPUT"
                 exit 0
               fi
-              echo "::error::mergeStateStatus=$state — nothing is holding this pull request, so arming auto-merge would merge it immediately, before the Paperclip Preflight and the policy gate report. Refusing. Give '$FLAMA_BASE_REF' a required-status-checks rule (rulesets need GitHub Pro on a private repository, GitHub Team for organisation-level rules) so GitHub enforces the gates it is being asked to wait for, or render the merge gate and pass merge-gate: true."
+              echo "::error::mergeStateStatus=$state — nothing is holding this pull request, so arming auto-merge would merge it immediately, before the Flama Preflight and the policy gate report. Refusing. Give '$FLAMA_BASE_REF' a required-status-checks rule (rulesets need GitHub Pro on a private repository, GitHub Team for organisation-level rules) so GitHub enforces the gates it is being asked to wait for, or render the merge gate and pass merge-gate: true."
               exit 1
               ;;
           esac

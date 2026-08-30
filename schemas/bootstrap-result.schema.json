@@ -57,9 +57,9 @@
         },
         "files": {
           "type": "array",
-          "minItems": 8,
-          "$comment": "Eleven with the push guard, which is rendered only where the plan refuses branch protection.",
-          "maxItems": 11,
+          "minItems": 9,
+          "$comment": "Twelve with releases enabled; thirteen with the push guard and fourteen with the merge gate, which are rendered only where the plan refuses branch protection.",
+          "maxItems": 14,
           "items": {
             "type": "object",
             "additionalProperties": false,
@@ -78,7 +78,9 @@
                   ".github/workflows/flama-deploy.yml",
                   ".github/workflows/flama-final.yml",
                   ".github/workflows/flama-auto-merge.yml",
+                  ".github/workflows/flama-merge-gate.yml",
                   ".github/workflows/flama-policy.yml",
+                  ".github/workflows/flama-preflight.yml",
                   ".github/workflows/flama-push-guard.yml",
                   ".release-please-config.json",
                   ".release-please-manifest.json"

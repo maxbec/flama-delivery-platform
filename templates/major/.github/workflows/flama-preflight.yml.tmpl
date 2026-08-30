@@ -1,0 +1,49 @@
+name: Flama Preflight
+
+# Publishes the App-authored `Flama Preflight` check for every feature pull
+# request: the head's own `./scripts/delivery buildable` and `affected`, run
+# from a clean checkout of the exact commit and attested by the owner's Flama
+# delivery App. The gates require that check; this is what produces it,
+# without any machine outside GitHub in the loop. Where the sweep on ai-vm
+# still runs it publishes the same check first for some heads, and this
+# workflow then finds nothing to do.
+#
+# `workflow_run` starts a workflow only from the default branch, so this file
+# has to be there to fire at all — and that is the point: a pull request
+# cannot rewrite the publisher that judges it. The change runs in a job that
+# holds no secret; the App credential is forwarded, by name, to the job that
+# publishes and that job checks out nothing of the change.
+
+on:
+  workflow_run:
+    workflows: [Flama Branch Guard]
+    types: [completed]
+
+permissions:
+  contents: read
+  checks: read
+  pull-requests: read
+
+jobs:
+  preflight:
+    # Only a pull request from this repository whose Branch Guard passed. A
+    # fork head is never built here; a head that failed the branch boundary
+    # cannot merge and is not worth a build.
+    if: >-
+      ${{ github.event.workflow_run.event == 'pull_request'
+        && github.event.workflow_run.conclusion == 'success'
+        && github.event.workflow_run.head_repository.full_name == github.repository }}
+    uses: maxbec/flama-delivery-platform/.github/workflows/reusable-preflight.yml@__FLAMA_PLATFORM_REF__
+    with:
+      head-sha: ${{ github.event.workflow_run.head_sha }}
+      base-branch: dev
+      app-slug: __FLAMA_PAPERCLIP_APP_SLUG__
+      platform-sha: __FLAMA_PLATFORM_REF__
+      # The head is this repository's own, checked above, so the homelab
+      # runner is safe for it — the same rule the other gates apply.
+      runner-labels: ${{ vars.PIPELINE_RUNNER || '["ubuntu-latest"]' }}
+    # Exactly the App credential pair, by name. Blanket inheritance stays
+    # forbidden. The values reach only the platform's publish job.
+    secrets:
+      FLAMA_APP_ID: ${{ secrets.FLAMA_APP_ID }}
+      FLAMA_APP_PRIVATE_KEY: ${{ secrets.FLAMA_APP_PRIVATE_KEY }}

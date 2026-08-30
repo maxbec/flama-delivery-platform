@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/maxbec/flama-delivery-platform/schemas/publish-check-result.schema.json",
-  "title": "Secret-minimized Paperclip Preflight publication result",
+  "title": "Secret-minimized Flama Preflight publication result",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "status", "headSha", "evidenceDigest", "check"],
@@ -15,8 +15,8 @@
       "additionalProperties": false,
       "required": ["name", "externalId", "status", "conclusion"],
       "properties": {
-        "name": { "const": "Paperclip Preflight" },
-        "externalId": { "type": "string", "pattern": "^paperclip-preflight:sha256:[0-9a-f]{64}$" },
+        "name": { "enum": ["Flama Preflight", "Paperclip Preflight"] },
+        "externalId": { "type": "string", "pattern": "^(flama|paperclip)-preflight:sha256:[0-9a-f]{64}$" },
         "status": { "const": "completed" },
         "conclusion": { "const": "success" }
       }
