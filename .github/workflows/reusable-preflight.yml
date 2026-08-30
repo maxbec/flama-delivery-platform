@@ -20,9 +20,11 @@ name: Reusable Preflight
 # That is what makes the App's authorship of the check mean something. The
 # other event that runs a trusted definition against a pull request hands
 # secrets to the job that checks out the change, and the platform forbids it.
-# Here the split is by job: `run` executes the change with no secret and a
-# read-only token; `publish` holds the App credential and checks out nothing
-# but this platform. No step gives the change a token it could write with.
+# Here the split is by job: `run` executes the change with no secret, no
+# identity and a read-only token; `resolve` and `publish` request a
+# short-lived OIDC identity, read the App credential from Infisical with it,
+# and check out nothing but this platform. No step gives the change a token
+# it could write with, and no App credential is stored in GitHub at all.
 #
 # What the check proves is unchanged from the sweep: the head's own delivery
 # commands, from a clean checkout of exactly that commit, exited zero —
@@ -65,22 +67,57 @@ on:
         required: false
         default: '["ubuntu-latest"]'
         type: string
-    secrets:
-      FLAMA_APP_ID:
+      infisical-identity-id:
         description: >-
-          Id of the owner's Flama delivery GitHub App — the same App the sweep
-          publishes as, so a check from either publisher satisfies the gates.
-          Optional at the workflow boundary only so a missing secret fails in
-          a job with a message instead of as a silent startup_failure.
+          Infisical OIDC identity that accepts this repository's GitHub
+          Actions token and may read the owner's App credential. Rendered
+          from policies/preflight-publishers.json, never typed by a consumer.
+        required: true
+        type: string
+      infisical-domain:
+        description: Public Infisical host, used from GitHub-hosted runners.
+        required: true
+        type: string
+      infisical-local-domain:
+        description: >-
+          Infisical host reachable from the self-hosted runners on the LAN,
+          without the Cloudflare Access gate. Used whenever the runner labels
+          say self-hosted; empty means always use the public host.
         required: false
-      FLAMA_APP_PRIVATE_KEY:
-        description: Private key of the same App. Must be provided together with FLAMA_APP_ID.
+        default: ''
+        type: string
+      infisical-project-slug:
+        description: Infisical project holding the owner's App credential
+        required: true
+        type: string
+      infisical-env-slug:
+        description: Environment slug of that project
+        required: true
+        type: string
+      infisical-secret-path:
+        description: Folder in that project holding FLAMA_GITHUB_APP_ID_<suffix> and FLAMA_GITHUB_APP_PRIVATE_KEY_<suffix>
+        required: true
+        type: string
+      app-credential-suffix:
+        description: Suffix of the two secret names, MAXBEC, NAVIGAITE or EDILIO
+        required: true
+        type: string
+    secrets:
+      CF_ACCESS_CLIENT_ID:
+        description: >-
+          Cloudflare Access service token in front of the public Infisical
+          host. Needed only from GitHub-hosted runners; the self-hosted ones
+          use the LAN host. Empty where it does not exist.
+        required: false
+      CF_ACCESS_CLIENT_SECRET:
+        description: Secret half of the same service token.
         required: false
 
 permissions:
   contents: read
   checks: read
   pull-requests: read
+  id-token: write
 
 # One publication per head at a time. A second run for the same head — the
 # Branch Guard re-run by hand, say — queues rather than races, and then finds
@@ -97,6 +134,11 @@ jobs:
     name: Flama Preflight Scope
     runs-on: ${{ fromJSON(inputs.runner-labels) }}
     timeout-minutes: 5
+    permissions:
+      contents: read
+      checks: read
+      pull-requests: read
+      id-token: write
     outputs:
       proceed: ${{ steps.pull.outputs.proceed }}
       base-sha: ${{ steps.pull.outputs.base-sha }}
@@ -111,18 +153,19 @@ jobs:
           [[ "$FLAMA_HEAD_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$FLAMA_PLATFORM_SHA" =~ ^[0-9a-f]{40}$ ]]
 
-      - name: Check App credentials
+      - name: Check the publisher identity
         env:
-          FLAMA_APP_ID: ${{ secrets.FLAMA_APP_ID }}
-          FLAMA_APP_PRIVATE_KEY: ${{ secrets.FLAMA_APP_PRIVATE_KEY }}
+          FLAMA_IDENTITY: ${{ inputs.infisical-identity-id }}
+          FLAMA_SUFFIX: ${{ inputs.app-credential-suffix }}
         run: |
-          # Without the App this workflow can build but never publish, and an
-          # unpublished preflight looks exactly like a head nobody picked up.
-          # Refuse here, loudly, rather than run the commands for nothing.
-          if [[ -z "$FLAMA_APP_ID" || -z "$FLAMA_APP_PRIVATE_KEY" ]]; then
-            echo '::error::FLAMA_APP_ID and FLAMA_APP_PRIVATE_KEY must both be provided: they are the Flama delivery App this repository publishes its preflight as.'
+          # Without an identity this workflow can build but never publish, and
+          # an unpublished preflight looks exactly like a head nobody picked
+          # up. Refuse here, loudly, rather than run the commands for nothing.
+          [[ "$FLAMA_IDENTITY" =~ ^[0-9a-f-]{36}$ ]] || {
+            echo '::error::infisical-identity-id is not configured for this owner (policies/preflight-publishers.json in the platform).'
             exit 1
-          fi
+          }
+          [[ "$FLAMA_SUFFIX" =~ ^[A-Z]+$ ]]
 
       - name: Find the pull request this head is the tip of
         id: pull
@@ -204,6 +247,49 @@ jobs:
           echo "base-sha=$base_sha" >> "$GITHUB_OUTPUT"
           echo "pending=$pending" >> "$GITHUB_OUTPUT"
 
+      # The App credential lives in Infisical and nowhere in GitHub. This job
+      # authenticates as the repository through its OIDC token — an identity
+      # Infisical binds to this owner's repositories — and receives the two
+      # values into its environment for the minutes it runs. The self-hosted
+      # runners reach Infisical on the LAN; GitHub-hosted ones pass the
+      # Cloudflare Access service token in front of the public host.
+      - name: Load the App credential from Infisical
+        if: ${{ steps.pull.outputs.proceed == 'true' }}
+        uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
+        with:
+          method: oidc
+          identity-id: ${{ inputs.infisical-identity-id }}
+          domain: ${{ contains(inputs.runner-labels, 'self-hosted') && inputs.infisical-local-domain || inputs.infisical-domain }}
+          project-slug: ${{ inputs.infisical-project-slug }}
+          env-slug: ${{ inputs.infisical-env-slug }}
+          secret-path: ${{ inputs.infisical-secret-path }}
+          include-imports: false
+          recursive: false
+          extra-headers: |
+            CF-Access-Client-Id: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+            CF-Access-Client-Secret: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      - name: Select the App credential for this owner
+        id: credential
+        if: ${{ steps.pull.outputs.proceed == 'true' }}
+        env:
+          FLAMA_SUFFIX: ${{ inputs.app-credential-suffix }}
+        run: |
+          id_name="FLAMA_GITHUB_APP_ID_$FLAMA_SUFFIX"
+          key_name="FLAMA_GITHUB_APP_PRIVATE_KEY_$FLAMA_SUFFIX"
+          if [[ -z "${!id_name:-}" || -z "${!key_name:-}" ]]; then
+            echo "::error::Infisical returned no $id_name / $key_name; check the identity's project access."
+            exit 1
+          fi
+          # Re-exported under fixed names for the token step. The runner
+          # already masks the values the Infisical action registered.
+          printf 'FLAMA_APP_ID=%s\n' "${!id_name}" >> "$GITHUB_ENV"
+          {
+            printf 'FLAMA_APP_PRIVATE_KEY<<FLAMA_KEY_EOF\n'
+            printf '%s\n' "${!key_name}"
+            printf 'FLAMA_KEY_EOF\n'
+          } >> "$GITHUB_ENV"
+
       # Scoped to this repository and to checks:write: enough to announce and
       # to complete the check, and nothing else, for the minutes it lives.
       - name: Mint the App token that announces the check
@@ -211,8 +297,8 @@ jobs:
         if: ${{ steps.pull.outputs.proceed == 'true' }}
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.FLAMA_APP_ID }}
-          private-key: ${{ secrets.FLAMA_APP_PRIVATE_KEY }}
+          app-id: ${{ env.FLAMA_APP_ID }}
+          private-key: ${{ env.FLAMA_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
           permission-checks: write
@@ -257,8 +343,9 @@ jobs:
           [[ "$created" =~ ^[0-9]+$ ]]
           echo "check-run-id=$created" >> "$GITHUB_OUTPUT"
 
-  # Executes the change. No secret reaches this job, and its token can read
-  # and nothing else. It is the only job that checks out consumer code.
+  # Executes the change. No secret and no OIDC identity reaches this job, and
+  # its token can read and nothing else. It is the only job that checks out
+  # consumer code.
   run:
     name: Flama Preflight Run
     needs: resolve
@@ -360,13 +447,49 @@ jobs:
     if: ${{ always() && needs.resolve.outputs.proceed == 'true' }}
     runs-on: ${{ fromJSON(inputs.runner-labels) }}
     timeout-minutes: 10
+    permissions:
+      contents: read
+      checks: read
+      id-token: write
     steps:
+      - name: Load the App credential from Infisical
+        uses: Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995 # v1.0.16
+        with:
+          method: oidc
+          identity-id: ${{ inputs.infisical-identity-id }}
+          domain: ${{ contains(inputs.runner-labels, 'self-hosted') && inputs.infisical-local-domain || inputs.infisical-domain }}
+          project-slug: ${{ inputs.infisical-project-slug }}
+          env-slug: ${{ inputs.infisical-env-slug }}
+          secret-path: ${{ inputs.infisical-secret-path }}
+          include-imports: false
+          recursive: false
+          extra-headers: |
+            CF-Access-Client-Id: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+            CF-Access-Client-Secret: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+
+      - name: Select the App credential for this owner
+        env:
+          FLAMA_SUFFIX: ${{ inputs.app-credential-suffix }}
+        run: |
+          id_name="FLAMA_GITHUB_APP_ID_$FLAMA_SUFFIX"
+          key_name="FLAMA_GITHUB_APP_PRIVATE_KEY_$FLAMA_SUFFIX"
+          if [[ -z "${!id_name:-}" || -z "${!key_name:-}" ]]; then
+            echo "::error::Infisical returned no $id_name / $key_name; check the identity's project access."
+            exit 1
+          fi
+          printf 'FLAMA_APP_ID=%s\n' "${!id_name}" >> "$GITHUB_ENV"
+          {
+            printf 'FLAMA_APP_PRIVATE_KEY<<FLAMA_KEY_EOF\n'
+            printf '%s\n' "${!key_name}"
+            printf 'FLAMA_KEY_EOF\n'
+          } >> "$GITHUB_ENV"
+
       - name: Mint the App token that completes the check
         id: app-token
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         with:
-          app-id: ${{ secrets.FLAMA_APP_ID }}
-          private-key: ${{ secrets.FLAMA_APP_PRIVATE_KEY }}
+          app-id: ${{ env.FLAMA_APP_ID }}
+          private-key: ${{ env.FLAMA_APP_PRIVATE_KEY }}
           owner: ${{ github.repository_owner }}
           repositories: ${{ github.event.repository.name }}
           permission-checks: write

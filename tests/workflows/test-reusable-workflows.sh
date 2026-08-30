@@ -125,8 +125,17 @@ grep -Fqx '  checks: read' "$PREFLIGHT"
 grep -Fqx '    name: Flama Preflight Scope' "$PREFLIGHT"
 grep -Fqx '    name: Flama Preflight Run' "$PREFLIGHT"
 grep -Fqx '    name: Flama Preflight Publish' "$PREFLIGHT"
-grep -Fqx '      FLAMA_APP_ID:' "$PREFLIGHT"
-grep -Fqx '      FLAMA_APP_PRIVATE_KEY:' "$PREFLIGHT"
+# The App credential is read from Infisical with a short-lived OIDC identity
+# by the two platform-owned jobs, and stored nowhere in GitHub.
+grep -Fqx '      CF_ACCESS_CLIENT_ID:' "$PREFLIGHT"
+grep -Fqx '      CF_ACCESS_CLIENT_SECRET:' "$PREFLIGHT"
+grep -Fq 'Infisical/secrets-action@77ab1f4ccd183a543cb5b42435fbd181189f4995' "$PREFLIGHT"
+[[ $(grep -Fc 'Infisical/secrets-action@' "$PREFLIGHT") -eq 2 ]]
+grep -Fqx '  id-token: write' "$PREFLIGHT"
+if grep -Fq 'FLAMA_APP_ID:' "$PREFLIGHT" | grep -Fq 'secrets.FLAMA_APP'; then
+  echo "preflight workflow still takes the App credential as a GitHub secret" >&2
+  exit 1
+fi
 grep -Fq 'actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1' "$PREFLIGHT"
 grep -Fq '          permission-checks: write' "$PREFLIGHT"
 grep -Fq 'scripts/obtain-cli.sh' "$PREFLIGHT"
@@ -139,7 +148,7 @@ grep -Fq "external_id=\"flama-preflight:failed:\$GITHUB_RUN_ID\"" "$PREFLIGHT"
 grep -Fq "if: \${{ always() && needs.resolve.outputs.proceed == 'true' }}" "$PREFLIGHT"
 grep -Fq "(failure() || cancelled()) && needs.resolve.outputs.pending-check-run-id != ''" "$PREFLIGHT"
 grep -Fq 'conclusion=cancelled' "$PREFLIGHT"
-if grep -Eq 'pull_request_target|id-token:|secrets: inherit|continue-on-error:' "$PREFLIGHT"; then
+if grep -Eq 'pull_request_target|secrets: inherit|continue-on-error:|secrets\.FLAMA_APP' "$PREFLIGHT"; then
   echo "preflight workflow contains a forbidden trust or mutability pattern" >&2
   exit 1
 fi
@@ -157,10 +166,13 @@ publish_job=$(awk '/^  publish:$/{p=1} p' "$PREFLIGHT")
 resolve_job=$(awk '/^  resolve:$/{p=1} /^  run:$/{p=0} p' "$PREFLIGHT")
 grep -Fq 'ref: ${{ inputs.head-sha }}' <<< "$run_job"
 grep -Fqx '      contents: read' <<< "$run_job"
-if grep -Eq 'secrets\.|app-token' <<< "$run_job"; then
-  echo "preflight run job can reach a secret" >&2
+if grep -Eq 'secrets\.|app-token|id-token|Infisical' <<< "$run_job"; then
+  echo "preflight run job can reach a secret or an identity" >&2
   exit 1
 fi
+# Only the platform-owned jobs request the identity, and both do.
+grep -Fqx '      id-token: write' <<< "$resolve_job"
+grep -Fqx '      id-token: write' <<< "$publish_job"
 if grep -Fq 'ref: ${{ inputs.head-sha }}' <<< "$publish_job"; then
   echo "preflight publish job checks out the change under review" >&2
   exit 1

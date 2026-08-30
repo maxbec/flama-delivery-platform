@@ -11,8 +11,8 @@ name: Flama Preflight
 # `workflow_run` starts a workflow only from the default branch, so this file
 # has to be there to fire at all — and that is the point: a pull request
 # cannot rewrite the publisher that judges it. The change runs in a job that
-# holds no secret; the App credential is forwarded, by name, to the job that
-# publishes and that job checks out nothing of the change.
+# holds no credential and no identity; only the platform's own jobs request
+# the short-lived OIDC identity that reads the App credential from Infisical.
 
 on:
   workflow_run:
@@ -23,6 +23,9 @@ permissions:
   contents: read
   checks: read
   pull-requests: read
+  # Requested by the platform's scope and publish jobs alone, to authenticate
+  # to Infisical as this repository; the job that runs the change gets none.
+  id-token: write
 
 jobs:
   preflight:
@@ -42,8 +45,18 @@ jobs:
       # The head is this repository's own, checked above, so the homelab
       # runner is safe for it — the same rule the other gates apply.
       runner-labels: ${{ vars.PIPELINE_RUNNER || '["ubuntu-latest"]' }}
-    # Exactly the App credential pair, by name. Blanket inheritance stays
-    # forbidden. The values reach only the platform's publish job.
+      # Where the owner's App credential lives, rendered from platform policy.
+      infisical-identity-id: __FLAMA_PREFLIGHT_INFISICAL_IDENTITY_ID__
+      infisical-domain: __FLAMA_PREFLIGHT_INFISICAL_DOMAIN__
+      infisical-local-domain: __FLAMA_PREFLIGHT_INFISICAL_LOCAL_DOMAIN__
+      infisical-project-slug: __FLAMA_PREFLIGHT_INFISICAL_PROJECT_SLUG__
+      infisical-env-slug: __FLAMA_PREFLIGHT_INFISICAL_ENV_SLUG__
+      infisical-secret-path: __FLAMA_PREFLIGHT_INFISICAL_SECRET_PATH__
+      app-credential-suffix: __FLAMA_PREFLIGHT_APP_CREDENTIAL_SUFFIX__
+    # The Cloudflare Access service token in front of the public Infisical
+    # host, forwarded by name exactly as the universal pipeline forwards it;
+    # empty where it does not exist, and unused on the homelab runners, which
+    # reach Infisical on the LAN. Blanket inheritance stays forbidden.
     secrets:
-      FLAMA_APP_ID: ${{ secrets.FLAMA_APP_ID }}
-      FLAMA_APP_PRIVATE_KEY: ${{ secrets.FLAMA_APP_PRIVATE_KEY }}
+      CF_ACCESS_CLIENT_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+      CF_ACCESS_CLIENT_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
