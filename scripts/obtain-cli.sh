@@ -36,9 +36,13 @@ checkout=$3
 
 mkdir -p "$output"
 
+# A tag source that cannot be read is a failure, never "no release": falling
+# through to a source build because the network blinked would swap the
+# provenance of what runs, silently.
 resolve_tag_version() {
   local refs
-  refs=$(git ls-remote --tags "https://github.com/${FLAMA_PLATFORM_REPOSITORY}.git")
+  refs=$(git ls-remote --tags "https://github.com/${FLAMA_PLATFORM_REPOSITORY}.git") \
+    || { echo "could not read platform release tags from ${FLAMA_PLATFORM_REPOSITORY}" >&2; return 1; }
   printf '%s\n' "$refs" | awk -v sha="$sha" '
     {
       ref = $2
@@ -58,7 +62,7 @@ resolve_tag_version() {
 
 version=$FLAMA_PLATFORM_TAG_VERSION
 if [[ -z "$version" ]]; then
-  version=$(resolve_tag_version)
+  version=$(resolve_tag_version) || exit 1
 fi
 # Two release tags on one commit leave no single answer; refuse rather than guess.
 [[ "$version" != *$'\n'* ]] || { echo 'more than one release tag points at the platform commit' >&2; exit 1; }
@@ -73,6 +77,20 @@ if [[ -n "$version" ]]; then
   curl --fail --silent --show-error --location --retry 3 \
     --output "$work/$name.tar.gz.sha256" "${FLAMA_RELEASE_BASE_URL}/v${version}/${name}.tar.gz.sha256"
   (cd "$work" && sha256sum --check --status "$name.tar.gz.sha256")
+  # The checksum sits beside the tarball in the same release, so it proves
+  # integrity, not origin. The provenance attestation the release workflow
+  # signs proves the tarball was built by that workflow from this repository.
+  # A gh too old to verify attestations says so and continues on the checksum
+  # and manifest binding, which is what every consumer ran on before this
+  # check existed; the seam that skips it outright is for the offline test.
+  : "${FLAMA_RELEASE_ATTESTATION:=verify}"
+  if [[ "$FLAMA_RELEASE_ATTESTATION" == "verify" ]]; then
+    if gh attestation verify --help >/dev/null 2>&1; then
+      gh attestation verify "$work/$name.tar.gz" --repo "$FLAMA_PLATFORM_REPOSITORY" >/dev/null
+    else
+      echo "::warning::gh on this runner cannot verify release attestations; relying on checksum and release manifest"
+    fi
+  fi
   # The whole release, not the bundle alone: the CLI locates its schemas and
   # policies by walking up from its own path, exactly as it does on ai-vm.
   rm -rf "$output/release"

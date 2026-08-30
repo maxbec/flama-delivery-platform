@@ -75,6 +75,10 @@ export interface SweepOutcome {
     | "preflight_failed"
     | "skipped_fork"
     | "already_published"
+    /** The repository publishes its own preflight from GitHub Actions. */
+    | "self_published"
+    /** The repository's own publisher announced this head while the sweep was building it. */
+    | "superseded"
     | "failed"
     /** Eligible, not reached within this pass's bounds; the next pass takes it. */
     | "deferred";
@@ -104,6 +108,12 @@ export async function sweepPreflights(
   for (const head of heads) {
     const identity = { repository: head.repository, number: head.number, headSha: head.headSha };
 
+    if (head.publishesOwnPreflight) {
+      // Off the list entirely, not merely deferred: two publishers for one
+      // head is a race the gates were written to refuse.
+      outcomes.push({ ...identity, status: "self_published" });
+      continue;
+    }
     if (head.hasPreflight) {
       outcomes.push({ ...identity, status: "already_published" });
       continue;
@@ -163,7 +173,11 @@ export async function sweepPreflights(
 
       outcomes.push({
         ...identity,
-        status: result.status === "published" ? "published" : "preflight_failed",
+        status: result.status === "published"
+          ? "published"
+          : result.status === "superseded"
+          ? "superseded"
+          : "preflight_failed",
       });
     } catch (error) {
       const code = typeof (error as { code?: unknown }).code === "string"

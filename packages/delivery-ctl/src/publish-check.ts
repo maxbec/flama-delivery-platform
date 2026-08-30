@@ -144,6 +144,7 @@ export type PublishCheckResult =
 
 export type PublishCheckErrorCode =
   | "github_check_conflict"
+  | "github_check_pending"
   | "github_check_response_invalid"
   | "github_request_failed"
   | "publish_check_contract_mismatch"
@@ -357,6 +358,22 @@ export async function publishCheck(
       status: "published",
       publication: { checkRunId: check.id, appSlug: check.appSlug, reused: true },
     };
+  }
+
+  // A check this App announced and has not completed belongs to the
+  // publisher that announced it. A caller that was not told about it — the
+  // sweep, listing the head minutes after it decided to build — yields rather
+  // than creating a second completed check beside it: two checks of one name
+  // is exactly the ambiguity the gates refuse.
+  if (
+    options.pendingCheckRunId === undefined &&
+    visible.some(
+      (check) =>
+        check.name === request.name && check.headSha === request.headSha &&
+        check.appSlug === input.publisher.appSlug && check.status !== "completed",
+    )
+  ) {
+    throw new PublishCheckError("github_check_pending");
   }
 
   // An announced check is completed in place. One that is visible but is not

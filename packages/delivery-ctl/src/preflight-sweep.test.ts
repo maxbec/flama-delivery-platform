@@ -52,7 +52,11 @@ interface PullSpec {
   readonly unadopted?: boolean;
 }
 
-function githubStub(pulls: readonly PullSpec[], created: string[] = []): typeof fetch {
+function githubStub(
+  pulls: readonly PullSpec[],
+  created: string[] = [],
+  repository: { readonly publishesOwnPreflight?: boolean } = {},
+): typeof fetch {
   return (async (input, init) => {
     const url = String(input);
     const method = init?.method ?? "GET";
@@ -70,6 +74,13 @@ function githubStub(pulls: readonly PullSpec[], created: string[] = []): typeof 
     }
     // Scope is decided at the head: a pull request opened before the repository
     // adopted the profile has no entrypoint in its own tree.
+    // The generated preflight workflow on the default branch: the repository
+    // publishes its own check and the sweep has no business there.
+    if (url.includes("/contents/.github/workflows/flama-preflight.yml")) {
+      return repository.publishesOwnPreflight === true
+        ? json({ name: "flama-preflight.yml" })
+        : json({ message: "Not Found" }, 404);
+    }
     if (url.includes("/contents/scripts/delivery")) {
       const ref = url.split("ref=")[1];
       return pulls.some((pull) => pull.headSha === ref && pull.unadopted)
@@ -171,6 +182,28 @@ describe("preflight sweep", () => {
     });
 
     expect(outcomes.map(({ number, status }) => `${number}:${status}`)).toEqual(["11:already_published"]);
+    expect(created).toEqual([]);
+  });
+
+  /*
+   * A repository re-rendered to a platform that publishes its own preflight
+   * from GitHub Actions is off the sweep's list entirely — not because the
+   * sweep could not do the work, but because two publishers for one head is a
+   * race the gates were written to refuse.
+   */
+  it("leaves a repository alone once its default branch publishes its own preflight", async () => {
+    const { headSha } = await upstream();
+    const created: string[] = [];
+    const outcomes = await sweepPreflights({
+      owner: "maxbec",
+      appSlug: "flama-delivery-maxbec",
+      environment,
+      cacheRoot: await cacheRoot(),
+      runnerId: "11111111-1111-4111-8111-111111111111",
+      fetchImplementation: githubStub([{ number: 12, headSha }], created, { publishesOwnPreflight: true }),
+    });
+
+    expect(outcomes.map(({ number, status }) => `${number}:${status}`)).toEqual(["12:self_published"]);
     expect(created).toEqual([]);
   });
 

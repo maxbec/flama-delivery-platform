@@ -269,6 +269,31 @@ export interface OpenPullRequestHead {
    * publisher and still running. The sweep leaves all three alone.
    */
   readonly hasPreflight: boolean;
+  /**
+   * True when the repository's default branch carries the generated
+   * `flama-preflight.yml`: the repository publishes its own check from GitHub
+   * Actions, and the sweep has no business with any of its heads. Read from
+   * the default branch, not the head, because that is where `workflow_run`
+   * reads it from.
+   */
+  readonly publishesOwnPreflight: boolean;
+}
+
+async function repositoryPublishesOwnPreflight(
+  fetchImplementation: FetchImplementation,
+  repository: string,
+  token: string,
+): Promise<boolean> {
+  try {
+    await requestJson(
+      fetchImplementation,
+      `/repos/${repository}/contents/.github/workflows/flama-preflight.yml`,
+      token,
+    );
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -400,6 +425,7 @@ export async function discoverOpenPullRequests(
     if (!isRecord(entry) || typeof entry["full_name"] !== "string") continue;
     if (entry["archived"] === true || entry["disabled"] === true) continue;
     const fullName = entry["full_name"];
+    const publishesOwnPreflight = await repositoryPublishesOwnPreflight(fetchImplementation, fullName, token);
     const pulls = await requestJson(
       fetchImplementation,
       `/repos/${fullName}/pulls?state=open&per_page=100`,
@@ -421,6 +447,7 @@ export async function discoverOpenPullRequests(
         headSha: head["sha"],
         baseSha: base["sha"],
         hasPreflight: await hasAppPreflight(fetchImplementation, fullName, head["sha"], token, appSlug),
+        publishesOwnPreflight,
         // A head from another repository is a fork contribution; publication
         // refuses it later, but recording it keeps the reason visible.
         isFork: !isRecord(headRepository) || headRepository["full_name"] !== fullName,

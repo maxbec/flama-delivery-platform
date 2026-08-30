@@ -24,11 +24,15 @@ GitHub now, and the sweep is an optional accelerator.
 | `flama-delivery-ctl sweep` (`flama-sweep@<org>.timer` on ai-vm) | ai-vm | Every two minutes after the previous pass, when the machine is up | `runner.class: paperclip_ephemeral` |
 
 Both publish as the same App with the same evidence contract, so the gates do
-not care which one got there first. They do not build a head twice: the
-workflow announces its check as `in_progress` before it builds, and the sweep
-leaves any head alone that already carries an App-authored `Flama Preflight`
-in any state; the sweep, in turn, yields at publication when it finds a check
-the workflow has announced meanwhile.
+not care which one got there first. They do not overlap: the sweep leaves a
+repository alone entirely once its default branch carries the generated
+`flama-preflight.yml` (`self_published` in the sweep's outcomes), because
+that is the branch `workflow_run` reads the publisher from. For repositories
+not yet re-rendered the sweep still publishes, and two further guards cover
+the moment of a re-render merging: the sweep skips any head that already
+carries an App-authored `Flama Preflight` in any state (the workflow announces
+its check as `in_progress` before it builds), and it yields at publication
+(`superseded`) when it finds a check the workflow announced meanwhile.
 
 ## The Actions publisher
 
@@ -49,7 +53,11 @@ the consumer's runner labels:
    nothing else. This is the only job that executes consumer code.
 3. **Publish** — on success, `certify` then `publish-check`, completing the
    announced check in place; on failure, completes it as `failure` with the
-   failing command and a link to the run. Checks out nothing but the platform.
+   failing command and a link to the run; a cancelled or timed-out run
+   completes it as `cancelled`. It runs whatever happened to the run job, and
+   a last-resort step closes the announced check if publication itself fails,
+   so the check never stays in progress with nothing left to wake it. Checks
+   out nothing but the platform.
 
 The App credential reaches the workflow as the repository or organisation
 secrets `FLAMA_APP_ID` and `FLAMA_APP_PRIVATE_KEY`, forwarded by name by the
@@ -104,8 +112,9 @@ flama-delivery-ctl publish-check --dry-run --input /protected/evidence/publish-c
 Consumers pinned to a platform older than the rename still look for a check
 called `Paperclip Preflight`. Until every consumer is re-rendered, the sweep is
 run with `"publishLegacyCheck": true` and publishes both names with the same
-digest, so the re-rendering pull requests merge through the older merge gate
-they were opened under. Branch-protection rules that name
+digest — the legacy name first, because discovery keys on the new name and a
+pass that fails between the two is then retried whole — so the re-rendering
+pull requests merge through the older merge gate they were opened under. Branch-protection rules that name
 `Paperclip Preflight` as a required context must be renamed when the
 repository is re-rendered; `policies/branch-profiles.json` names the new
 context. The legacy publication is removed with the last consumer.

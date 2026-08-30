@@ -48,7 +48,12 @@ interface Call {
 }
 
 function githubStub(
-  overrides: { readonly repository?: unknown; readonly repositoryStatus?: number } = {},
+  overrides: {
+    readonly repository?: unknown;
+    readonly repositoryStatus?: number;
+    /** A `Flama Preflight` the Actions publisher has announced for the head. */
+    readonly announced?: boolean;
+  } = {},
   calls: Call[] = [],
 ): typeof fetch {
   return (async (input, init) => {
@@ -80,7 +85,17 @@ function githubStub(
       );
     }
     if (url.includes("/check-runs")) {
-      if ((init?.method ?? "GET") === "GET") return json({ check_runs: [] }, 200);
+      if ((init?.method ?? "GET") === "GET") {
+        return json({
+          check_runs: overrides.announced === true && url.includes("Flama%20Preflight")
+            ? [{
+              id: 7, name: "Flama Preflight", head_sha: url.split("/commits/")[1]?.split("/")[0],
+              external_id: "flama-preflight:pending:1", status: "in_progress", conclusion: null,
+              app: { slug: "flama-delivery-maxbec" },
+            }]
+            : [],
+        }, 200);
+      }
       const body = JSON.parse(String(init?.body));
       return json({ id: 99, name: body.name, external_id: body.external_id, head_sha: body.head_sha, app: { slug: "flama-delivery-maxbec" }, status: "completed", conclusion: "success" }, 201);
     }
@@ -194,10 +209,13 @@ describe("legacy check publication", () => {
     const created = calls
       .filter((call) => call.method === "POST" && call.url.includes("/check-runs"))
       .map((call) => call.body as { name: string; external_id: string });
-    expect(created.map(({ name }) => name)).toEqual(["Flama Preflight", "Paperclip Preflight"]);
-    const digest = created[0]?.external_id.replace(/^flama-preflight:/u, "");
+    // Legacy first: discovery keys on the new name, so a pass that publishes
+    // the legacy check and then fails on the new one is retried whole, while
+    // the reverse order would leave the legacy check missing for good.
+    expect(created.map(({ name }) => name)).toEqual(["Paperclip Preflight", "Flama Preflight"]);
+    const digest = created[1]?.external_id.replace(/^flama-preflight:/u, "");
     expect(digest).toMatch(/^sha256:[0-9a-f]{64}$/u);
-    expect(created[1]?.external_id).toBe(`paperclip-preflight:${digest}`);
+    expect(created[0]?.external_id).toBe(`paperclip-preflight:${digest}`);
   });
 
   it("publishes only the new name by default", async () => {
@@ -207,5 +225,16 @@ describe("legacy check publication", () => {
     expect(
       calls.filter((call) => call.method === "POST" && call.url.includes("/check-runs")).map((call) => (call.body as { name: string }).name),
     ).toEqual(["Flama Preflight"]);
+  });
+});
+
+describe("an announced check", () => {
+  it("is left to the publisher that announced it", async () => {
+    const { root, headSha } = await checkout();
+    const calls: Call[] = [];
+    const result = await run(root, headSha, githubStub({ announced: true }, calls));
+
+    expect(result).toEqual({ status: "superseded" });
+    expect(calls.filter((call) => call.method === "POST" && call.url.includes("/check-runs"))).toEqual([]);
   });
 });

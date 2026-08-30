@@ -325,6 +325,21 @@ describe("completing an announced check", () => {
     }
   });
 
+  /*
+   * The sweep lists the head's checks right before it publishes. A check the
+   * Actions publisher announced in the meantime means that publisher owns the
+   * verdict; creating a second completed check beside it would leave two
+   * checks of one name, which the gates refuse.
+   */
+  it("yields to a check another publisher announced meanwhile", async () => {
+    const client = new FakeCheckClient([pending()]);
+    await expect(publishCheck(input(), client)).rejects.toEqual(
+      new PublishCheckError("github_check_pending"),
+    );
+    expect(client.createCalls).toHaveLength(0);
+    expect(client.updateCalls).toHaveLength(0);
+  });
+
   it("creates the check when the pending one it was told about no longer exists", async () => {
     const client = new FakeCheckClient([]);
     const result = await publishCheck(input(), client, { pendingCheckRunId: 7 });

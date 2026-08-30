@@ -302,10 +302,13 @@ jobs:
         with:
           node-version-file: platform/.nvmrc
 
+      # The read-only workflow token is what verifies the release's provenance
+      # attestation; it is the one token this job has, and it can write nothing.
       - name: Obtain the platform CLI
         id: cli
         env:
           FLAMA_PLATFORM_SHA: ${{ inputs.platform-sha }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           corepack enable
@@ -348,11 +351,13 @@ jobs:
 
   # Attests the verdict as the owner's App. Holds the App credential and
   # checks out nothing but the platform, so no consumer code ever runs beside
-  # it. Runs on a failed build too: the check must complete either way.
+  # it. Runs on a failed, cancelled or timed-out build too: the announced
+  # check must complete either way, or it stays in progress and holds the
+  # merge with nothing left to wake it.
   publish:
     name: Flama Preflight Publish
     needs: [resolve, run]
-    if: ${{ !cancelled() && needs.resolve.outputs.proceed == 'true' }}
+    if: ${{ always() && needs.resolve.outputs.proceed == 'true' }}
     runs-on: ${{ fromJSON(inputs.runner-labels) }}
     timeout-minutes: 10
     steps:
@@ -390,11 +395,20 @@ jobs:
             echo "passed=true" >> "$GITHUB_OUTPUT"
           else
             echo "passed=false" >> "$GITHUB_OUTPUT"
-            if [[ -n "$failed_command" ]]; then
+            # A cancelled run — by a person, or by the job timeout, which
+            # GitHub also reports as cancelled — is not a verdict on the
+            # change, and the check says so rather than calling it a failure.
+            if [[ "$FLAMA_RUN_RESULT" == "cancelled" ]]; then
+              echo "conclusion=cancelled" >> "$GITHUB_OUTPUT"
+              echo "reason=the run was cancelled or timed out before the delivery commands finished" >> "$GITHUB_OUTPUT"
+            elif [[ -n "$failed_command" ]]; then
+              echo "conclusion=failure" >> "$GITHUB_OUTPUT"
               echo "reason=$failed_command failed" >> "$GITHUB_OUTPUT"
             elif [[ "$FLAMA_RUN_RESULT" != "success" ]]; then
+              echo "conclusion=failure" >> "$GITHUB_OUTPUT"
               echo "reason=the run job finished with result '$FLAMA_RUN_RESULT'" >> "$GITHUB_OUTPUT"
             else
+              echo "conclusion=failure" >> "$GITHUB_OUTPUT"
               echo "reason=no run result was recorded" >> "$GITHUB_OUTPUT"
             fi
           fi
@@ -419,6 +433,7 @@ jobs:
         if: ${{ steps.verdict.outputs.passed == 'true' }}
         env:
           FLAMA_PLATFORM_SHA: ${{ inputs.platform-sha }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           corepack enable
@@ -469,6 +484,7 @@ jobs:
       - name: Publish the failing preflight
         if: ${{ steps.verdict.outputs.passed != 'true' }}
         env:
+          FLAMA_CONCLUSION: ${{ steps.verdict.outputs.conclusion }}
           FLAMA_HEAD_SHA: ${{ inputs.head-sha }}
           FLAMA_PENDING: ${{ needs.resolve.outputs.pending-check-run-id }}
           FLAMA_REASON: ${{ steps.verdict.outputs.reason }}
@@ -476,13 +492,14 @@ jobs:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
         run: |
           set -euo pipefail
-          summary="Flama preflight failed on $FLAMA_HEAD_SHA: $FLAMA_REASON. Details: $FLAMA_RUN_URL"
+          [[ "$FLAMA_CONCLUSION" == "cancelled" || "$FLAMA_CONCLUSION" == "failure" ]]
+          summary="Flama preflight did not pass on $FLAMA_HEAD_SHA: $FLAMA_REASON. Details: $FLAMA_RUN_URL"
           if [[ -n "$FLAMA_PENDING" ]]; then
             gh api -X PATCH -H 'Accept: application/vnd.github+json' \
               -H 'X-GitHub-Api-Version: 2026-03-10' \
               "/repos/$GITHUB_REPOSITORY/check-runs/$FLAMA_PENDING" \
               -f external_id="flama-preflight:failed:$GITHUB_RUN_ID" \
-              -f status=completed -f conclusion=failure \
+              -f status=completed -f conclusion="$FLAMA_CONCLUSION" \
               -f details_url="$FLAMA_RUN_URL" \
               -f 'output[title]=Flama preflight failed' \
               -f "output[summary]=$summary" >/dev/null
@@ -492,18 +509,20 @@ jobs:
               "/repos/$GITHUB_REPOSITORY/check-runs" \
               -f name='Flama Preflight' -f head_sha="$FLAMA_HEAD_SHA" \
               -f external_id="flama-preflight:failed:$GITHUB_RUN_ID" \
-              -f status=completed -f conclusion=failure \
+              -f status=completed -f conclusion="$FLAMA_CONCLUSION" \
               -f details_url="$FLAMA_RUN_URL" \
               -f 'output[title]=Flama preflight failed' \
               -f "output[summary]=$summary" >/dev/null
           fi
           echo "::error::$summary"
 
-      # Last resort. If publication itself failed, the announced check would
-      # otherwise stay in progress and hold the merge with nothing to wake it.
+      # Last resort. If publication itself failed or this job was cancelled,
+      # the announced check would otherwise stay in progress and hold the
+      # merge with nothing to wake it.
       - name: Close the announced check if publication failed
-        if: ${{ failure() && needs.resolve.outputs.pending-check-run-id != '' }}
+        if: ${{ (failure() || cancelled()) && needs.resolve.outputs.pending-check-run-id != '' }}
         env:
+          FLAMA_CONCLUSION: ${{ cancelled() && 'cancelled' || 'failure' }}
           FLAMA_PENDING: ${{ needs.resolve.outputs.pending-check-run-id }}
           FLAMA_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -512,7 +531,7 @@ jobs:
             -H 'X-GitHub-Api-Version: 2026-03-10' \
             "/repos/$GITHUB_REPOSITORY/check-runs/$FLAMA_PENDING" \
             -f external_id="flama-preflight:unpublished:$GITHUB_RUN_ID" \
-            -f status=completed -f conclusion=failure \
+            -f status=completed -f conclusion="$FLAMA_CONCLUSION" \
             -f details_url="$FLAMA_RUN_URL" \
             -f 'output[title]=Flama preflight could not be published' \
             -f "output[summary]=The preflight ran but its check could not be published. Re-run $FLAMA_RUN_URL." \

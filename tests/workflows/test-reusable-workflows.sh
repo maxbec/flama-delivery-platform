@@ -134,6 +134,11 @@ grep -Fq 'runnerClass: "github_actions"' "$PREFLIGHT"
 grep -Fq 'FLAMA_GITHUB_APP_INSTALLATION_TOKEN: ${{ steps.app-token.outputs.token }}' "$PREFLIGHT"
 grep -Fq "external_id=\"flama-preflight:pending:\$GITHUB_RUN_ID\"" "$PREFLIGHT"
 grep -Fq "external_id=\"flama-preflight:failed:\$GITHUB_RUN_ID\"" "$PREFLIGHT"
+# A cancelled or timed-out run must still complete the announced check, or it
+# stays in progress and holds the merge with nothing left to wake it.
+grep -Fq "if: \${{ always() && needs.resolve.outputs.proceed == 'true' }}" "$PREFLIGHT"
+grep -Fq "(failure() || cancelled()) && needs.resolve.outputs.pending-check-run-id != ''" "$PREFLIGHT"
+grep -Fq 'conclusion=cancelled' "$PREFLIGHT"
 if grep -Eq 'pull_request_target|id-token:|secrets: inherit|continue-on-error:' "$PREFLIGHT"; then
   echo "preflight workflow contains a forbidden trust or mutability pattern" >&2
   exit 1

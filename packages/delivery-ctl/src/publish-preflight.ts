@@ -4,6 +4,7 @@ import { runPreflight } from "./preflight.js";
 import {
   GitHubRestCheckClient,
   publishCheck,
+  PublishCheckError,
   type DeliveryController,
   type PublishCheckResult,
 } from "./publish-check.js";
@@ -77,6 +78,8 @@ export interface PublishPreflightInput {
 
 export type PublishPreflightResult =
   | { readonly status: "published"; readonly check: PublishCheckResult }
+  /** The repository's own Actions publisher announced this head meanwhile; its verdict stands. */
+  | { readonly status: "superseded" }
   | {
     readonly status: "preflight_failed";
     readonly failedCommand: string | null;
@@ -199,9 +202,22 @@ export async function publishPreflight(
     { FLAMA_GITHUB_APP_INSTALLATION_TOKEN: token.reveal() },
     fetchImplementation,
   );
-  const check = await publishCheck(publishInput, client);
+  // Legacy name first. Discovery keys on the new name, so a pass that
+  // publishes the legacy check and then fails on the new one is simply
+  // retried whole next time (the legacy publication reuses itself); the
+  // reverse order would leave a consumer pinned to the old platform without
+  // the check its gates need, for good.
   if (input.publishLegacyCheck === true) {
     await publishCheck(publishInput, client, { legacyName: true });
+  }
+  let check: PublishCheckResult;
+  try {
+    check = await publishCheck(publishInput, client);
+  } catch (error) {
+    if (error instanceof PublishCheckError && error.code === "github_check_pending") {
+      return { status: "superseded" };
+    }
+    throw error;
   }
 
   return { status: "published", check };
